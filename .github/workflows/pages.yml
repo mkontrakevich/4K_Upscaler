@@ -1,37 +1,59 @@
-name: Deploy GitHub Pages
+name: Deploy Cloudflare Pages
 
 on:
+  workflow_dispatch:
   push:
     branches: [main]
     paths:
       - "site/**"
-      - ".github/workflows/pages.yml"
-  workflow_dispatch:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
+  deployments: write
 
 concurrency:
-  group: "pages"
+  group: cloudflare-pages-production
   cancel-in-progress: true
+
+env:
+  CLOUDFLARE_PROJECT_NAME: mg-4k-upscaler
 
 jobs:
   deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
-      - name: Upload site
-        uses: actions/upload-pages-artifact@v4
+
+      - name: Verify Cloudflare credentials
+        shell: bash
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          test -n "$CLOUDFLARE_ACCOUNT_ID" || { echo "Missing CLOUDFLARE_ACCOUNT_ID"; exit 2; }
+          test -n "$CLOUDFLARE_API_TOKEN" || { echo "Missing CLOUDFLARE_API_TOKEN"; exit 2; }
+
+      - name: Ensure Cloudflare Pages project exists
+        shell: bash
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          API="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects"
+          CODE=$(curl -sS -o /tmp/cf-project.json -w "%{http_code}"             -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN"             "$API/$CLOUDFLARE_PROJECT_NAME")
+          if [ "$CODE" = "404" ]; then
+            curl --fail-with-body -sS -X POST "$API"               -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN"               -H "Content-Type: application/json"               --data "{"name":"$CLOUDFLARE_PROJECT_NAME","production_branch":"main"}"
+          elif [ "$CODE" != "200" ]; then
+            cat /tmp/cf-project.json
+            exit 3
+          fi
+
+      - name: Deploy site to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v4
         with:
-          path: site
-      - name: Deploy
-        id: deployment
-        uses: actions/deploy-pages@v4
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy site --project-name=${{ env.CLOUDFLARE_PROJECT_NAME }} --branch=main
+          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
