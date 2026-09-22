@@ -4,75 +4,338 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#06111c">
-<title>MG 4K Upscaler — ARCH LOCK</title>
+<title>MG 4K — ARCH LOCK</title>
 <style>
-:root{--bg:#06111c;--panel:#0a1928;--panel2:#0d2031;--line:#294054;--text:#eef5ff;--muted:#92a9be;--cyan:#16c5f4;--green:#32d178;--amber:#ffb019;--red:#ff5267}
-*{box-sizing:border-box}html,body{margin:0;min-height:100%;background:radial-gradient(circle at 75% -10%,#123651 0,transparent 31%),linear-gradient(180deg,#06111c,#07101a 70%);color:var(--text);font-family:Inter,Segoe UI,Arial,sans-serif}
-a{color:inherit;text-decoration:none}button{font:inherit}.wrap{max-width:1480px;margin:auto;padding:0 24px 40px}.top{height:86px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--line)}
-.brand{display:flex;align-items:center;gap:14px}.mark{width:34px;height:34px;display:grid;place-items:center;border:1px solid #6f879c;border-radius:7px;font-size:11px;letter-spacing:.12em}.brand strong{font-size:27px}.brand span{color:var(--cyan);letter-spacing:.13em;font-size:12px}
-.version{font:12px Consolas,monospace;color:var(--muted);border:1px solid var(--line);padding:9px 12px;border-radius:6px}
-.hero{padding:72px 0 42px;display:grid;grid-template-columns:1.35fr .65fr;gap:42px;align-items:end}.eyebrow{color:var(--cyan);font-size:12px;letter-spacing:.18em}.hero h1{font-size:clamp(42px,6vw,88px);line-height:.95;margin:18px 0 22px;letter-spacing:-.045em}.hero p{max-width:760px;color:#b6c7d8;font-size:18px;line-height:1.6;margin:0}
-.hero-side{border-left:1px solid var(--line);padding-left:28px;display:grid;gap:18px}.metric span{display:block;color:var(--muted);font-size:11px;letter-spacing:.13em;margin-bottom:6px}.metric strong{font-size:20px}
-.actions{display:flex;gap:12px;flex-wrap:wrap;margin:34px 0 0}.btn{display:inline-flex;align-items:center;justify-content:center;min-height:48px;padding:0 18px;border-radius:7px;border:1px solid #547085;background:#102537;font-weight:700}.btn.primary{background:#0b8fb8;border-color:#19c8f4}.btn:hover{filter:brightness(1.12)}
-.status{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:10px 0 28px}.card{border:1px solid var(--line);background:linear-gradient(180deg,rgba(13,32,49,.96),rgba(8,22,35,.96));border-radius:9px;padding:18px;min-height:116px;box-shadow:0 18px 48px rgba(0,0,0,.22)}.card small{color:var(--muted);letter-spacing:.12em}.card strong{display:block;margin-top:18px;font-size:18px}.ok{color:var(--green)}.warn{color:var(--amber)}
-.console{border:1px solid var(--line);background:#07121d;border-radius:12px;overflow:hidden;box-shadow:0 28px 70px rgba(0,0,0,.28)}.console-head{height:56px;display:flex;align-items:center;justify-content:space-between;padding:0 18px;background:#0c1d2d;border-bottom:1px solid var(--line)}.console-head strong{letter-spacing:.06em}.console-head span{font:12px Consolas,monospace;color:var(--muted)}
-.grid{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line)}.pane{background:#08131f;min-height:340px;padding:18px;display:flex;flex-direction:column}.pane h3{font-size:12px;letter-spacing:.14em;margin:0;color:#c9d8e7}.canvas{flex:1;margin-top:16px;border:1px solid #24394c;border-radius:7px;background:radial-gradient(circle at 50% 35%,#14324a,#07111b 65%);display:grid;place-items:center;color:#5f7890}.locks{padding:20px;background:#08131f;border-top:1px solid var(--line)}.locks h2{font-size:13px;letter-spacing:.14em;margin:0 0 16px}.lock-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.lock{border:1px solid #274056;border-radius:7px;padding:14px}.lock b{font-size:12px}.lock p{margin:8px 0 0;color:var(--muted);font-size:13px;line-height:1.45}
-.foot{display:flex;justify-content:space-between;gap:20px;margin-top:22px;color:#738ba1;font-size:12px}.pulse{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 18px var(--green);margin-right:8px}
-@media(max-width:900px){.hero{grid-template-columns:1fr}.hero-side{border-left:0;border-top:1px solid var(--line);padding:22px 0 0;grid-template-columns:repeat(3,1fr)}.status{grid-template-columns:1fr 1fr}.grid{grid-template-columns:1fr}.lock-grid{grid-template-columns:1fr}.top{height:auto;padding:18px 0;gap:16px;align-items:flex-start}.brand{flex-wrap:wrap}.version{white-space:nowrap}}
-@media(max-width:560px){.wrap{padding:0 14px 28px}.hero{padding-top:48px}.status{grid-template-columns:1fr}.hero-side{grid-template-columns:1fr}.actions .btn{width:100%}.foot{flex-direction:column}}
+:root{
+  --bg:#06111c;--panel:#0a1928;--panel2:#0d2031;--line:#294054;
+  --text:#eef5ff;--muted:#91a7bb;--cyan:#16c5f4;--green:#32d178;
+  --amber:#ffb019;--red:#ff5267;--hard:#ff5d6c;--soft:#ffb019;--free:#73899c;
+}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%;background:
+radial-gradient(circle at 75% -10%,#123651 0,transparent 31%),
+linear-gradient(180deg,#06111c,#07101a 70%);
+color:var(--text);font-family:Inter,Segoe UI,Arial,sans-serif}
+button,input,select{font:inherit}
+button{color:inherit}
+.wrap{max-width:1480px;margin:auto;padding:0 22px 34px}
+.top{min-height:72px;display:flex;align-items:center;justify-content:space-between;gap:14px;border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:center;gap:12px;min-width:0}
+.mark{width:32px;height:32px;display:grid;place-items:center;border:1px solid #6f879c;border-radius:7px;font-size:10px;letter-spacing:.12em}
+.brand-copy{display:flex;align-items:baseline;gap:10px;min-width:0}
+.brand strong{font-size:23px;white-space:nowrap}
+.brand span{color:var(--cyan);letter-spacing:.12em;font-size:11px;white-space:nowrap}
+.version{font:11px Consolas,monospace;color:var(--muted);border:1px solid var(--line);padding:7px 10px;border-radius:6px;white-space:nowrap}
+.main-grid{display:grid;grid-template-columns:minmax(0,1.28fr) minmax(360px,.72fr);gap:16px;padding-top:16px}
+.panel{border:1px solid var(--line);background:linear-gradient(180deg,rgba(13,32,49,.97),rgba(8,22,35,.97));border-radius:10px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.2)}
+.panel-head{min-height:48px;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;border-bottom:1px solid var(--line);background:#0b1c2c}
+.panel-head strong{font-size:12px;letter-spacing:.12em}
+.panel-head span{font-size:11px;color:var(--muted)}
+.upload-body{padding:14px}
+.drop{position:relative;border:1px dashed #45627b;border-radius:9px;min-height:300px;background:radial-gradient(circle at 50% 35%,#123049,#07111b 67%);overflow:hidden;display:grid;place-items:center;text-align:center}
+.drop.drag{border-color:var(--cyan);box-shadow:inset 0 0 0 1px var(--cyan)}
+.drop-content{padding:24px;max-width:560px}
+.drop-icon{width:52px;height:52px;margin:0 auto 14px;border-radius:50%;display:grid;place-items:center;border:1px solid #49667e;color:var(--cyan);font-size:25px}
+.drop h1{font-size:22px;margin:0 0 8px}
+.drop p{color:var(--muted);line-height:1.5;margin:0 auto 16px;font-size:14px}
+.upload-actions{display:flex;gap:9px;justify-content:center;flex-wrap:wrap}
+.btn{min-height:42px;padding:0 15px;border:1px solid #506d84;border-radius:7px;background:#102538;font-weight:700;cursor:pointer}
+.btn.primary{background:#0b8fb8;border-color:#18c8f4}
+.btn.ghost{background:#0a1826;color:#c8d7e5}
+.btn:disabled{opacity:.38;cursor:not-allowed}
+#file-input{display:none}
+.preview{position:absolute;inset:0;display:none;background:#050c13}
+.preview.visible{display:block}
+.preview img{width:100%;height:100%;object-fit:contain}
+.preview-top{position:absolute;left:10px;right:10px;top:10px;display:flex;justify-content:space-between;gap:10px;pointer-events:none}
+.badge{display:inline-flex;align-items:center;gap:7px;padding:6px 8px;border-radius:6px;background:rgba(4,12,20,.82);border:1px solid rgba(92,121,145,.55);font:11px Consolas,monospace;color:#d5e3ee;backdrop-filter:blur(8px)}
+.preview-bottom{position:absolute;left:10px;right:10px;bottom:10px;display:flex;gap:8px;justify-content:flex-end}
+.preview-bottom button{pointer-events:auto}
+.source-meta{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:10px}
+.meta{padding:9px 10px;border:1px solid #243c50;border-radius:7px;background:#081522;min-width:0}
+.meta small{display:block;font-size:9px;letter-spacing:.12em;color:var(--muted);margin-bottom:4px}
+.meta strong{font:12px Consolas,monospace;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.locks{padding:12px}
+.lock-list{display:grid;gap:8px}
+.lock-row{display:grid;grid-template-columns:minmax(160px,1fr) 210px;align-items:center;gap:10px;padding:9px 10px;border:1px solid #263e52;border-radius:8px;background:#091725}
+.lock-name{min-width:0}
+.lock-name strong{display:block;font-size:13px}
+.lock-name small{display:block;color:var(--muted);font-size:10px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.segmented{display:grid;grid-template-columns:repeat(3,1fr);border:1px solid #38546a;border-radius:6px;overflow:hidden}
+.segmented button{height:33px;border:0;border-right:1px solid #38546a;background:#0c1d2b;color:#71889b;font-size:10px;font-weight:800;letter-spacing:.06em;cursor:pointer}
+.segmented button:last-child{border-right:0}
+.segmented button.active[data-level="hard"]{background:#52202a;color:#ffbec5}
+.segmented button.active[data-level="soft"]{background:#49340c;color:#ffd477}
+.segmented button.active[data-level="free"]{background:#223344;color:#d1dfeb}
+.profile-actions{display:flex;gap:8px;margin-top:10px}
+.profile-actions button{flex:1}
+.statusbar{margin-top:16px;border:1px solid var(--line);border-radius:9px;background:#081521;display:grid;grid-template-columns:1fr auto;align-items:center;gap:12px;padding:11px 13px}
+.status-copy{display:flex;align-items:center;gap:9px;min-width:0}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--green);box-shadow:0 0 15px rgba(50,209,120,.7);flex:0 0 auto}
+.status-copy span{font-size:12px;color:#c7d5e2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.run{display:flex;gap:8px}
+.run .btn{min-height:39px}
+.mobile-actions{display:none}
+.toast{position:fixed;left:50%;bottom:24px;transform:translate(-50%,90px);opacity:0;transition:.22s;padding:10px 14px;background:#0d2131;border:1px solid #49657b;border-radius:7px;z-index:50;box-shadow:0 18px 50px rgba(0,0,0,.35);font-size:12px;max-width:min(520px,calc(100vw - 28px));text-align:center}
+.toast.show{transform:translate(-50%,0);opacity:1}
+@media(max-width:980px){
+  .main-grid{grid-template-columns:1fr}
+  .locks-panel{order:2}
+  .source-meta{grid-template-columns:repeat(2,1fr)}
+}
+@media(max-width:640px){
+  body{padding-bottom:72px}
+  .wrap{padding:0 9px 16px}
+  .top{min-height:54px}
+  .mark{width:27px;height:27px;font-size:9px}
+  .brand{gap:8px}
+  .brand-copy{display:grid;gap:1px}
+  .brand strong{font-size:18px;line-height:1}
+  .brand span{font-size:8px}
+  .version{font-size:9px;padding:5px 7px}
+  .main-grid{gap:9px;padding-top:9px}
+  .panel{border-radius:8px}
+  .panel-head{min-height:39px;padding:7px 10px}
+  .panel-head strong{font-size:10px}
+  .panel-head span{font-size:9px}
+  .upload-body{padding:8px}
+  .drop{min-height:220px}
+  .drop-content{padding:14px}
+  .drop-icon{width:40px;height:40px;margin-bottom:9px;font-size:20px}
+  .drop h1{font-size:17px;margin-bottom:5px}
+  .drop p{font-size:11px;line-height:1.35;margin-bottom:11px}
+  .upload-actions{gap:6px}
+  .upload-actions .btn{min-height:38px;padding:0 11px;font-size:11px}
+  .source-meta{grid-template-columns:1fr 1fr;gap:5px;margin-top:6px}
+  .meta{padding:7px 8px}
+  .meta small{font-size:8px;margin-bottom:3px}
+  .meta strong{font-size:10px}
+  .locks{padding:7px}
+  .lock-list{gap:5px}
+  .lock-row{grid-template-columns:minmax(0,1fr) 146px;gap:6px;padding:6px 7px}
+  .lock-name strong{font-size:11px}
+  .lock-name small{display:none}
+  .segmented button{height:29px;font-size:8px}
+  .profile-actions{display:none}
+  .statusbar{margin-top:9px;padding:8px 9px;grid-template-columns:1fr}
+  .status-copy span{font-size:10px}
+  .run{display:none}
+  .mobile-actions{position:fixed;left:0;right:0;bottom:0;display:grid;grid-template-columns:1fr 1.35fr;gap:7px;padding:8px 10px calc(8px + env(safe-area-inset-bottom));background:rgba(5,15,25,.94);border-top:1px solid var(--line);backdrop-filter:blur(14px);z-index:40}
+  .mobile-actions .btn{min-height:44px;font-size:11px}
+  .preview-top{left:6px;right:6px;top:6px}
+  .preview-bottom{left:6px;right:6px;bottom:6px}
+  .badge{font-size:9px;padding:5px 6px}
+}
 </style>
 </head>
 <body>
 <div class="wrap">
-<header class="top">
-<div class="brand"><div class="mark">MG</div><strong>MG 4K</strong><span>ARCH LOCK SYSTEM</span></div>
-<div class="version">V8.8.1 · R4 FINAL</div>
-</header>
+  <header class="top">
+    <div class="brand">
+      <div class="mark">MG</div>
+      <div class="brand-copy"><strong>MG 4K</strong><span>ARCH LOCK SYSTEM</span></div>
+    </div>
+    <div class="version">CORE 8.8.1 R4 · UI R5</div>
+  </header>
 
-<section class="hero">
-<div>
-<div class="eyebrow">ARCHITECTURAL IMAGE QUALITY PIPELINE</div>
-<h1>4K UPSCALER<br>WITHOUT REDESIGN</h1>
-<p>Система повышения качества архитектурных визуализаций с жёстким сохранением камеры, геометрии, материалов и ключевых объектов сцены. Генеративное улучшение допускается только внутри утверждённого контура ARCH LOCK.</p>
-<div class="actions">
-<a class="btn primary" href="http://127.0.0.1:8742/" target="_blank" rel="noreferrer">Открыть локальную консоль</a>
-<a class="btn" href="https://github.com/mkontrakevich/4K_Upscaler" target="_blank" rel="noreferrer">GitHub Repository</a>
-<a class="btn" href="https://github.com/mkontrakevich/4K_Upscaler/tree/v8.8.1-r4" target="_blank" rel="noreferrer">V8.8.1 R4 branch</a>
-</div>
-</div>
-<div class="hero-side">
-<div class="metric"><span>BUILD</span><strong>R4 FINAL</strong></div>
-<div class="metric"><span>LOCAL UI</span><strong>127.0.0.1:8742</strong></div>
-<div class="metric"><span>PIPELINE</span><strong>SAFE / GENERATIVE</strong></div>
-</div>
-</section>
+  <main class="main-grid">
+    <section class="panel">
+      <div class="panel-head">
+        <strong>ИСХОДНОЕ ИЗОБРАЖЕНИЕ</strong>
+        <span>устройство · Files · iCloud · Drive · Dropbox</span>
+      </div>
+      <div class="upload-body">
+        <div class="drop" id="drop">
+          <div class="drop-content" id="drop-content">
+            <div class="drop-icon">＋</div>
+            <h1>Добавить изображение</h1>
+            <p>Выберите файл с устройства или из любого облачного хранилища, доступного через системный файловый менеджер. На компьютере можно перетащить изображение сюда.</p>
+            <div class="upload-actions">
+              <button class="btn primary" id="pick-file" type="button">Выбрать файл</button>
+              <button class="btn ghost" id="pick-cloud" type="button">Открыть Files / облако</button>
+            </div>
+            <input id="file-input" type="file" accept="image/*,.heic,.heif">
+          </div>
+          <div class="preview" id="preview">
+            <img id="preview-image" alt="Исходное изображение">
+            <div class="preview-top">
+              <span class="badge" id="preview-name">SOURCE</span>
+              <span class="badge" id="preview-dimensions">—</span>
+            </div>
+            <div class="preview-bottom">
+              <button class="btn ghost" id="replace-file" type="button">Заменить</button>
+            </div>
+          </div>
+        </div>
 
-<section class="status">
-<div class="card"><small>REPOSITORY</small><strong class="ok"><span class="pulse"></span>ONLINE</strong></div>
-<div class="card"><small>ARCHITECTURE</small><strong>HARD LOCK</strong></div>
-<div class="card"><small>GENERATION</small><strong>NANO BANANA PRO</strong></div>
-<div class="card"><small>WEB CONSOLE</small><strong class="warn">LOCAL BACKEND</strong></div>
-</section>
+        <div class="source-meta">
+          <div class="meta"><small>ФАЙЛ</small><strong id="meta-name">—</strong></div>
+          <div class="meta"><small>РАЗМЕР</small><strong id="meta-size">—</strong></div>
+          <div class="meta"><small>РАЗРЕШЕНИЕ</small><strong id="meta-resolution">—</strong></div>
+          <div class="meta"><small>ИСТОЧНИК</small><strong id="meta-source">—</strong></div>
+        </div>
+      </div>
+    </section>
 
-<section class="console">
-<div class="console-head"><strong>WEB REVIEW CONSOLE</strong><span>STATIC GITHUB CONTROL PAGE</span></div>
-<div class="grid">
-<div class="pane"><h3>ИСХОДНИК · SOURCE AUTHORITY</h3><div class="canvas">локальный исходник</div></div>
-<div class="pane"><h3>РЕЗУЛЬТАТ · REVIEW REQUIRED</h3><div class="canvas">локальный результат</div></div>
-</div>
-<div class="locks">
-<h2>SCENE STABILITY PROFILE</h2>
-<div class="lock-grid">
-<div class="lock"><b>HARD LOCK</b><p>Camera · Geometry · Architecture · Textures · Vegetation · People · Vehicles · Small Objects</p></div>
-<div class="lock"><b>SOFT LOCK</b><p>Lighting · Sky & Clouds · Water · Reflections · Shadows</p></div>
-</div>
-</div>
-</section>
+    <section class="panel locks-panel">
+      <div class="panel-head">
+        <strong>LOCK PROFILE</strong>
+        <span>индивидуально по параметрам</span>
+      </div>
+      <div class="locks">
+        <div class="lock-list" id="lock-list"></div>
+        <div class="profile-actions">
+          <button class="btn ghost" id="reset-locks" type="button">По умолчанию</button>
+          <button class="btn ghost" id="copy-profile" type="button">Копировать профиль</button>
+        </div>
+      </div>
+    </section>
+  </main>
 
-<footer class="foot">
-<span>GitHub Pages — presentation/control entry point</span>
-<span>Image processing remains local and is not executed by GitHub Pages.</span>
-</footer>
+  <section class="statusbar">
+    <div class="status-copy">
+      <i class="dot"></i>
+      <span id="status-text">Интерфейс готов. Добавьте изображение.</span>
+    </div>
+    <div class="run">
+      <button class="btn ghost" id="save-profile" type="button">Сохранить настройки</button>
+      <button class="btn primary" id="prepare-job" type="button" disabled>Подготовить обработку</button>
+    </div>
+  </section>
 </div>
+
+<div class="mobile-actions">
+  <button class="btn ghost" id="mobile-file" type="button">Файл</button>
+  <button class="btn primary" id="mobile-prepare" type="button" disabled>Обработка</button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const defaults = [
+  {id:"camera",name:"Камера",hint:"ракурс · перспектива · фокус",level:"hard"},
+  {id:"geometry",name:"Геометрия",hint:"объём · пропорции · силуэт",level:"hard"},
+  {id:"architecture",name:"Архитектура",hint:"фасад · проёмы · конструкция",level:"hard"},
+  {id:"textures",name:"Текстуры",hint:"идентичность материалов",level:"hard"},
+  {id:"vegetation",name:"Озеленение",hint:"деревья · кустарники · газон",level:"hard"},
+  {id:"people_vehicles",name:"Люди / транспорт",hint:"люди · машины · малые объекты",level:"hard"},
+  {id:"lighting",name:"Освещение",hint:"экспозиция · световой рисунок",level:"soft"},
+  {id:"sky",name:"Небо / облака",hint:"погода · облачность · атмосфера",level:"soft"},
+  {id:"water",name:"Вода / отражения",hint:"вода · стекло · отражения · тени",level:"soft"}
+];
+
+let locks = JSON.parse(localStorage.getItem("mg4k.lockProfile") || "null") || Object.fromEntries(defaults.map(x=>[x.id,x.level]));
+let currentFile = null;
+let currentObjectUrl = null;
+
+const $ = id => document.getElementById(id);
+const toast = text => {
+  const el=$("toast"); el.textContent=text; el.classList.add("show");
+  clearTimeout(window.__toastTimer); window.__toastTimer=setTimeout(()=>el.classList.remove("show"),2300);
+};
+
+function renderLocks(){
+  $("lock-list").innerHTML = defaults.map(item => `
+    <div class="lock-row">
+      <div class="lock-name"><strong>${item.name}</strong><small>${item.hint}</small></div>
+      <div class="segmented" data-lock="${item.id}">
+        ${["hard","soft","free"].map(level=>`
+          <button type="button" data-level="${level}" class="${locks[item.id]===level?"active":""}">
+            ${level==="hard"?"HARD":level==="soft"?"SOFT":"FREE"}
+          </button>`).join("")}
+      </div>
+    </div>`).join("");
+
+  document.querySelectorAll(".segmented button").forEach(btn=>{
+    btn.addEventListener("click",()=>{
+      const id=btn.closest(".segmented").dataset.lock;
+      locks[id]=btn.dataset.level;
+      localStorage.setItem("mg4k.lockProfile",JSON.stringify(locks));
+      renderLocks();
+      $("status-text").textContent="Lock-профиль изменён и сохранён локально.";
+    });
+  });
+}
+
+function humanSize(bytes){
+  if(!bytes) return "0 B";
+  const units=["B","KB","MB","GB"]; let i=Math.floor(Math.log(bytes)/Math.log(1024));
+  return (bytes/Math.pow(1024,i)).toFixed(i?1:0)+" "+units[i];
+}
+
+function setFile(file, sourceLabel="Устройство / облако"){
+  if(!file || !file.type.startsWith("image/") && !/\.(heic|heif)$/i.test(file.name)){
+    toast("Выберите файл изображения."); return;
+  }
+  currentFile=file;
+  if(currentObjectUrl) URL.revokeObjectURL(currentObjectUrl);
+  currentObjectUrl=URL.createObjectURL(file);
+
+  const img=$("preview-image");
+  img.onload=()=>{
+    $("preview-dimensions").textContent=`${img.naturalWidth}×${img.naturalHeight}`;
+    $("meta-resolution").textContent=`${img.naturalWidth}×${img.naturalHeight}`;
+  };
+  img.onerror=()=>{
+    $("preview-dimensions").textContent="preview unavailable";
+    $("meta-resolution").textContent="—";
+  };
+  img.src=currentObjectUrl;
+  $("preview-name").textContent=file.name;
+  $("meta-name").textContent=file.name;
+  $("meta-size").textContent=humanSize(file.size);
+  $("meta-source").textContent=sourceLabel;
+  $("preview").classList.add("visible");
+  $("prepare-job").disabled=false;
+  $("mobile-prepare").disabled=false;
+  $("status-text").textContent="Источник загружен. Проверьте Lock-профиль.";
+}
+
+function openPicker(){ $("file-input").click(); }
+$("pick-file").addEventListener("click",openPicker);
+$("pick-cloud").addEventListener("click",openPicker);
+$("replace-file").addEventListener("click",openPicker);
+$("mobile-file").addEventListener("click",openPicker);
+$("file-input").addEventListener("change",e=>setFile(e.target.files?.[0],"Системный файловый менеджер"));
+
+const drop=$("drop");
+["dragenter","dragover"].forEach(type=>drop.addEventListener(type,e=>{e.preventDefault();drop.classList.add("drag")}));
+["dragleave","drop"].forEach(type=>drop.addEventListener(type,e=>{e.preventDefault();drop.classList.remove("drag")}));
+drop.addEventListener("drop",e=>setFile(e.dataTransfer?.files?.[0],"Drag & Drop"));
+
+$("reset-locks").addEventListener("click",()=>{
+  locks=Object.fromEntries(defaults.map(x=>[x.id,x.level]));
+  localStorage.setItem("mg4k.lockProfile",JSON.stringify(locks));
+  renderLocks(); toast("Возвращён базовый ARCH LOCK профиль.");
+});
+
+$("copy-profile").addEventListener("click",async()=>{
+  const payload={version:"ui-r5",locks};
+  try{await navigator.clipboard.writeText(JSON.stringify(payload,null,2));toast("Lock-профиль скопирован.");}
+  catch{toast("Не удалось скопировать профиль.");}
+});
+
+$("save-profile").addEventListener("click",()=>{
+  localStorage.setItem("mg4k.lockProfile",JSON.stringify(locks));
+  toast("Настройки сохранены на этом устройстве.");
+});
+
+function prepareJob(){
+  if(!currentFile){toast("Сначала добавьте изображение.");return;}
+  const manifest={
+    schema:"mg4k-job-v1",
+    created_at:new Date().toISOString(),
+    source:{name:currentFile.name,size:currentFile.size,type:currentFile.type},
+    locks
+  };
+  localStorage.setItem("mg4k.lastJob",JSON.stringify(manifest));
+  $("status-text").textContent="Задание подготовлено. Lock-профиль привязан к исходнику.";
+  toast("Задание подготовлено.");
+}
+$("prepare-job").addEventListener("click",prepareJob);
+$("mobile-prepare").addEventListener("click",prepareJob);
+
+renderLocks();
+</script>
 </body>
 </html>
