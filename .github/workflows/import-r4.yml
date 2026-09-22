@@ -1,0 +1,71 @@
+name: Import V8.8.1 R4 FINAL
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "_bootstrap/R4_SOURCE.zip"
+
+permissions:
+  contents: write
+
+jobs:
+  import-r4:
+    if: github.event.head_commit.message == 'Stage V8.8.1 R4 FINAL archive'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify source archive
+        shell: bash
+        run: |
+          echo "ea019b192aabd241a7b0e55799b1de89b1088d973634636d21ad50336e3a498d  _bootstrap/R4_SOURCE.zip" | sha256sum -c -
+
+      - name: Extract verified R4 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .r4_extract
+          mkdir .r4_extract
+          unzip -q _bootstrap/R4_SOURCE.zip -d .r4_extract
+          ROOT="$(find .r4_extract -mindepth 1 -maxdepth 1 -type d | head -n 1)"
+          test -n "$ROOT"
+          test -f "$ROOT/VERSION.json"
+          test -f "$ROOT/V881_R4_LOCALIZED_DEFECT_VISUALIZATION_2026-09-22.txt"
+          rsync -a --exclude='.git' "$ROOT/" ./
+          rm -rf .r4_extract _bootstrap
+          cat > .gitignore <<'EOF'
+.env
+.env.*
+API.txt
+OPENROUTER_API_KEY.txt
+*secret*
+*token*.txt
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+_diagnostics/
+WEB_CONSOLE_ENDPOINT.json
+EOF
+
+      - name: Validate Python sources
+        shell: bash
+        run: |
+          python3 -m compileall -q .
+          find . -type d -name __pycache__ -prune -exec rm -rf {} +
+
+      - name: Commit R4 FINAL
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Deploy V8.8.1 R4 FINAL from verified archive"
+          git push origin HEAD:main
+          git tag -f v8.8.1-r4-final
+          git push origin refs/tags/v8.8.1-r4-final --force
