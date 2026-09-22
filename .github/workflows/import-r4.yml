@@ -4,14 +4,13 @@ on:
   push:
     branches: [main]
     paths:
-      - "_bootstrap/R4_SOURCE.zip"
+      - "_bootstrap/**"
 
 permissions:
   contents: write
 
 jobs:
   import-r4:
-    if: github.event.head_commit.message == 'Stage V8.8.1 R4 FINAL archive'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -22,6 +21,7 @@ jobs:
       - name: Verify source archive
         shell: bash
         run: |
+          test -f _bootstrap/R4_SOURCE.zip
           echo "ea019b192aabd241a7b0e55799b1de89b1088d973634636d21ad50336e3a498d  _bootstrap/R4_SOURCE.zip" | sha256sum -c -
 
       - name: Extract verified R4 source
