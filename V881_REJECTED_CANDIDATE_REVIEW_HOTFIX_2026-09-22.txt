@@ -1,0 +1,7 @@
+Rejected Candidate Review Hotfix
+- Existing exact-source donors that fail technical review are shown in RESULT preview.
+- Automatic FAIL blocks auto approval but does not hide candidate pixels.
+- Manual approval creates FINAL with MANUAL_OVERRIDE=true and preserves failed checks.
+- Candidate rejection keeps current image active and enables replacement generation.
+- New paid generation still requires explicit user confirmation.
+- No batch processing; one-image gate remains enforced.

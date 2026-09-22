@@ -1,0 +1,18 @@
+V8.8.1 build r3 — Inspection Layer
+
+Implemented:
+- detailed quality-gate rejection reasons
+- rejected candidate remains visible
+- full-screen 100% / 200% zoom and pan
+- synchronized SIDE compare
+- draggable SPLIT compare
+- ABS / EDGE / HEATMAP DIFF preview
+- BLINK comparison
+- defect overlay for mapped checks
+- keyboard shortcuts
+
+Safety:
+- APP_VERSION remains 8.8.1
+- BUILD_ID is r3 to prevent stale-server reuse
+- no generation or API request is triggered by viewer use
+- one-image gate and explicit paid confirmation remain intact

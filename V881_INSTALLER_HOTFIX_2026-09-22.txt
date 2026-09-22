@@ -1,0 +1,22 @@
+V8.8.1 INSTALLER HOTFIX — 2026-09-22
+
+Fixed failure:
+  AssertionError: Unexpected project root: 'D:\\Work\\ИИ\\MG\\base'
+
+Root cause:
+  The web console is allowed to persist D:\Work\ИИ\MG\base as the active source queue,
+  while the path-relocation self-test and legacy-path migration previously assumed the
+  configured source was always the stable MG project root.
+
+Fix:
+  - active source queue may be either D:\Work\ИИ\MG or D:\Work\ИИ\MG\base;
+  - legacy path relocation always targets D:\Work\ИИ\MG;
+  - prevents accidental ...\MG\base\base\... remapping;
+  - no generator, donor, camera, canvas, material, or quality thresholds changed;
+  - no API request is made by this hotfix or its tests.
+
+Verified locally:
+  - source_folder_picker_self_test.py: PASS, API requests 0
+  - sibling_donor_recovery_self_test.py: PASS, API requests 0
+  - path_relocation_self_test.py with MG: PASS, API requests 0
+  - path_relocation_self_test.py with MG\base: PASS, API requests 0

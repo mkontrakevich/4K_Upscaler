@@ -1,0 +1,35 @@
+{
+  "project": "MG 4K Web Review Console",
+  "application_version": "8.8.1",
+  "scene_stability_profile": "ARCH_LOCK_SCENE_STABILITY v1.0",
+  "offline_checks": {
+    "version_guard": true,
+    "source_folder_selection": true,
+    "preview_urls_visible": true,
+    "sibling_exact_sha_donor_recovery": true,
+    "canvas_integrity": true,
+    "material_identity_lock": true,
+    "source_sky_recovery": true,
+    "dual_mode_and_approval": true,
+    "path_relocation": true,
+    "retry_budget": true,
+    "self_healing_web_bootstrap": true,
+    "scene_profile_in_prompt": true,
+    "scene_profile_in_web_ui": true
+  },
+  "hard_lock": [
+    "CAMERA",
+    "GEOMETRY",
+    "ARCHITECTURE",
+    "TEXTURES",
+    "VEGETATION",
+    "PEOPLE / VEHICLES / SMALL_OBJECTS"
+  ],
+  "soft_lock": [
+    "LIGHTING",
+    "SKY_CLOUDS",
+    "WATER / REFLECTIONS / SHADOWS"
+  ],
+  "real_api_requests_during_tests": 0,
+  "windows_production_verification": "required_on_user_workstation"
+}

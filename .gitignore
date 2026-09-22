@@ -1,0 +1,12 @@
+.env
+.env.*
+API.txt
+OPENROUTER_API_KEY.txt
+*secret*
+*token*.txt
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+_diagnostics/
+WEB_CONSOLE_ENDPOINT.json

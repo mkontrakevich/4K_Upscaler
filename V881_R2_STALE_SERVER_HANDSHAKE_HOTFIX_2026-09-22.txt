@@ -1,0 +1,7 @@
+Build handshake hotfix
+- Web server/runtime build: 8.8.1-r2
+- Prevents bootstrap from reusing an already-running pre-hotfix 8.8.1 server.
+- Old 8.8.1 process is not killed; bootstrap selects the next free loopback port.
+- Browser opens the new endpoint only after /health reports the exact r2 build.
+- Rejected candidate preview/manual override/regenerate/reject logic is unchanged.
+- No generation or API request is triggered by installation/startup.

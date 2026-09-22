@@ -1,0 +1,35 @@
+{
+  "version": "1.0",
+  "profile_name": "ARCH_LOCK_SCENE_STABILITY",
+  "hard_lock": [
+    "CAMERA",
+    "GEOMETRY",
+    "ARCHITECTURE",
+    "TEXTURES",
+    "VEGETATION",
+    "PEOPLE / VEHICLES / SMALL_OBJECTS"
+  ],
+  "soft_lock": [
+    "LIGHTING",
+    "SKY_CLOUDS",
+    "WATER / REFLECTIONS / SHADOWS"
+  ],
+  "principles": [
+    "DETAIL_ENHANCEMENT_ONLY",
+    "NO_SCENE_REINTERPRETATION",
+    "SOURCE_IS_AUTHORITY_FOR_HARD_LOCK",
+    "SOFT_LOCK_ALLOWS_MINOR_LOCAL_VARIATION_WITH_GLOBAL_CAUSALITY_PRESERVED",
+    "DONOR_IS_DETAIL_REFERENCE_ONLY"
+  ],
+  "rules": {
+    "CAMERA": "Exact viewpoint, camera height, direction, field of view, perspective, crop and object scale.",
+    "GEOMETRY": "Exact contours, proportions, massing, structural edges and spatial relationships.",
+    "ARCHITECTURE": "No addition, deletion, relocation or redesign of architectural elements.",
+    "TEXTURES": "Material identity and texture pattern are locked; recover detail, never invent a new pattern.",
+    "VEGETATION": "Position, crown silhouette, volume, density and character are locked.",
+    "PEOPLE / VEHICLES / SMALL_OBJECTS": "Count, position, scale, orientation, silhouette and identity are locked.",
+    "LIGHTING": "Preserve time of day, main light direction and scene mood; minor local contrast/shadow refinement allowed.",
+    "SKY_CLOUDS": "Preserve overall cloud distribution, mass balance, weather and atmosphere; minor local cloud-shape variation allowed.",
+    "WATER / REFLECTIONS / SHADOWS": "Preserve overall location, direction, scale and causal logic; minor local surface variation allowed."
+  }
+}

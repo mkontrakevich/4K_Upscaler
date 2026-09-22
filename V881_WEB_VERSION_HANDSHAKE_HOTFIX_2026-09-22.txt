@@ -1,0 +1,3 @@
+Fix: web_review_server.py self-test expected APP_VERSION 8.8.0 while runtime is 8.8.1.
+Updated self-test to 8.8.1 and argparse description to V8.8.1.
+No generation, donor, quality-gate, or API logic changed.

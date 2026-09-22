@@ -1,0 +1,28 @@
+{
+  "project": "MG 4K Local Web Review Console",
+  "version": "8.7.9",
+  "tested_at_utc": "2026-09-21T10:30:51.714189+00:00",
+  "checks": {
+    "python_syntax": true,
+    "javascript_syntax": true,
+    "version_guard": true,
+    "sibling_candidate_discovery": true,
+    "exact_sha_checkpoint_only": true,
+    "whole_scene_gate_rechecked": true,
+    "base_queue_independent": true,
+    "live_windows_donor_match": "not_run_donor_files_unavailable",
+    "windows_installer": "not_run_linux_environment",
+    "source_queue_isolation": true,
+    "source_folder_picker": true,
+    "dual_mode": true,
+    "safe_upscale_self_test": true,
+    "pipeline_validator_self_test": true,
+    "material_identity_self_test": true,
+    "canvas_integrity_self_test": true,
+    "retry_budget_self_test": true,
+    "path_relocation_self_test": true,
+    "web_server_self_test": true,
+    "web_bootstrap_self_test": true
+  },
+  "real_api_requests": 0
+}

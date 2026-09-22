@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#071421">
+  <meta name="mg-token" content="__CONTROL_TOKEN__">
+  <title>MG 4K — Web Review Console V__APP_VERSION__</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/assets/app.css">
+  <script defer src="/assets/app.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="mark">MG</span><strong>MG 4K</strong><span>WEB REVIEW CONSOLE</span><small>V__APP_VERSION__ · __BUILD_ID__</small></div>
+    <nav class="mode-switch" aria-label="Режим обработки">
+      <button id="mode-safe" data-mode="safe"><strong>SAFE</strong><span>без генерации</span></button>
+      <button id="mode-generative" data-mode="generative"><strong>GENERATIVE</strong><span>Nano Banana Pro</span></button>
+    </nav>
+  </header>
+  <main>
+    <section class="source-picker" aria-label="Папка исходных изображений">
+      <div class="source-folder-copy"><span>ПАПКА ИСХОДНИКОВ</span><strong id="source-folder-path">—</strong></div>
+      <div class="source-folder-controls">
+        <input id="source-folder-input" type="text" aria-label="Путь к папке исходников" placeholder="D:\Work\ИИ\MG" autocomplete="off" spellcheck="false">
+        <button id="apply-source-folder" type="button">Открыть путь</button>
+        <button id="select-source-folder" type="button"><span class="icon">▱</span><span>Обзор…</span></button>
+      </div>
+    </section>
+    <section class="status-strip">
+      <div class="status-message"><i id="status-dot"></i><span id="status-text">Подключение к локальной очереди…</span></div>
+      <div class="current-file">Текущий файл: <strong id="current-file">—</strong></div>
+      <div class="progress-box"><span id="progress-label">0 / 0 утверждено</span><div class="progress"><i id="progress-bar"></i></div></div>
+    </section>
+    <section class="comparison" aria-label="Сравнение изображений">
+      <article class="image-card">
+        <header><div><strong>ИСХОДНИК</strong><span>неизменный</span></div><span id="source-size">—</span></header>
+        <button class="image-stage" id="open-source" title="Открыть исходник на весь экран">
+          <img id="source-image" alt="Исходное изображение"><span class="empty" id="source-empty">Исходник не выбран</span><span class="zoom-hint">Развернуть</span>
+        </button>
+      </article>
+      <article class="image-card result-card">
+        <header><div><strong>РЕЗУЛЬТАТ</strong><span id="result-caption">ожидает обработки</span></div><span id="result-size">—</span></header>
+        <button class="image-stage" id="open-result" title="Открыть результат на весь экран">
+          <img id="result-image" alt="Результат обработки"><span class="empty" id="result-empty">Нажмите «Запустить / продолжить»</span><span class="zoom-hint">Развернуть</span>
+        </button>
+      </article>
+    </section>
+    <section id="technical-hold" class="technical-hold" hidden>
+      <div>
+        <strong>НЕ ПРОШЁЛ АВТОМАТИЧЕСКУЮ ПРОВЕРКУ</strong>
+        <span id="technical-decision">—</span>
+      </div>
+      <p id="failed-checks">—</p>
+      <small>Кандидат показан для визуальной оценки. Автоматическое утверждение заблокировано; пользователь может принять его вручную или запросить нового донора.</small>
+    </section>
+    <section id="failure-details" class="failure-details" hidden>
+      <header><div><strong>ПРИЧИНЫ ОТКЛОНЕНИЯ</strong><span id="failure-count">0</span></div><button id="inspect-failure" type="button">Открыть инспекцию</button></header>
+      <div id="failure-list" class="failure-list"></div>
+    </section>
+    <section class="scene-profile" aria-label="Scene Stability Profile">
+      <header><div><strong>SCENE STABILITY PROFILE</strong><span>канонические ограничения генерации и проверки</span></div></header>
+      <div id="scene-profile-grid" class="scene-profile-grid"></div>
+    </section>
+    <section class="actions" aria-label="Действия">
+      <button id="action-process" class="primary"><span class="icon">▶</span><span>Запустить / продолжить</span></button>
+      <button id="action-approve" class="approve"><span class="icon">✓</span><span>Утвердить и дальше</span></button>
+      <button id="action-reject" class="reject"><span class="icon">×</span><span>Отклонить</span></button>
+      <button id="action-generate" class="generate"><span class="icon">↻</span><span>Новая генерация</span></button>
+      <button id="action-pause" class="pause"><span class="icon">Ⅱ</span><span>Пауза</span></button>
+      <button id="action-folder" class="folder"><span class="icon">▱</span><span>Папка результата</span></button>
+    </section>
+    <section class="log-panel">
+      <header><strong>Лог процесса</strong><div><label for="log-filter">Показать:</label><select id="log-filter"><option value="all">Все события</option><option value="errors">Только ошибки</option></select></div></header>
+      <div id="log-lines" class="log-lines" role="log" aria-live="polite"></div>
+    </section>
+  </main>
+  <dialog id="confirm-dialog" class="confirm-dialog"><form method="dialog"><div class="dialog-symbol" id="dialog-symbol">✓</div><h2 id="dialog-title">Подтвердите действие</h2><p id="dialog-text"></p><div class="dialog-actions"><button value="cancel" class="secondary">Отмена</button><button value="confirm" id="dialog-confirm">Подтвердить</button></div></form></dialog>
+  <dialog id="viewer" class="viewer inspection-viewer">
+    <div class="viewer-shell">
+      <header class="viewer-toolbar">
+        <div class="viewer-title-group"><strong id="viewer-title">Инспекция</strong><span id="viewer-subtitle">—</span></div>
+        <div class="viewer-toolgroup viewer-modes" aria-label="Режим сравнения">
+          <button type="button" data-view-mode="side">SIDE</button>
+          <button type="button" data-view-mode="split">SPLIT</button>
+          <button type="button" data-view-mode="diff">DIFF</button>
+          <button type="button" data-view-mode="blink">BLINK</button>
+        </div>
+        <div class="viewer-toolgroup viewer-zoom" aria-label="Масштаб">
+          <button type="button" data-zoom="fit">FIT</button>
+          <button type="button" data-zoom="0.5">50%</button>
+          <button type="button" data-zoom="1">100%</button>
+          <button type="button" data-zoom="2">200%</button>
+          <span id="viewer-zoom-value">FIT</span>
+        </div>
+        <div class="viewer-toolgroup">
+          <button id="viewer-sync" type="button" class="active">SYNC</button>
+          <button id="viewer-defects" type="button">ДЕФЕКТ</button>
+          <button id="viewer-reset" type="button">RESET</button>
+        </div>
+        <button id="viewer-close" class="viewer-close" aria-label="Закрыть">×</button>
+      </header>
+      <div id="diff-controls" class="diff-controls" hidden>
+        <div class="viewer-toolgroup">
+          <button type="button" data-diff-mode="absolute">ABS</button>
+          <button type="button" data-diff-mode="edge">EDGE</button>
+          <button type="button" data-diff-mode="heatmap">HEATMAP</button>
+        </div>
+        <label>Threshold <input id="diff-threshold" type="range" min="0" max="96" value="24"><span id="diff-threshold-value">24</span></label>
+        <label>Opacity <input id="diff-opacity" type="range" min="10" max="100" value="72"><span id="diff-opacity-value">72%</span></label>
+        <span class="diff-note">DIFF preview ≤ 2048 px</span>
+      </div>
+      <div id="viewer-stage" class="viewer-stage">
+        <canvas id="viewer-canvas"></canvas>
+        <div id="viewer-split-labels" class="viewer-split-labels"><span>SOURCE</span><span>RESULT</span></div>
+        <div id="viewer-no-result" class="viewer-no-result" hidden>Для сравнения нужен RESULT / rejected candidate.</div>
+      </div>
+      <footer class="viewer-footer"><span id="viewer-footer-left">Колесо — масштаб · drag — панорама · double click — FIT/100%</span><span id="viewer-footer-right">1 SIDE · 2 SPLIT · 3 DIFF · 4 BLINK · F FIT · Z 100% · X 200% · D DEFECT</span></footer>
+    </div>
+  </dialog>
+  <div id="toast" class="toast" role="status"></div>
+</body>
+</html>

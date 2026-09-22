@@ -1,0 +1,8 @@
+V8.8.1 build r4 — Localized defect visualization
+- Red boxes now represent locally detected suspicious regions.
+- Generic perimeter outline is amber and explicitly labelled CHECK AREA, not defect.
+- For perimeter_low_frequency_continuity, browser computes a low-frequency border-difference locator.
+- For unsupported_long_border_seam, browser also uses edge-difference energy near the border.
+- DEFECT auto-focuses the first suspicious region at 100% zoom.
+- If no region can be localized, UI says so instead of presenting the whole border as the defect.
+- Pipeline, validator thresholds, queue and generation logic are unchanged.

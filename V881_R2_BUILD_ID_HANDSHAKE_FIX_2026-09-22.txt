@@ -1,0 +1,6 @@
+V8.8.1 r2 build handshake fix
+- APP_VERSION remains exactly 8.8.1 for installer compatibility.
+- BUILD_ID=r2 distinguishes the rejected-candidate-controls server from older 8.8.1 processes.
+- /health returns version + build.
+- bootstrap reuses a server only when both version and build match.
+- no generation, quality-gate, donor, queue, or API logic changed.

@@ -1,0 +1,28 @@
+{
+  "project": "MG 4K Web Review Console",
+  "application_version": "8.8.0",
+  "image_pipeline_tag": "V874_CANVAS_INTEGRITY_GATE",
+  "offline_checks": {
+    "version_guard": true,
+    "source_queue_isolation": true,
+    "source_folder_selection": true,
+    "exact_sha_sibling_donor_recovery": true,
+    "safe_upscale": true,
+    "strict_whole_scene_validator": true,
+    "material_identity_lock": true,
+    "original_canvas_integrity_regression": true,
+    "source_sky_recovery_and_border_regression": true,
+    "dual_mode_and_approval": true,
+    "path_relocation": true,
+    "retry_budget": true,
+    "web_server": true,
+    "web_bootstrap": true,
+    "live_loopback_bootstrap": true,
+    "transcoded_2048px_donor_before": "REJECTED_CANVAS_INTEGRITY",
+    "transcoded_2048px_donor_after": "DONOR_READY_FOR_WHOLE_SCENE_REVIEW",
+    "full_native_5504px_donor_on_windows": "to_be_checked_when_current_image_runs",
+    "windows_powershell_installer": "not_run_in_linux_build_environment"
+  },
+  "real_api_requests_during_tests": 0,
+  "release_behavior": "Full-resolution result remains blocked if any technical gate fails; final image awaits explicit user approval."
+}

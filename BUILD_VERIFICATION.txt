@@ -1,0 +1,34 @@
+MG 4K V8.8.0 BUILD VERIFICATION
+
+Status: PASSED.
+Real API requests during tests: 0.
+
+Verified:
+- Python syntax and JSON build identity.
+- V8.7.2 queue migration without regeneration.
+- SAFE source-only processing and zero API calls.
+- Nano Banana Pro accepted RAW equals FINAL bytes.
+- camera, whole-scene, background, material and texture gates.
+- resumable retry budget and D:\Work\ИИ\MG path relocation.
+- loopback HTTP server, local static assets and security headers.
+- token rejection and explicit paid-confirmation rejection.
+- ordinary Start / Continue command contains no generation authorization.
+- faithful reconstruction passes the canvas-integrity gate.
+- frame-within-frame and invented side margins are rejected.
+- the reported defective fixture is rejected by the new gate.
+- pending V8.7.3 RAW is forced through free local revalidation.
+- the original-source sky can replace modified donor sky without changing
+  donor material pixels outside sky, while foreground defects remain blocked.
+- the outer two pixels of a subpixel registration cannot create a false
+  long-border-seam rejection; real inset frame seams remain blocked.
+- self-healing bootstrap waits for a verified /health response before browser open.
+- occupied preferred port is detected and fallback ports 8743-8752 are available.
+- an existing healthy V8.8.0 server is reused without a second process.
+- startup logs and endpoint metadata contain no API secret.
+- the bootstrap command contains no generation authorization flag.
+- application folders, UI references, output folders and diagnostics are excluded from all source queues.
+- a stale active UI/service image is removed from queue state without an API request.
+- the web UI opens a native Windows source-folder selector and persists the chosen path.
+- folder switching rebinds SAFE and GENERATIVE queues without starting processing or an API request.
+
+The detailed results are stored in TEST_RESULTS_V880.json.

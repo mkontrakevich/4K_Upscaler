@@ -1,0 +1,18 @@
+V8.8.1 INSTALLER TARGET HOTFIX
+
+Problem reproduced from workstation traceback:
+The active installation is located at:
+D:\Work\ИИ\MG\_GENERATIVE_QUALITY_IMMUTABLE_ARCH_V8_8_0_SOURCE_SKY_RECOVERY
+
+The previous V8.8.1 hotfix updater targeted a different sibling directory under D:\Work\ИИ,
+so the active path_relocation_self_test.py remained old and produced the identical traceback.
+
+Fix:
+- detect and update the active in-project installation first;
+- keep sibling-directory compatibility for older installs;
+- fresh installs use the in-project application folder;
+- force-overwrite path_relocation_self_test.py and v8_safe_appearance.py;
+- clear stale __pycache__;
+- verify the new self-test signature before running 01_INSTALL.bat;
+- print the exact update target to the console;
+- no API request is made by the installer.

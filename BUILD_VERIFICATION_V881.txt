@@ -1,0 +1,21 @@
+MG 4K V8.8.1 BUILD VERIFICATION
+
+Status: PASSED in offline build environment.
+Real API requests during tests: 0.
+
+Verified:
+- Existing V8.8.0 Web Review Console retained; no parallel UI introduced.
+- Source-folder selection persists and preview URLs are exposed.
+- SOURCE and RESULT side-by-side UI remains active.
+- Exact-SHA sibling donor discovery checks parent output/02_NANO_BANANA_PRO_RAW when base is selected.
+- Canonical Scene Stability Profile is loaded by the server and rendered in the web UI.
+- The same Scene Stability Profile is embedded into the Nano Banana Pro generation prompt.
+- HARD_LOCK: CAMERA, GEOMETRY, ARCHITECTURE, TEXTURES, VEGETATION, PEOPLE/VEHICLES/SMALL_OBJECTS.
+- SOFT_LOCK: LIGHTING, SKY_CLOUDS, WATER/REFLECTIONS/SHADOWS.
+- Canvas-integrity, material-identity, camera and source-sky recovery tests pass.
+- Self-healing bootstrap selects a fallback port when 8742 is occupied and reuses a healthy existing server.
+- Installation/startup/folder selection/offline tests do not authorize paid generation.
+- D:\Work\ИИ\MG relocation contract remains intact.
+
+Production boundary:
+- Full native-resolution Windows run against the user's real D:\Work\ИИ\MG remains the final acceptance step.
