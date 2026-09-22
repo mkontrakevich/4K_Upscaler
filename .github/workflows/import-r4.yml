@@ -2,7 +2,8 @@ name: Import V8.8.1 R4 FINAL
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
     paths:
       - "_bootstrap/**"
 
@@ -21,6 +22,7 @@ jobs:
       - name: Verify source archive
         shell: bash
         run: |
+          set -euo pipefail
           test -f _bootstrap/R4_SOURCE.zip
           echo "ea019b192aabd241a7b0e55799b1de89b1088d973634636d21ad50336e3a498d  _bootstrap/R4_SOURCE.zip" | sha256sum -c -
 
@@ -37,24 +39,12 @@ jobs:
           test -f "$ROOT/V881_R4_LOCALIZED_DEFECT_VISUALIZATION_2026-09-22.txt"
           rsync -a --exclude='.git' "$ROOT/" ./
           rm -rf .r4_extract _bootstrap
-          cat > .gitignore <<'EOF'
-.env
-.env.*
-API.txt
-OPENROUTER_API_KEY.txt
-*secret*
-*token*.txt
-__pycache__/
-*.py[cod]
-.venv/
-venv/
-_diagnostics/
-WEB_CONSOLE_ENDPOINT.json
-EOF
+          printf '%s\n' '.env' '.env.*' 'API.txt' 'OPENROUTER_API_KEY.txt' '*secret*' '*token*.txt' '__pycache__/' '*.py[cod]' '.venv/' 'venv/' '_diagnostics/' 'WEB_CONSOLE_ENDPOINT.json' > .gitignore
 
       - name: Validate Python sources
         shell: bash
         run: |
+          set -euo pipefail
           python3 -m compileall -q .
           find . -type d -name __pycache__ -prune -exec rm -rf {} +
 
