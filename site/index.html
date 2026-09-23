@@ -3,286 +3,313 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#06111c">
-<title>MG 4K — ARCH LOCK</title>
+<meta name="theme-color" content="#071421">
+<title>MG 4K — Visual Review Console</title>
 <style>
 :root{
-  --bg:#06111c;--panel:#0a1928;--panel2:#0d2031;--line:#294054;
+  --bg:#06111c;--bg2:#071421;--panel:#0a1928;--panel2:#0d2031;--line:#294054;
   --text:#eef5ff;--muted:#91a7bb;--cyan:#16c5f4;--green:#32d178;
   --amber:#ffb019;--red:#ff5267;--hard:#ff5d6c;--soft:#ffb019;--free:#73899c;
 }
 *{box-sizing:border-box}
-html,body{margin:0;min-height:100%;background:
-radial-gradient(circle at 75% -10%,#123651 0,transparent 31%),
-linear-gradient(180deg,#06111c,#07101a 70%);
-color:var(--text);font-family:Inter,Segoe UI,Arial,sans-serif}
+html,body{margin:0;min-height:100%;background:linear-gradient(180deg,#06111c,#07101a 70%);color:var(--text);font-family:Inter,Segoe UI,Arial,sans-serif}
 button,input,select{font:inherit}
 button{color:inherit}
-.wrap{max-width:1480px;margin:auto;padding:0 22px 34px}
-.top{min-height:72px;display:flex;align-items:center;justify-content:space-between;gap:14px;border-bottom:1px solid var(--line)}
-.brand{display:flex;align-items:center;gap:12px;min-width:0}
-.mark{width:32px;height:32px;display:grid;place-items:center;border:1px solid #6f879c;border-radius:7px;font-size:10px;letter-spacing:.12em}
+body{overflow-x:hidden}
+.shell{max-width:1680px;margin:0 auto;padding:0 18px 28px}
+.topbar{min-height:76px;display:flex;align-items:center;justify-content:space-between;gap:16px;border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:center;gap:13px;min-width:0}
+.mark{width:34px;height:34px;display:grid;place-items:center;border:1px solid #6f879c;border-radius:7px;font-size:10px;letter-spacing:.12em}
 .brand-copy{display:flex;align-items:baseline;gap:10px;min-width:0}
-.brand strong{font-size:23px;white-space:nowrap}
-.brand span{color:var(--cyan);letter-spacing:.12em;font-size:11px;white-space:nowrap}
+.brand-copy strong{font-size:25px;white-space:nowrap}
+.brand-copy span{color:var(--cyan);letter-spacing:.12em;font-size:12px;white-space:nowrap}
 .version{font:11px Consolas,monospace;color:var(--muted);border:1px solid var(--line);padding:7px 10px;border-radius:6px;white-space:nowrap}
-.main-grid{display:grid;grid-template-columns:minmax(0,1.28fr) minmax(360px,.72fr);gap:16px;padding-top:16px}
-.panel{border:1px solid var(--line);background:linear-gradient(180deg,rgba(13,32,49,.97),rgba(8,22,35,.97));border-radius:10px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.2)}
-.panel-head{min-height:48px;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;border-bottom:1px solid var(--line);background:#0b1c2c}
-.panel-head strong{font-size:12px;letter-spacing:.12em}
-.panel-head span{font-size:11px;color:var(--muted)}
-.upload-body{padding:14px}
-.drop{position:relative;border:1px dashed #45627b;border-radius:9px;min-height:300px;background:radial-gradient(circle at 50% 35%,#123049,#07111b 67%);overflow:hidden;display:grid;place-items:center;text-align:center}
-.drop.drag{border-color:var(--cyan);box-shadow:inset 0 0 0 1px var(--cyan)}
-.drop-content{padding:24px;max-width:560px}
-.drop-icon{width:52px;height:52px;margin:0 auto 14px;border-radius:50%;display:grid;place-items:center;border:1px solid #49667e;color:var(--cyan);font-size:25px}
-.drop h1{font-size:22px;margin:0 0 8px}
-.drop p{color:var(--muted);line-height:1.5;margin:0 auto 16px;font-size:14px}
-.upload-actions{display:flex;gap:9px;justify-content:center;flex-wrap:wrap}
+.mode-switch{display:flex;border:1px solid #35536b;border-radius:8px;overflow:hidden}
+.mode-switch button{min-width:190px;padding:10px 18px;border:0;border-right:1px solid #35536b;background:#0a1826;color:#8fa5b8;cursor:pointer}
+.mode-switch button:last-child{border-right:0}
+.mode-switch button strong{display:block;font-size:12px}
+.mode-switch button span{display:block;font-size:10px;margin-top:2px}
+.mode-switch button.active{background:#0a293b;color:#61dafb;box-shadow:inset 0 -2px 0 var(--cyan)}
+.status-strip{margin-top:12px;display:grid;grid-template-columns:1.25fr 1fr auto;align-items:center;gap:12px;padding:11px 13px;border:1px solid var(--line);border-radius:8px;background:#081521}
+.status-message,.current-file{display:flex;align-items:center;gap:9px;min-width:0}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--green);box-shadow:0 0 15px rgba(50,209,120,.7);flex:0 0 auto}
+.status-message span,.current-file{font-size:12px;color:#c7d5e2}
+.current-file strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.progress-box{display:flex;align-items:center;gap:9px;font-size:11px;color:var(--muted)}
+.progress{width:100px;height:8px;background:#1e3447;border-radius:10px;overflow:hidden}
+.progress i{display:block;height:100%;width:0;background:var(--cyan);transition:.25s}
+.comparison{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px}
+.image-card{border:1px solid var(--line);border-radius:9px;overflow:hidden;background:#07131f;min-width:0}
+.image-card>header{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:10px 12px;border-bottom:1px solid var(--line);background:#0a1b2a}
+.image-card>header div{display:flex;align-items:center;gap:8px}
+.image-card>header strong{font-size:13px;letter-spacing:.05em}
+.image-card>header span{font-size:11px;color:var(--muted)}
+.image-stage{position:relative;min-height:430px;background:#030a10;display:grid;place-items:center;overflow:hidden}
+.image-stage img{display:block;width:100%;height:100%;min-height:430px;max-height:67vh;object-fit:contain;background:#030a10}
+.image-stage .empty{position:absolute;inset:0;display:grid;place-items:center;text-align:center;color:#71899d;padding:30px;font-size:13px}
+.upload-overlay{position:absolute;inset:0;display:grid;place-items:center;background:radial-gradient(circle at 50% 35%,rgba(18,48,73,.85),rgba(3,10,16,.95) 70%);transition:.2s}
+.upload-overlay.hidden{opacity:0;pointer-events:none}
+.upload-box{text-align:center;max-width:520px;padding:30px}
+.upload-icon{width:54px;height:54px;border:1px solid #49667e;border-radius:50%;display:grid;place-items:center;margin:0 auto 14px;color:var(--cyan);font-size:25px}
+.upload-box h1{font-size:20px;margin:0 0 8px}
+.upload-box p{font-size:13px;line-height:1.45;color:var(--muted);margin:0 0 15px}
+.upload-actions{display:flex;justify-content:center;gap:8px;flex-wrap:wrap}
+#file-input{display:none}
+.badges{position:absolute;left:9px;right:9px;top:9px;display:flex;justify-content:space-between;gap:8px;pointer-events:none}
+.badge{max-width:72%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:6px 8px;border-radius:6px;background:rgba(4,12,20,.84);border:1px solid rgba(92,121,145,.55);font:11px Consolas,monospace;color:#d5e3ee;backdrop-filter:blur(8px)}
+.replace{position:absolute;right:9px;bottom:9px}
 .btn{min-height:42px;padding:0 15px;border:1px solid #506d84;border-radius:7px;background:#102538;font-weight:700;cursor:pointer}
-.btn.primary{background:#0b8fb8;border-color:#18c8f4}.btn.approve{background:#168b48;border-color:#31dc79}.btn.reject{background:#8d2638;border-color:#ff6475}
+.btn.primary{background:#0b8fb8;border-color:#18c8f4}
+.btn.approve{background:#168b48;border-color:#31dc79}
+.btn.reject{background:#8d2638;border-color:#ff6475}
+.btn.generate{background:#81560b;border-color:#f5a714}
 .btn.ghost{background:#0a1826;color:#c8d7e5}
 .btn:disabled{opacity:.38;cursor:not-allowed}
-#file-input{display:none}
-.preview{position:absolute;inset:0;display:none;background:#050c13}
-.preview.visible{display:block}
-.preview img{width:100%;height:100%;object-fit:contain}
-.preview-top{position:absolute;left:10px;right:10px;top:10px;display:flex;justify-content:space-between;gap:10px;pointer-events:none}
-.badge{display:inline-flex;align-items:center;gap:7px;padding:6px 8px;border-radius:6px;background:rgba(4,12,20,.82);border:1px solid rgba(92,121,145,.55);font:11px Consolas,monospace;color:#d5e3ee;backdrop-filter:blur(8px)}
-.preview-bottom{position:absolute;left:10px;right:10px;bottom:10px;display:flex;gap:8px;justify-content:flex-end}
-.preview-bottom button{pointer-events:auto}
-.source-meta{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:10px}
-.meta{padding:9px 10px;border:1px solid #243c50;border-radius:7px;background:#081522;min-width:0}
-.meta small{display:block;font-size:9px;letter-spacing:.12em;color:var(--muted);margin-bottom:4px}
-.meta strong{font:12px Consolas,monospace;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.locks{padding:12px}
-.lock-list{display:grid;gap:8px}
-.lock-row{display:grid;grid-template-columns:minmax(160px,1fr) 210px;align-items:center;gap:10px;padding:9px 10px;border:1px solid #263e52;border-radius:8px;background:#091725}
-.lock-name{min-width:0}
-.lock-name strong{display:block;font-size:13px}
-.lock-name small{display:block;color:var(--muted);font-size:10px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.meta-row{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;padding:8px;background:#06111b;border-top:1px solid #1b3143}
+.meta{padding:7px 9px;border:1px solid #243c50;border-radius:6px;background:#081522;min-width:0}
+.meta small{display:block;font-size:8px;letter-spacing:.1em;color:var(--muted);margin-bottom:3px}
+.meta strong{font:11px Consolas,monospace;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.result-state{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);text-align:center;color:#8399ac;max-width:80%}
+.result-state strong{display:block;color:#d4e0ea;margin-bottom:6px;font-size:14px}
+.result-state span{font-size:12px;line-height:1.45}
+.result-stage.ready .result-state{display:none}
+.lock-panel,.analysis-panel,.actions-panel,.log-panel{margin-top:12px;border:1px solid var(--line);border-radius:9px;overflow:hidden;background:linear-gradient(180deg,#0b1b2a,#081521)}
+.section-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 13px;border-bottom:1px solid var(--line);background:#0b1c2c}
+.section-head strong{font-size:12px;letter-spacing:.1em}
+.section-head span{font-size:10px;color:var(--muted)}
+.lock-body{padding:10px}
+.lock-list{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.lock-row{display:grid;grid-template-columns:minmax(120px,1fr) 176px;align-items:center;gap:8px;padding:8px 9px;border:1px solid #263e52;border-radius:7px;background:#091725}
+.lock-name strong{display:block;font-size:12px}
+.lock-name small{display:block;color:var(--muted);font-size:9px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .segmented{display:grid;grid-template-columns:repeat(3,1fr);border:1px solid #38546a;border-radius:6px;overflow:hidden}
-.segmented button{height:33px;border:0;border-right:1px solid #38546a;background:#0c1d2b;color:#71889b;font-size:10px;font-weight:800;letter-spacing:.06em;cursor:pointer}
+.segmented button{height:30px;border:0;border-right:1px solid #38546a;background:#0c1d2b;color:#71889b;font-size:9px;font-weight:800;letter-spacing:.05em;cursor:pointer}
 .segmented button:last-child{border-right:0}
 .segmented button.active[data-level="hard"]{background:#52202a;color:#ffbec5}
 .segmented button.active[data-level="soft"]{background:#49340c;color:#ffd477}
 .segmented button.active[data-level="free"]{background:#223344;color:#d1dfeb}
-.profile-actions{display:flex;gap:8px;margin-top:10px}
-.profile-actions button{flex:1}
-.statusbar{margin-top:16px;border:1px solid var(--line);border-radius:9px;background:#081521;display:grid;grid-template-columns:1fr auto;align-items:center;gap:12px;padding:11px 13px}
-.status-copy{display:flex;align-items:center;gap:9px;min-width:0}
-.dot{width:9px;height:9px;border-radius:50%;background:var(--green);box-shadow:0 0 15px rgba(50,209,120,.7);flex:0 0 auto}
-.status-copy span{font-size:12px;color:#c7d5e2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.run{display:flex;gap:8px}
-.run .btn{min-height:39px}
-.mobile-actions{display:none}
-.toast{position:fixed;left:50%;bottom:24px;transform:translate(-50%,90px);opacity:0;transition:.22s;padding:10px 14px;background:#0d2131;border:1px solid #49657b;border-radius:7px;z-index:50;box-shadow:0 18px 50px rgba(0,0,0,.35);font-size:12px;max-width:min(520px,calc(100vw - 28px));text-align:center}
+.lock-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:9px}
+.actions{display:grid;grid-template-columns:1.25fr 1.1fr 1fr 1.15fr 1fr;gap:9px;padding:10px}
+.actions .btn{min-height:48px}
+.analysis-panel{display:none}
+.analysis-panel.visible{display:block}
+.analysis-summary{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;padding:10px}
+.stat{border:1px solid #294054;border-radius:7px;background:#071522;padding:8px 9px;min-width:0}
+.stat small{display:block;font-size:8px;letter-spacing:.08em;color:#71899c;margin-bottom:4px}
+.stat strong{display:block;font:11px Consolas,monospace;color:#dbe7f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.analysis-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:0 10px 10px}
+.checks,.raw-analysis{border:1px solid #263e52;border-radius:7px;background:#07131e;overflow:hidden}
+.subhead{padding:8px 10px;border-bottom:1px solid #263e52;color:#b8cad8;font-size:10px;font-weight:800;letter-spacing:.08em}
+.check-list{padding:6px 9px;max-height:250px;overflow:auto}
+.check{display:grid;grid-template-columns:18px minmax(0,1fr) auto;gap:7px;align-items:center;padding:6px 2px;border-bottom:1px solid rgba(41,64,84,.45);font-size:10px}
+.check:last-child{border-bottom:0}
+.check i{width:9px;height:9px;border-radius:50%;background:#72889a}
+.check.pass i{background:var(--green)}
+.check.fail i{background:var(--red)}
+.check.warn i{background:var(--amber)}
+.check code{font:9px Consolas,monospace;color:#8aa1b4}
+.raw-analysis pre{margin:0;padding:9px 10px;max-height:250px;overflow:auto;white-space:pre-wrap;word-break:break-word;font:9px/1.45 Consolas,monospace;color:#91a7bb}
+.log-lines{padding:8px 12px;min-height:90px;max-height:220px;overflow:auto;font:10px/1.55 Consolas,monospace;color:#9fb4c5}
+.log-line{display:grid;grid-template-columns:74px 80px 1fr;gap:8px}
+.log-line .ok{color:#42d680}.log-line .err{color:#ff6576}.log-line .info{color:#21c9f6}.log-line .warn{color:#ffb42c}
+.viewer{width:min(97vw,1500px);height:min(94vh,960px);padding:0;border:1px solid #38536a;border-radius:10px;background:#06111b;color:#eef5ff}
+.viewer::backdrop{background:rgba(0,0,0,.82)}
+.viewer-shell{height:100%;display:grid;grid-template-rows:auto 1fr}
+.viewer-toolbar{display:flex;align-items:center;gap:8px;justify-content:space-between;padding:9px 10px;border-bottom:1px solid #294054;background:#0b1c2c}
+.viewer-title{display:flex;flex-direction:column;min-width:170px}
+.viewer-title strong{font-size:12px}.viewer-title span{font-size:9px;color:#8aa1b4;margin-top:2px}
+.viewer-tools{display:flex;gap:6px;flex-wrap:wrap}
+.viewer-tools button{height:34px;border:1px solid #38546a;border-radius:6px;background:#0b1c2b;color:#a6bac9;font-size:10px;font-weight:800;cursor:pointer}
+.viewer-tools button.active{border-color:#1ccaf3;color:#5cdcff;background:#0b2a3b}
+.viewer-stage{position:relative;overflow:hidden;background:#02070b}
+.viewer-side{position:absolute;inset:0;display:grid;grid-template-columns:1fr 1fr}
+.viewer-side img{width:100%;height:100%;object-fit:contain;border-right:1px solid #294054}
+.viewer-side img:last-child{border-right:0}
+.viewer-overlay{position:absolute;inset:0;display:none}
+.viewer-overlay img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
+.viewer-overlay .clip{clip-path:inset(0 50% 0 0)}
+.viewer-canvas{position:absolute;inset:0;width:100%;height:100%;display:none;object-fit:contain}
+.viewer-close{width:38px;height:34px;border:1px solid #38546a;border-radius:6px;background:#0a1826;font-size:18px;cursor:pointer}
+.mobile-bar{display:none}
+.toast{position:fixed;left:50%;bottom:22px;transform:translate(-50%,90px);opacity:0;transition:.22s;padding:10px 14px;background:#0d2131;border:1px solid #49657b;border-radius:7px;z-index:80;box-shadow:0 18px 50px rgba(0,0,0,.35);font-size:12px;max-width:min(520px,calc(100vw - 28px));text-align:center}
 .toast.show{transform:translate(-50%,0);opacity:1}
-@media(max-width:980px){
-  .main-grid{grid-template-columns:1fr}
-  .locks-panel{order:2}
-  .source-meta{grid-template-columns:repeat(2,1fr)}
+@media(max-width:1180px){
+  .lock-list{grid-template-columns:repeat(2,1fr)}
 }
-@media(max-width:640px){
+@media(max-width:850px){
   body{padding-bottom:72px}
-  .wrap{padding:0 9px 16px}
-  .top{min-height:54px}
-  .mark{width:27px;height:27px;font-size:9px}
-  .brand{gap:8px}
+  .shell{padding:0 8px 18px}
+  .topbar{min-height:58px}
   .brand-copy{display:grid;gap:1px}
-  .brand strong{font-size:18px;line-height:1}
-  .brand span{font-size:8px}
-  .version{font-size:9px;padding:5px 7px}
-  .main-grid{gap:9px;padding-top:9px}
-  .panel{border-radius:8px}
-  .panel-head{min-height:39px;padding:7px 10px}
-  .panel-head strong{font-size:10px}
-  .panel-head span{font-size:9px}
-  .upload-body{padding:8px}
-  .drop{min-height:220px}
-  .drop-content{padding:14px}
-  .drop-icon{width:40px;height:40px;margin-bottom:9px;font-size:20px}
-  .drop h1{font-size:17px;margin-bottom:5px}
-  .drop p{font-size:11px;line-height:1.35;margin-bottom:11px}
-  .upload-actions{gap:6px}
-  .upload-actions .btn{min-height:38px;padding:0 11px;font-size:11px}
-  .source-meta{grid-template-columns:1fr 1fr;gap:5px;margin-top:6px}
-  .meta{padding:7px 8px}
-  .meta small{font-size:8px;margin-bottom:3px}
-  .meta strong{font-size:10px}
-  .locks{padding:7px}
-  .lock-list{gap:5px}
-  .lock-row{grid-template-columns:minmax(0,1fr) 146px;gap:6px;padding:6px 7px}
-  .lock-name strong{font-size:11px}
+  .brand-copy strong{font-size:19px;line-height:1}.brand-copy span{font-size:8px}
+  .version{font-size:8px;padding:5px 6px}
+  .mode-switch{display:none}
+  .status-strip{grid-template-columns:1fr;padding:8px 9px;gap:6px}
+  .current-file,.progress-box{display:none}
+  .comparison{grid-template-columns:1fr;gap:8px;margin-top:8px}
+  .image-stage,.image-stage img{min-height:260px;max-height:48vh}
+  .meta-row{grid-template-columns:1fr 1fr}
+  .lock-list{grid-template-columns:1fr}
+  .lock-row{grid-template-columns:minmax(0,1fr) 145px;padding:6px}
   .lock-name small{display:none}
-  .segmented button{height:29px;font-size:8px}
-  .profile-actions{display:none}
-  .statusbar{margin-top:9px;padding:8px 9px;grid-template-columns:1fr}
-  .status-copy span{font-size:10px}
-  .run{display:none}
-  .mobile-actions{position:fixed;left:0;right:0;bottom:0;display:grid;grid-template-columns:1fr 1.35fr;gap:7px;padding:8px 10px calc(8px + env(safe-area-inset-bottom));background:rgba(5,15,25,.94);border-top:1px solid var(--line);backdrop-filter:blur(14px);z-index:40}
-  .mobile-actions .btn{min-height:44px;font-size:11px}
-  .preview-top{left:6px;right:6px;top:6px}
-  .preview-bottom{left:6px;right:6px;bottom:6px}
-  .badge{font-size:9px;padding:5px 6px}
-}
-
-.review-panel{display:none;margin-top:12px}
-.review-panel.visible{display:block}
-.review-headline{display:flex;align-items:center;gap:10px}
-.review-headline .review-state{font-size:10px;font-weight:800;letter-spacing:.07em;color:#8ca5b9}
-.review-body{padding:10px}
-.review-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.review-frame{position:relative;min-height:360px;border:1px solid var(--line);border-radius:8px;background:#030a10;overflow:hidden}
-.review-frame img{display:block;width:100%;height:100%;min-height:360px;max-height:68vh;object-fit:contain;background:#030a10}
-.review-label{position:absolute;left:8px;top:8px;z-index:2;padding:6px 8px;border:1px solid #38546a;border-radius:6px;background:rgba(7,19,29,.88);font-size:10px;font-weight:900;letter-spacing:.08em}
-.review-toolbar{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:9px}
-.review-tools,.review-decisions{display:flex;gap:7px;flex-wrap:wrap}
-.review-summary{margin-top:9px;display:grid;grid-template-columns:repeat(4,1fr);gap:7px}
-.review-stat{border:1px solid var(--line);border-radius:7px;background:#081521;padding:8px 10px;min-width:0}
-.review-stat small{display:block;color:#6f8a9e;font-size:8px;letter-spacing:.08em;margin-bottom:3px}
-.review-stat strong{display:block;color:#d8e6f1;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.review-panel.blink .review-source-wrap img{animation:reviewBlink 1s steps(1,end) infinite}
-.review-panel.blink .review-result-wrap img{animation:reviewBlinkInverse 1s steps(1,end) infinite}
-@keyframes reviewBlink{0%,49%{opacity:1}50%,100%{opacity:0}}
-@keyframes reviewBlinkInverse{0%,49%{opacity:0}50%,100%{opacity:1}}
-@media(max-width:760px){
-  .review-grid{grid-template-columns:1fr}
-  .review-frame,.review-frame img{min-height:230px}
-  .review-summary{grid-template-columns:repeat(2,1fr)}
-  .review-toolbar{align-items:flex-start;flex-direction:column}
+  .actions-panel{display:none}
+  .analysis-summary{grid-template-columns:1fr 1fr}
+  .analysis-grid{grid-template-columns:1fr}
+  .mobile-bar{position:fixed;left:0;right:0;bottom:0;z-index:60;display:grid;grid-template-columns:1fr 1.25fr 1fr;gap:6px;padding:7px 8px calc(7px + env(safe-area-inset-bottom));background:rgba(5,15,25,.95);border-top:1px solid var(--line);backdrop-filter:blur(14px)}
+  .mobile-bar .btn{min-height:44px;padding:0 7px;font-size:10px}
+  .viewer{width:100vw;height:100vh;border-radius:0;border:0}
+  .viewer-toolbar{align-items:flex-start;flex-wrap:wrap}
+  .viewer-title{width:100%}
+  .viewer-side{grid-template-columns:1fr}
+  .viewer-side img{height:50%;border-right:0;border-bottom:1px solid #294054}
 }
 </style>
 </head>
 <body>
-<div class="wrap">
-  <header class="top">
+<div class="shell">
+  <header class="topbar">
     <div class="brand">
       <div class="mark">MG</div>
-      <div class="brand-copy"><strong>MG 4K</strong><span>ARCH LOCK SYSTEM</span></div>
+      <div class="brand-copy"><strong>MG 4K</strong><span>VISUAL REVIEW CONSOLE</span></div>
     </div>
-    <div class="version">CORE 8.8.1 R4 · UI R7</div>
+    <div class="mode-switch" aria-label="Режим">
+      <button type="button" id="mode-safe" disabled><strong>SAFE</strong><span>локальный upscale</span></button>
+      <button type="button" id="mode-generative" class="active"><strong>GENERATIVE</strong><span>Nano Banana Pro</span></button>
+    </div>
+    <div class="version">CORE 8.8.1 R4 · CLOUD UI R8</div>
   </header>
 
-  <main class="main-grid">
-    <section class="panel">
-      <div class="panel-head">
-        <strong>ИСХОДНОЕ ИЗОБРАЖЕНИЕ</strong>
-        <span>устройство · Files · iCloud · Drive · Dropbox</span>
-      </div>
-      <div class="upload-body">
-        <div class="drop" id="drop">
-          <div class="drop-content" id="drop-content">
-            <div class="drop-icon">＋</div>
+  <section class="status-strip">
+    <div class="status-message"><i class="dot" id="status-dot"></i><span id="status-text">Подключение к временной облачной сессии…</span></div>
+    <div class="current-file">Текущий файл: <strong id="current-file">—</strong></div>
+    <div class="progress-box"><span id="progress-label">0%</span><div class="progress"><i id="progress-bar"></i></div></div>
+  </section>
+
+  <section class="comparison" aria-label="Сравнение исходника и результата">
+    <article class="image-card">
+      <header><div><strong>ИСХОДНИК</strong><span>неизменный</span></div><span id="source-size">—</span></header>
+      <div class="image-stage" id="source-stage">
+        <img id="source-image" alt="Исходное изображение" hidden>
+        <div class="upload-overlay" id="upload-overlay">
+          <div class="upload-box">
+            <div class="upload-icon">＋</div>
             <h1>Добавить изображение</h1>
-            <p>Выберите файл с устройства или из любого облачного хранилища, доступного через системный файловый менеджер. На компьютере можно перетащить изображение сюда.</p>
+            <p>Файл можно выбрать с устройства, Files, iCloud, Drive, Dropbox или перетащить сюда на компьютере.</p>
             <div class="upload-actions">
               <button class="btn primary" id="pick-file" type="button">Выбрать файл</button>
-              <button class="btn ghost" id="pick-cloud" type="button">Открыть Files / облако</button>
-            </div>
-            <input id="file-input" type="file" accept="image/*,.heic,.heif">
-          </div>
-          <div class="preview" id="preview">
-            <img id="preview-image" alt="Исходное изображение">
-            <div class="preview-top">
-              <span class="badge" id="preview-name">SOURCE</span>
-              <span class="badge" id="preview-dimensions">—</span>
-            </div>
-            <div class="preview-bottom">
-              <button class="btn ghost" id="replace-file" type="button">Заменить</button>
+              <button class="btn ghost" id="pick-cloud" type="button">Files / облако</button>
             </div>
           </div>
         </div>
+        <div class="badges" id="source-badges" hidden>
+          <span class="badge" id="source-name">SOURCE</span>
+          <span class="badge" id="source-dimensions">—</span>
+        </div>
+        <button class="btn ghost replace" id="replace-file" type="button" hidden>Заменить</button>
+        <input id="file-input" type="file" accept="image/*,.heic,.heif">
+      </div>
+      <div class="meta-row">
+        <div class="meta"><small>ФАЙЛ</small><strong id="meta-name">—</strong></div>
+        <div class="meta"><small>РАЗМЕР</small><strong id="meta-size">—</strong></div>
+        <div class="meta"><small>РАЗРЕШЕНИЕ</small><strong id="meta-resolution">—</strong></div>
+        <div class="meta"><small>ИСТОЧНИК</small><strong id="meta-source">—</strong></div>
+      </div>
+    </article>
 
-        <div class="source-meta">
-          <div class="meta"><small>ФАЙЛ</small><strong id="meta-name">—</strong></div>
-          <div class="meta"><small>РАЗМЕР</small><strong id="meta-size">—</strong></div>
-          <div class="meta"><small>РАЗРЕШЕНИЕ</small><strong id="meta-resolution">—</strong></div>
-          <div class="meta"><small>ИСТОЧНИК</small><strong id="meta-source">—</strong></div>
+    <article class="image-card">
+      <header><div><strong>РЕЗУЛЬТАТ</strong><span id="result-caption">ожидает обработки</span></div><span id="result-size">3840 × 2160</span></header>
+      <div class="image-stage result-stage" id="result-stage">
+        <img id="result-image" alt="Результат обработки" hidden>
+        <div class="result-state" id="result-state">
+          <strong>RESULT</strong>
+          <span>Настройте LOCK-профиль и запустите обработку. Результат появится здесь без перехода на другой экран.</span>
+        </div>
+        <div class="badges" id="result-badges" hidden>
+          <span class="badge" id="result-label">RESULT</span>
+          <span class="badge" id="result-validation-badge">ARCH LOCK · WAIT</span>
         </div>
       </div>
-    </section>
+    </article>
+  </section>
 
-    <section class="panel locks-panel">
-      <div class="panel-head">
-        <strong>LOCK PROFILE</strong>
-        <span>индивидуально по параметрам</span>
-      </div>
-      <div class="locks">
-        <div class="lock-list" id="lock-list"></div>
-        <div class="profile-actions">
-          <button class="btn ghost" id="reset-locks" type="button">По умолчанию</button>
-          <button class="btn ghost" id="copy-profile" type="button">Копировать профиль</button>
-          <button class="btn ghost" id="pair-processor" type="button">Подключить процессор</button>
-        </div>
-      </div>
-    </section>
-  </main>
-
-  <section class="panel review-panel" id="review-panel">
-    <div class="panel-head">
-      <div class="review-headline">
-        <strong>ПРОВЕРКА РЕЗУЛЬТАТА</strong>
-        <span class="review-state" id="review-state">RESULT · REVIEW</span>
-      </div>
-      <span>сравнение SOURCE / RESULT перед FINAL</span>
-    </div>
-    <div class="review-body">
-      <div class="review-toolbar">
-        <div class="review-tools">
-          <button class="btn ghost" id="review-side" type="button">SIDE</button>
-          <button class="btn ghost" id="review-blink" type="button">BLINK</button>
-        </div>
-        <div class="review-decisions">
-          <button class="btn reject" id="review-reject" type="button">Отклонить</button>
-          <button class="btn approve" id="review-approve" type="button">Утвердить результат</button>
-          <button class="btn primary" id="review-download" type="button" hidden>Скачать FINAL 4K</button>
-        </div>
-      </div>
-      <div class="review-grid">
-        <div class="review-frame review-source-wrap">
-          <span class="review-label">SOURCE</span>
-          <img id="review-source" alt="Исходное изображение">
-        </div>
-        <div class="review-frame review-result-wrap">
-          <span class="review-label" id="review-result-label">RESULT</span>
-          <img id="review-result" alt="Результат обработки">
-        </div>
-      </div>
-      <div class="review-summary">
-        <div class="review-stat"><small>ЗАДАНИЕ</small><strong id="review-job">—</strong></div>
-        <div class="review-stat"><small>СТАТУС</small><strong id="review-status">—</strong></div>
-        <div class="review-stat"><small>ARCH LOCK</small><strong id="review-validation">—</strong></div>
-        <div class="review-stat"><small>ПРОГРЕСС</small><strong id="review-progress">—</strong></div>
+  <section class="lock-panel">
+    <div class="section-head"><strong>LOCK PROFILE</strong><span>настройки перед генерацией · каждый параметр независим</span></div>
+    <div class="lock-body">
+      <div class="lock-list" id="lock-list"></div>
+      <div class="lock-actions">
+        <button class="btn ghost" id="reset-locks" type="button">По умолчанию</button>
+        <button class="btn ghost" id="copy-profile" type="button">Копировать профиль</button>
       </div>
     </div>
   </section>
 
-  <section class="statusbar">
-    <div class="status-copy">
-      <i class="dot"></i>
-      <span id="status-text">Интерфейс готов. Добавьте изображение.</span>
+  <section class="actions-panel">
+    <div class="actions">
+      <button class="btn primary" id="action-process" type="button" disabled>▶ Запустить / продолжить</button>
+      <button class="btn approve" id="action-approve" type="button" disabled>✓ Утвердить и дальше</button>
+      <button class="btn reject" id="action-reject" type="button" disabled>× Отклонить</button>
+      <button class="btn generate" id="action-regenerate" type="button" disabled>↻ Новая генерация</button>
+      <button class="btn ghost" id="action-inspect" type="button" disabled>Инспекция</button>
     </div>
-    <div class="run">
-      <button class="btn ghost" id="save-profile" type="button">Сохранить настройки</button>
-      <button class="btn reject" id="reject-job" type="button" hidden>Отклонить</button>
-      <button class="btn approve" id="approve-job" type="button" hidden>Утвердить</button>
-      <button class="btn primary" id="prepare-job" type="button" disabled>Отправить в обработку</button>
+  </section>
+
+  <section class="analysis-panel" id="analysis-panel">
+    <div class="section-head"><strong>ТЕХНИЧЕСКИЙ РАЗБОР / ARCH LOCK</strong><span id="analysis-caption">ожидает результата</span></div>
+    <div class="analysis-summary">
+      <div class="stat"><small>ЗАДАНИЕ</small><strong id="analysis-job">—</strong></div>
+      <div class="stat"><small>СТАТУС</small><strong id="analysis-status">—</strong></div>
+      <div class="stat"><small>РЕШЕНИЕ</small><strong id="analysis-decision">—</strong></div>
+      <div class="stat"><small>ARCH LOCK</small><strong id="analysis-validation">—</strong></div>
+      <div class="stat"><small>ПРОГРЕСС</small><strong id="analysis-progress">—</strong></div>
     </div>
+    <div class="analysis-grid">
+      <div class="checks">
+        <div class="subhead">ПРОВЕРКИ</div>
+        <div class="check-list" id="check-list"></div>
+      </div>
+      <div class="raw-analysis">
+        <div class="subhead">ДЕТАЛИ ВАЛИДАЦИИ</div>
+        <pre id="raw-validation">—</pre>
+      </div>
+    </div>
+  </section>
+
+  <section class="log-panel">
+    <div class="section-head"><strong>ЛОГ ПРОЦЕССА</strong><span>события текущей сессии</span></div>
+    <div class="log-lines" id="log-lines"></div>
   </section>
 </div>
 
-<div class="mobile-actions">
+<div class="mobile-bar">
   <button class="btn ghost" id="mobile-file" type="button">Файл</button>
-  <button class="btn primary" id="mobile-prepare" type="button" disabled>Обработка</button>
-  <button class="btn reject" id="mobile-reject-job" type="button" hidden>Отклонить</button>
-  <button class="btn approve" id="mobile-approve-job" type="button" hidden>Утвердить</button>
+  <button class="btn primary" id="mobile-process" type="button" disabled>Обработка</button>
+  <button class="btn ghost" id="mobile-inspect" type="button" disabled>Инспекция</button>
 </div>
+
+<dialog id="viewer" class="viewer">
+  <div class="viewer-shell">
+    <header class="viewer-toolbar">
+      <div class="viewer-title"><strong>ИНСПЕКЦИЯ SOURCE / RESULT</strong><span>SIDE · SPLIT · DIFF · BLINK</span></div>
+      <div class="viewer-tools">
+        <button type="button" data-view="side" class="active">SIDE</button>
+        <button type="button" data-view="split">SPLIT</button>
+        <button type="button" data-view="diff">DIFF</button>
+        <button type="button" data-view="blink">BLINK</button>
+      </div>
+      <button class="viewer-close" id="viewer-close" type="button">×</button>
+    </header>
+    <div class="viewer-stage" id="viewer-stage">
+      <div class="viewer-side" id="viewer-side"><img id="viewer-source" alt="SOURCE"><img id="viewer-result" alt="RESULT"></div>
+      <div class="viewer-overlay" id="viewer-overlay"><img id="overlay-source" alt="SOURCE"><img id="overlay-result" class="clip" alt="RESULT"></div>
+      <canvas class="viewer-canvas" id="viewer-canvas"></canvas>
+    </div>
+  </div>
+</dialog>
 
 <div class="toast" id="toast"></div>
 
 <script>
-const defaults = [
+const defaults=[
   {id:"camera",name:"Камера",hint:"ракурс · перспектива · фокус",level:"hard"},
   {id:"geometry",name:"Геометрия",hint:"объём · пропорции · силуэт",level:"hard"},
   {id:"architecture",name:"Архитектура",hint:"фасад · проёмы · конструкция",level:"hard"},
@@ -293,387 +320,163 @@ const defaults = [
   {id:"sky",name:"Небо / облака",hint:"погода · облачность · атмосфера",level:"soft"},
   {id:"water",name:"Вода / отражения",hint:"вода · стекло · отражения · тени",level:"soft"}
 ];
+const $=id=>document.getElementById(id);
+let locks=JSON.parse(localStorage.getItem("mg4k.lockProfile")||"null")||Object.fromEntries(defaults.map(x=>[x.id,x.level]));
+let currentFile=null,currentObjectUrl=null,currentJob=null,cloudSession=null,sessionStartPromise=null,heartbeatTimer=null,jobPollTimer=null;
+let resultObjectUrl=null,viewerBlinkTimer=null;
 
-let locks = JSON.parse(localStorage.getItem("mg4k.lockProfile") || "null") || Object.fromEntries(defaults.map(x=>[x.id,x.level]));
-let currentFile = null;
-let currentObjectUrl = null;
-let currentJob = null;
-let jobPollTimer = null;
-let cloudSession = null;
-let heartbeatTimer = null;
-let sessionStartPromise = null;
-
-const $ = id => document.getElementById(id);
-const toast = text => {
-  const el=$("toast"); el.textContent=text; el.classList.add("show");
-  clearTimeout(window.__toastTimer); window.__toastTimer=setTimeout(()=>el.classList.remove("show"),2300);
-};
+function log(level,text){
+  const now=new Date().toLocaleTimeString("ru-RU",{hour12:false});
+  const row=document.createElement("div");row.className="log-line";
+  row.innerHTML='<span>['+now+']</span><span class="'+level+'">'+level.toUpperCase()+'</span><span></span>';
+  row.lastElementChild.textContent=text;
+  $("log-lines").appendChild(row);$("log-lines").scrollTop=$("log-lines").scrollHeight;
+}
+function toast(text){const el=$("toast");el.textContent=text;el.classList.add("show");clearTimeout(window.__toast);window.__toast=setTimeout(()=>el.classList.remove("show"),2300)}
+function humanSize(bytes){if(!bytes)return"0 B";const u=["B","KB","MB","GB"];let i=Math.min(u.length-1,Math.floor(Math.log(bytes)/Math.log(1024)));return(bytes/Math.pow(1024,i)).toFixed(i?1:0)+" "+u[i]}
+function setProgress(n,label){n=Math.max(0,Math.min(100,Number(n||0)));$("progress-bar").style.width=n+"%";$("progress-label").textContent=label||n+"%"}
+function setStatus(text,level="info"){ $("status-text").textContent=text; log(level,text); }
 
 function renderLocks(){
-  $("lock-list").innerHTML = defaults.map(item => `
-    <div class="lock-row">
-      <div class="lock-name"><strong>${item.name}</strong><small>${item.hint}</small></div>
-      <div class="segmented" data-lock="${item.id}">
-        ${["hard","soft","free"].map(level=>`
-          <button type="button" data-level="${level}" class="${locks[item.id]===level?"active":""}">
-            ${level==="hard"?"HARD":level==="soft"?"SOFT":"FREE"}
-          </button>`).join("")}
-      </div>
-    </div>`).join("");
-
-  document.querySelectorAll(".segmented button").forEach(btn=>{
-    btn.addEventListener("click",()=>{
-      const id=btn.closest(".segmented").dataset.lock;
-      locks[id]=btn.dataset.level;
-      localStorage.setItem("mg4k.lockProfile",JSON.stringify(locks));
-      renderLocks();
-      $("status-text").textContent="Lock-профиль изменён и сохранён локально.";
-    });
-  });
+  $("lock-list").innerHTML=defaults.map(item=>'<div class="lock-row"><div class="lock-name"><strong>'+item.name+'</strong><small>'+item.hint+'</small></div><div class="segmented" data-lock="'+item.id+'">'+["hard","soft","free"].map(level=>'<button type="button" data-level="'+level+'" class="'+(locks[item.id]===level?"active":"")+'">'+level.toUpperCase()+'</button>').join("")+'</div></div>').join("");
+  document.querySelectorAll(".segmented button").forEach(btn=>btn.addEventListener("click",()=>{
+    const id=btn.closest(".segmented").dataset.lock;locks[id]=btn.dataset.level;
+    localStorage.setItem("mg4k.lockProfile",JSON.stringify(locks));renderLocks();
+    setStatus("LOCK изменён: "+id.toUpperCase()+" → "+btn.dataset.level.toUpperCase());
+  }));
 }
-
-function humanSize(bytes){
-  if(!bytes) return "0 B";
-  const units=["B","KB","MB","GB"]; let i=Math.floor(Math.log(bytes)/Math.log(1024));
-  return (bytes/Math.pow(1024,i)).toFixed(i?1:0)+" "+units[i];
+function resetResult(){
+  $("result-image").hidden=true;$("result-image").removeAttribute("src");
+  $("result-stage").classList.remove("ready");$("result-badges").hidden=true;
+  $("result-caption").textContent="ожидает обработки";$("analysis-panel").classList.remove("visible");
+  $("action-approve").disabled=true;$("action-reject").disabled=true;$("action-regenerate").disabled=true;$("action-inspect").disabled=true;$("mobile-inspect").disabled=true;
 }
-
-function setFile(file, sourceLabel="Устройство / облако"){
-  if(!file || !file.type.startsWith("image/") && !/\.(heic|heif)$/i.test(file.name)){
-    toast("Выберите файл изображения."); return;
-  }
-  currentFile=file;
-  $("review-panel").classList.remove("visible","blink");
-  $("review-download").hidden=true;
-  setReviewButtons(false);
-  if(currentObjectUrl) URL.revokeObjectURL(currentObjectUrl);
-  currentObjectUrl=URL.createObjectURL(file);
-
-  const img=$("preview-image");
-  img.onload=()=>{
-    $("preview-dimensions").textContent=`${img.naturalWidth}×${img.naturalHeight}`;
-    $("meta-resolution").textContent=`${img.naturalWidth}×${img.naturalHeight}`;
-  };
-  img.onerror=()=>{
-    $("preview-dimensions").textContent="preview unavailable";
-    $("meta-resolution").textContent="—";
-  };
-  img.src=currentObjectUrl;
-  $("preview-name").textContent=file.name;
-  $("meta-name").textContent=file.name;
-  $("meta-size").textContent=humanSize(file.size);
-  $("meta-source").textContent=sourceLabel;
-  $("preview").classList.add("visible");
-  $("prepare-job").disabled=false;
-  $("mobile-prepare").disabled=false;
-  $("status-text").textContent="Источник загружен. Проверьте Lock-профиль.";
+function setFile(file,source="Системный файловый менеджер"){
+  if(!file||(!String(file.type||"").startsWith("image/")&&!/\.(heic|heif)$/i.test(file.name))){toast("Выберите файл изображения.");return}
+  currentFile=file;currentJob=null;resetResult();
+  if(currentObjectUrl)URL.revokeObjectURL(currentObjectUrl);currentObjectUrl=URL.createObjectURL(file);
+  const img=$("source-image");img.onload=()=>{const dim=img.naturalWidth+"×"+img.naturalHeight;$("source-dimensions").textContent=dim;$("source-size").textContent=dim;$("meta-resolution").textContent=dim};
+  img.src=currentObjectUrl;img.hidden=false;$("upload-overlay").classList.add("hidden");$("source-badges").hidden=false;$("replace-file").hidden=false;
+  $("source-name").textContent=file.name;$("meta-name").textContent=file.name;$("meta-size").textContent=humanSize(file.size);$("meta-source").textContent=source;$("current-file").textContent=file.name;
+  $("action-process").disabled=false;$("mobile-process").disabled=false;setProgress(0,"готов к запуску");setStatus("Источник загружен. Настройте LOCK и запустите обработку.","ok");
 }
-
-function openPicker(){ $("file-input").click(); }
-$("pick-file").addEventListener("click",openPicker);
-$("pick-cloud").addEventListener("click",openPicker);
-$("replace-file").addEventListener("click",openPicker);
-$("mobile-file").addEventListener("click",openPicker);
-$("file-input").addEventListener("change",e=>setFile(e.target.files?.[0],"Системный файловый менеджер"));
-
-const drop=$("drop");
-["dragenter","dragover"].forEach(type=>drop.addEventListener(type,e=>{e.preventDefault();drop.classList.add("drag")}));
-["dragleave","drop"].forEach(type=>drop.addEventListener(type,e=>{e.preventDefault();drop.classList.remove("drag")}));
-drop.addEventListener("drop",e=>setFile(e.dataTransfer?.files?.[0],"Drag & Drop"));
-
-$("reset-locks").addEventListener("click",()=>{
-  locks=Object.fromEntries(defaults.map(x=>[x.id,x.level]));
-  localStorage.setItem("mg4k.lockProfile",JSON.stringify(locks));
-  renderLocks(); toast("Возвращён базовый ARCH LOCK профиль.");
-});
-
-$("copy-profile").addEventListener("click",async()=>{
-  const payload={version:"ui-r5",locks};
-  try{await navigator.clipboard.writeText(JSON.stringify(payload,null,2));toast("Lock-профиль скопирован.");}
-  catch{toast("Не удалось скопировать профиль.");}
-});
-
-$("save-profile").addEventListener("click",()=>{
-  localStorage.setItem("mg4k.lockProfile",JSON.stringify(locks));
-  toast("Настройки сохранены на этом устройстве.");
-});
-
-function setRunButtons(disabled, label){
-  $("prepare-job").disabled=disabled;
-  $("mobile-prepare").disabled=disabled;
-  if(label){
-    $("prepare-job").textContent=label;
-    $("mobile-prepare").textContent=label==="Скачать результат"?"Скачать":"Обработка";
-  }
-}
-
-function setReviewButtons(show){
-  $("approve-job").hidden=!show;
-  $("reject-job").hidden=!show;
-  $("mobile-approve-job").hidden=!show;
-  $("mobile-reject-job").hidden=!show;
-  $("review-approve").hidden=!show;
-  $("review-reject").hidden=!show;
-  $("mobile-file").hidden=show;
-  $("mobile-prepare").hidden=show;
-  $("prepare-job").hidden=show;
-  $("save-profile").hidden=show;
-}
-
-function validationLabel(state){
-  const validation=state?.validation;
-  if(!validation) return "ожидает проверки";
-  if(validation.passed===true) return "PASSED";
-  if(validation.decision) return String(validation.decision).toUpperCase();
-  return "REVIEW";
-}
-
-function showCloudReview(job,state,label="RESULT · REVIEW"){
-  const resultSrc=`/api/jobs/${job.id}/result?token=${encodeURIComponent(job.token)}&v=${Date.now()}`;
-  $("review-source").src=currentObjectUrl||$("preview-image").src||"";
-  $("review-result").src=resultSrc;
-  $("review-result-label").textContent=label;
-  $("review-state").textContent=label;
-  $("review-job").textContent=job.id.slice(0,8);
-  $("review-status").textContent=String(state?.status||"review").toUpperCase();
-  $("review-validation").textContent=validationLabel(state);
-  $("review-progress").textContent=`${Number(state?.progress||0)}%`;
-  $("review-panel").classList.add("visible");
-  $("review-panel").scrollIntoView({behavior:"smooth",block:"start"});
-}
+function openPicker(){$("file-input").click()}
+["pick-file","pick-cloud","replace-file","mobile-file"].forEach(id=>$(id).addEventListener("click",openPicker));
+$("file-input").addEventListener("change",e=>setFile(e.target.files?.[0]));
+const stage=$("source-stage");
+["dragenter","dragover"].forEach(t=>stage.addEventListener(t,e=>{e.preventDefault();stage.style.outline="1px solid #16c5f4"}));
+["dragleave","drop"].forEach(t=>stage.addEventListener(t,e=>{e.preventDefault();stage.style.outline=""}));
+stage.addEventListener("drop",e=>setFile(e.dataTransfer?.files?.[0],"Drag & Drop"));
+$("reset-locks").addEventListener("click",()=>{locks=Object.fromEntries(defaults.map(x=>[x.id,x.level]));localStorage.setItem("mg4k.lockProfile",JSON.stringify(locks));renderLocks();toast("Базовый ARCH LOCK восстановлен.")});
+$("copy-profile").addEventListener("click",async()=>{try{await navigator.clipboard.writeText(JSON.stringify({version:"cloud-ui-r8",locks},null,2));toast("LOCK-профиль скопирован.")}catch{toast("Не удалось скопировать.")}});
 
 async function startCloudSession(){
-  if(cloudSession) return cloudSession;
-  if(sessionStartPromise) return sessionStartPromise;
-  sessionStartPromise=(async()=>{
-    const response=await fetch("/api/session/start",{method:"POST",cache:"no-store"});
-    const data=await response.json().catch(()=>({}));
-    if(!response.ok) throw new Error(data.error||"session_start_failed");
-    cloudSession={id:data.id,token:data.token};
-    if(heartbeatTimer) clearInterval(heartbeatTimer);
-    heartbeatTimer=setInterval(heartbeatCloudSession,60000);
-    return cloudSession;
-  })();
-  try{
-    return await sessionStartPromise;
-  }finally{
-    sessionStartPromise=null;
-  }
+  if(cloudSession)return cloudSession;if(sessionStartPromise)return sessionStartPromise;
+  sessionStartPromise=(async()=>{const r=await fetch("/api/session/start",{method:"POST",cache:"no-store"});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||"session_start_failed");cloudSession={id:d.id,token:d.token};clearInterval(heartbeatTimer);heartbeatTimer=setInterval(heartbeatCloudSession,60000);return cloudSession})();
+  try{return await sessionStartPromise}finally{sessionStartPromise=null}
 }
+async function heartbeatCloudSession(){if(!cloudSession)return;try{const r=await fetch("/api/session/heartbeat",{method:"POST",headers:{"Content-Type":"application/json","X-Session-Id":cloudSession.id,"X-Session-Token":cloudSession.token},body:"{}"});if(r.status===403){cloudSession=null;await startCloudSession()}}catch{}}
+function finishCloudSession(){if(!cloudSession)return;try{navigator.sendBeacon("/api/session/end",new Blob([JSON.stringify({session_id:cloudSession.id,session_token:cloudSession.token})],{type:"application/json"}))}catch{}cloudSession=null;currentJob=null}
+async function jobStatus(job){const r=await fetch("/api/jobs/"+job.id,{headers:{"X-Job-Token":job.token},cache:"no-store"});if(!r.ok)throw new Error("job_status_failed");return await r.json()}
 
-async function heartbeatCloudSession(){
-  if(!cloudSession) return;
-  try{
-    const response=await fetch("/api/session/heartbeat",{
-      method:"POST",
-      headers:{
-        "Content-Type":"application/json",
-        "X-Session-Id":cloudSession.id,
-        "X-Session-Token":cloudSession.token
-      },
-      body:JSON.stringify({})
+function flattenChecks(validation){
+  const out=[];
+  if(!validation||typeof validation!=="object")return out;
+  const pushObject=(obj,prefix="")=>{
+    if(!obj||typeof obj!=="object"||Array.isArray(obj))return;
+    Object.entries(obj).forEach(([k,v])=>{
+      const key=prefix?prefix+"."+k:k;
+      if(typeof v==="boolean")out.push({key,value:v,state:v?"pass":"fail"});
+      else if(typeof v==="number"||typeof v==="string"){
+        if(/pass|ok|approved|valid/i.test(String(v)))out.push({key,value:v,state:"pass"});
+        else if(/fail|reject|invalid|error/i.test(String(v)))out.push({key,value:v,state:"fail"});
+      }else if(v&&typeof v==="object"&&!Array.isArray(v)&&key.split(".").length<4)pushObject(v,key);
     });
-    if(response.status===403){
-      cloudSession=null;
-      await startCloudSession();
-    }
-  }catch{}
+  };
+  if(validation.checks)pushObject(validation.checks,"checks"); else pushObject(validation);
+  const failed=new Set([...(validation.failed_checks||[]),...(validation.mandatory_failures||[])].map(String));
+  failed.forEach(key=>{if(!out.some(x=>x.key.includes(key)))out.push({key,value:false,state:"fail"})});
+  return out.slice(0,80);
 }
-
-function finishCloudSession(){
-  if(!cloudSession) return;
-  const payload=JSON.stringify({
-    session_id:cloudSession.id,
-    session_token:cloudSession.token
-  });
-  try{
-    navigator.sendBeacon(
-      "/api/session/end",
-      new Blob([payload],{type:"application/json"})
-    );
-  }catch{}
-  cloudSession=null;
-  currentJob=null;
+function validationLabel(v){if(!v)return"WAIT";if(v.passed===true)return"PASSED";if(v.decision)return String(v.decision).toUpperCase();if((v.mandatory_failures||[]).length)return"FAILED";return"REVIEW"}
+function renderValidation(state){
+  const v=state?.validation||null;$("analysis-panel").classList.add("visible");
+  $("analysis-job").textContent=currentJob?.id?.slice(0,8)||"—";$("analysis-status").textContent=String(state?.status||"—").toUpperCase();$("analysis-decision").textContent=String(state?.decision||v?.decision||"—").toUpperCase();$("analysis-validation").textContent=validationLabel(v);$("analysis-progress").textContent=Number(state?.progress||0)+"%";
+  $("analysis-caption").textContent=v?"полный отчёт текущего кандидата":"ожидает данных валидации";
+  const checks=flattenChecks(v);
+  $("check-list").innerHTML=checks.length?checks.map(x=>'<div class="check '+x.state+'"><i></i><span>'+escapeHtml(x.key)+'</span><code>'+escapeHtml(String(x.value))+'</code></div>').join(""):'<div class="check warn"><i></i><span>Детальные проверки ещё не получены</span><code>WAIT</code></div>';
+  $("raw-validation").textContent=v?JSON.stringify(v,null,2):"—";
+  $("result-validation-badge").textContent="ARCH LOCK · "+validationLabel(v);
 }
-
-async function jobStatus(job){
-  const response=await fetch(`/api/jobs/${job.id}`,{
-    headers:{"X-Job-Token":job.token}
-  });
-  if(!response.ok) throw new Error("Не удалось получить статус задачи");
-  return await response.json();
+function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]))}
+function resultUrl(job,download=false){return"/api/jobs/"+job.id+"/result?token="+encodeURIComponent(job.token)+(download?"&download=1":"")+"&v="+Date.now()}
+function showResult(state,final=false){
+  if(!currentJob)return;
+  const img=$("result-image");img.onload=()=>{$("result-size").textContent=img.naturalWidth+" × "+img.naturalHeight};img.src=resultUrl(currentJob,false);img.hidden=false;
+  $("result-stage").classList.add("ready");$("result-badges").hidden=false;$("result-label").textContent=final?"FINAL · 4K":"RESULT · REVIEW";$("result-caption").textContent=final?"утверждён":"ожидает решения";
+  $("action-inspect").disabled=false;$("mobile-inspect").disabled=false;$("action-regenerate").disabled=false;
+  renderValidation(state);
 }
-
-function downloadResult(){
-  if(!currentJob) return;
-  window.location.href=`/api/jobs/${currentJob.id}/result?token=${encodeURIComponent(currentJob.token)}&download=1`;
-}
-
 async function pollCurrentJob(){
-  if(!currentJob) return;
+  if(!currentJob)return;
   try{
-    const state=await jobStatus(currentJob);
-    const stage=state.stage||state.status||"queued";
-    const progress=Number(state.progress||0);
-    if(state.status==="done"){
-      clearInterval(jobPollTimer); jobPollTimer=null;
-      setReviewButtons(false);
-      showCloudReview(currentJob,state,"FINAL · 4K");
-      $("review-download").hidden=false;
-      $("review-approve").hidden=true;
-      $("review-reject").hidden=true;
-      $("status-text").textContent=`Готово · ${state.filename} · ARCH LOCK validation завершён`;
-      setRunButtons(false,"Скачать результат");
-      toast("4K результат готов.");
-      return;
-    }
+    const state=await jobStatus(currentJob);const p=Number(state.progress||0),stage=state.stage||state.status||"queued";setProgress(p,p+"%");
+    if(state.validation)renderValidation(state);
     if(state.status==="review"){
-      setReviewButtons(true);
-      showCloudReview(currentJob,state,"RESULT · REVIEW");
-      $("review-download").hidden=true;
-      $("status-text").textContent=`Кандидат готов · проверьте изображение и примите решение`;
-      toast("Результат ожидает вашего утверждения.");
-      return;
+      clearInterval(jobPollTimer);jobPollTimer=null;showResult(state,false);$("action-process").disabled=true;$("mobile-process").disabled=true;$("action-approve").disabled=false;$("action-reject").disabled=false;setStatus("Результат готов. Сравните SOURCE / RESULT и примите решение.","ok");return;
     }
-    if(state.status==="decision_pending"){
-      setReviewButtons(false);
-      $("status-text").textContent=state.decision==="approve"?"Утверждение передано процессору…":"Отклонение передано процессору…";
-      setRunButtons(true,"Обработка…");
-      return;
+    if(state.status==="done"){
+      clearInterval(jobPollTimer);jobPollTimer=null;showResult(state,true);$("action-process").disabled=false;$("action-process").textContent="Скачать FINAL 4K";$("mobile-process").disabled=false;$("mobile-process").textContent="Скачать";$("action-approve").disabled=true;$("action-reject").disabled=true;setProgress(100,"100%");setStatus("FINAL 4K утверждён и готов к скачиванию.","ok");return;
     }
     if(state.status==="failed"){
-      clearInterval(jobPollTimer); jobPollTimer=null;
-      $("status-text").textContent=`Ошибка обработки · ${state.error||"см. диагностику"}`;
-      setReviewButtons(false);
-      setRunButtons(false,"Повторить");
-      toast("Обработка остановлена с ошибкой.");
-      return;
+      clearInterval(jobPollTimer);jobPollTimer=null;$("action-process").disabled=false;$("mobile-process").disabled=false;$("action-process").textContent="Повторить";$("mobile-process").textContent="Повторить";$("action-regenerate").disabled=false;renderValidation(state);setStatus("Ошибка: "+(state.error||stage),"err");return;
     }
-    $("status-text").textContent=`Задача ${state.id.slice(0,8)} · ${stage} · ${progress}%`;
-    setRunButtons(true,"Обработка…");
-  }catch(error){
-    $("status-text").textContent="Связь с очередью временно недоступна. Повторяю…";
-  }
+    if(state.status==="decision_pending"){$("action-approve").disabled=true;$("action-reject").disabled=true;setStatus(state.decision==="approve"?"Утверждение передано процессору…":"Отклонение передано процессору…");return}
+    setStatus("Задача "+state.id.slice(0,8)+" · "+stage+" · "+p+"%");
+  }catch(e){setStatus("Связь с очередью временно недоступна. Повторяю…","warn")}
 }
-
 async function sendDecision(action){
-  if(!currentJob) return;
-  try{
-    setReviewButtons(false);
-    $("status-text").textContent=action==="approve"?"Передаю утверждение…":"Передаю отклонение…";
-    const response=await fetch(`/api/jobs/${currentJob.id}/decision`,{
-      method:"POST",
-      headers:{"Content-Type":"application/json","X-Job-Token":currentJob.token},
-      body:JSON.stringify({action})
-    });
-    const data=await response.json().catch(()=>({}));
-    if(!response.ok) throw new Error(data.error||"decision_failed");
-    toast(action==="approve"?"Результат утверждён.":"Результат отклонён.");
-    if(jobPollTimer) clearInterval(jobPollTimer);
-    await pollCurrentJob();
-    jobPollTimer=setInterval(pollCurrentJob,2000);
-  }catch(error){
-    setReviewButtons(true);
-    toast("Не удалось передать решение: "+error.message);
-  }
+  if(!currentJob)return;
+  $("action-approve").disabled=true;$("action-reject").disabled=true;
+  try{const r=await fetch("/api/jobs/"+currentJob.id+"/decision",{method:"POST",headers:{"Content-Type":"application/json","X-Job-Token":currentJob.token},body:JSON.stringify({action})});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||"decision_failed");setStatus(action==="approve"?"Результат утверждён. Завершаю FINAL…":"Результат отклонён.","ok");await pollCurrentJob();clearInterval(jobPollTimer);jobPollTimer=setInterval(pollCurrentJob,1800)}
+  catch(e){$("action-approve").disabled=false;$("action-reject").disabled=false;toast("Решение не передано: "+e.message)}
 }
-
-$("approve-job").addEventListener("click",()=>sendDecision("approve"));
-$("reject-job").addEventListener("click",()=>sendDecision("reject"));
-$("mobile-approve-job").addEventListener("click",()=>sendDecision("approve"));
-$("mobile-reject-job").addEventListener("click",()=>sendDecision("reject"));
-$("review-approve").addEventListener("click",()=>sendDecision("approve"));
-$("review-reject").addEventListener("click",()=>sendDecision("reject"));
-$("review-download").addEventListener("click",downloadResult);
-$("review-side").addEventListener("click",()=>{
-  $("review-panel").classList.remove("blink");
-  toast("Режим SIDE.");
-});
-$("review-blink").addEventListener("click",()=>{
-  $("review-panel").classList.toggle("blink");
-  toast($("review-panel").classList.contains("blink")?"Режим BLINK включён.":"Режим BLINK выключен.");
-});
-
-async function prepareJob(){
-  if(currentJob){
-    try{
-      const state=await jobStatus(currentJob);
-      if(state.status==="done"){downloadResult();return;}
-      if(!["failed","done"].includes(state.status)){toast("Задача уже находится в обработке.");return;}
-      currentJob=null;
-    }catch{currentJob=null;}
-  }
-  if(!currentFile){toast("Сначала добавьте изображение.");return;}
-
-  setRunButtons(true,"Загрузка…");
-  $("status-text").textContent="Загрузка исходника в защищённую очередь Cloudflare…";
-  const form=new FormData();
-  form.append("file",currentFile,currentFile.name);
-  form.append("locks",JSON.stringify(locks));
-  form.append("mode","generative");
-
-  try{
-    const session=await startCloudSession();
-    const response=await fetch("/api/jobs",{
-      method:"POST",
-      headers:{
-        "X-Session-Id":session.id,
-        "X-Session-Token":session.token
-      },
-      body:form
-    });
-    const data=await response.json().catch(()=>({}));
-    if(!response.ok) throw new Error(data.error||"upload_failed");
-    currentJob={id:data.id,token:data.token};
-    $("status-text").textContent=`Задача ${data.id.slice(0,8)} поставлена в очередь.`;
-    toast("Файл передан в облачную очередь.");
-    if(jobPollTimer) clearInterval(jobPollTimer);
-    await pollCurrentJob();
-    jobPollTimer=setInterval(pollCurrentJob,2500);
-  }catch(error){
-    currentJob=null;
-    setRunButtons(false,"Отправить в обработку");
-    $("status-text").textContent="Не удалось создать облачную задачу.";
-    toast("Ошибка отправки: "+error.message);
-  }
+function confirmPaidGeneration(){return window.confirm("Запустить Nano Banana Pro? Будет выполнен платный API-запрос. LOCK-профиль будет применён к DONOR prompt.")}
+async function prepareJob(forceNew=false){
+  if(!currentFile){toast("Сначала добавьте исходник.");return}
+  if(currentJob&&!forceNew){try{const s=await jobStatus(currentJob);if(s.status==="done"){location.href=resultUrl(currentJob,true);return}if(!["failed"].includes(s.status)){toast("Текущее задание ещё активно.");return}}catch{}}
+  if(!confirmPaidGeneration())return;
+  currentJob=null;resetResult();$("action-process").disabled=true;$("mobile-process").disabled=true;$("action-process").textContent="Загрузка…";$("mobile-process").textContent="Загрузка…";setStatus("Передаю исходник и LOCK-профиль в временную очередь Cloudflare…");
+  const form=new FormData();form.append("file",currentFile,currentFile.name);form.append("locks",JSON.stringify(locks));form.append("mode","generative");
+  try{const session=await startCloudSession();const r=await fetch("/api/jobs",{method:"POST",headers:{"X-Session-Id":session.id,"X-Session-Token":session.token},body:form});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||"upload_failed");currentJob={id:d.id,token:d.token};$("action-process").textContent="Обработка…";$("mobile-process").textContent="Обработка";setStatus("Задача "+d.id.slice(0,8)+" принята. Облачный processor запускается.","ok");setProgress(d.progress||5,(d.progress||5)+"%");clearInterval(jobPollTimer);await pollCurrentJob();jobPollTimer=setInterval(pollCurrentJob,1800)}
+  catch(e){$("action-process").disabled=false;$("mobile-process").disabled=false;$("action-process").textContent="Запустить / продолжить";$("mobile-process").textContent="Обработка";setStatus("Не удалось создать облачную задачу: "+e.message,"err")}
 }
+$("action-process").addEventListener("click",()=>prepareJob(false));$("mobile-process").addEventListener("click",()=>prepareJob(false));
+$("action-approve").addEventListener("click",()=>sendDecision("approve"));$("action-reject").addEventListener("click",()=>sendDecision("reject"));
+$("action-regenerate").addEventListener("click",()=>prepareJob(true));
 
-$("prepare-job").addEventListener("click",prepareJob);
-$("mobile-prepare").addEventListener("click",prepareJob);
+function openViewer(){
+  if(!currentObjectUrl||!currentJob){toast("Для инспекции нужны SOURCE и RESULT.");return}
+  const u=resultUrl(currentJob,false);["viewer-source","overlay-source"].forEach(id=>$(id).src=currentObjectUrl);["viewer-result","overlay-result"].forEach(id=>$(id).src=u);setViewerMode("side");$("viewer").showModal();
+}
+function stopBlink(){if(viewerBlinkTimer){clearInterval(viewerBlinkTimer);viewerBlinkTimer=null}$("overlay-source").style.opacity="1";$("overlay-result").style.opacity="1"}
+function setViewerMode(mode){
+  stopBlink();document.querySelectorAll("[data-view]").forEach(b=>b.classList.toggle("active",b.dataset.view===mode));$("viewer-side").style.display=mode==="side"?"grid":"none";$("viewer-overlay").style.display=["split","blink"].includes(mode)?"block":"none";$("viewer-canvas").style.display=mode==="diff"?"block":"none";
+  if(mode==="split"){$("overlay-result").classList.add("clip")}
+  if(mode==="blink"){$("overlay-result").classList.remove("clip");let show=true;viewerBlinkTimer=setInterval(()=>{show=!show;$("overlay-result").style.opacity=show?"1":"0"},650)}
+  if(mode==="diff")drawDiff();
+}
+async function drawDiff(){
+  const s=$("viewer-source"),r=$("viewer-result");await Promise.all([ensureImage(s),ensureImage(r)]);
+  const max=1400,ratio=Math.min(max/s.naturalWidth,max/r.naturalWidth,1),w=Math.max(1,Math.floor(Math.min(s.naturalWidth,r.naturalWidth)*ratio)),h=Math.max(1,Math.floor(Math.min(s.naturalHeight,r.naturalHeight)*ratio));
+  const c=$("viewer-canvas");c.width=w;c.height=h;const ctx=c.getContext("2d",{willReadFrequently:true});ctx.drawImage(s,0,0,w,h);const a=ctx.getImageData(0,0,w,h);ctx.clearRect(0,0,w,h);ctx.drawImage(r,0,0,w,h);const b=ctx.getImageData(0,0,w,h),o=ctx.createImageData(w,h);
+  for(let i=0;i<a.data.length;i+=4){o.data[i]=Math.min(255,Math.abs(a.data[i]-b.data[i])*3);o.data[i+1]=Math.min(255,Math.abs(a.data[i+1]-b.data[i+1])*3);o.data[i+2]=Math.min(255,Math.abs(a.data[i+2]-b.data[i+2])*3);o.data[i+3]=255}ctx.putImageData(o,0,0);
+}
+function ensureImage(img){if(img.complete&&img.naturalWidth)return Promise.resolve();return new Promise((res,rej)=>{img.onload=res;img.onerror=rej})}
+$("action-inspect").addEventListener("click",openViewer);$("mobile-inspect").addEventListener("click",openViewer);$("viewer-close").addEventListener("click",()=>{$("viewer").close();stopBlink()});document.querySelectorAll("[data-view]").forEach(b=>b.addEventListener("click",()=>setViewerMode(b.dataset.view)));
 
-$("pair-processor").addEventListener("click",async()=>{
-  const code=prompt("Введите код, который показывает локальный MG 4K процессор:");
-  if(!code) return;
-  try{
-    const response=await fetch("/api/processor/pair/approve",{
-      method:"POST",
-      headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({code:code.trim()})
-    });
-    const data=await response.json().catch(()=>({}));
-    if(!response.ok) throw new Error(data.error||"pair_failed");
-    toast("Локальный процессор подключён.");
-    $("status-text").textContent="Cloudflare связан с локальным ARCH LOCK процессором.";
-  }catch(error){
-    toast("Не удалось подключить процессор: "+error.message);
-  }
-});
-
-renderLocks();
-localStorage.removeItem("mg4k.lastCloudJob");
-
-startCloudSession()
-  .then(()=>{
-    if(!currentFile) $("status-text").textContent="Новая временная сессия готова. Добавьте изображение.";
-  })
-  .catch(()=>{
-    $("status-text").textContent="Не удалось открыть временную сессию. Обновите страницу.";
-  });
-
-window.addEventListener("pagehide",finishCloudSession);
-window.addEventListener("pageshow",event=>{
-  if(event.persisted) location.reload();
-});
+renderLocks();resetResult();startCloudSession().then(()=>setStatus("Новая временная сессия готова. Добавьте исходник.","ok")).catch(()=>setStatus("Не удалось открыть облачную сессию. Обновите страницу.","err"));
+window.addEventListener("pagehide",finishCloudSession);window.addEventListener("pageshow",e=>{if(e.persisted)location.reload()});
 </script>
 </body>
 </html>
