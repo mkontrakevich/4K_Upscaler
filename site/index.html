@@ -420,7 +420,7 @@ async function startCloudSession(){
   try{return await sessionStartPromise}finally{sessionStartPromise=null}
 }
 async function heartbeatCloudSession(){if(!cloudSession)return;try{const r=await fetch("/api/session/heartbeat",{method:"POST",headers:{"Content-Type":"application/json","X-Session-Id":cloudSession.id,"X-Session-Token":cloudSession.token},body:"{}"});if(r.status===403){cloudSession=null;await startCloudSession()}}catch{}}
-function finishCloudSession(){if(!cloudSession)return;try{navigator.sendBeacon("/api/session/end",new Blob([JSON.stringify({session_id:cloudSession.id,session_token:cloudSession.token})],{type:"application/json"}))}catch{}cloudSession=null;currentJob=null}
+function finishCloudSession(){if(cloudSession){try{navigator.sendBeacon("/api/session/end",new Blob([JSON.stringify({session_id:cloudSession.id,session_token:cloudSession.token})],{type:"application/json"}))}catch{}}sourceItems.forEach(item=>{try{URL.revokeObjectURL(item.objectUrl)}catch{}});cloudSession=null;currentJob=null}
 async function jobStatus(job){const r=await fetch("/api/jobs/"+job.id,{headers:{"X-Job-Token":job.token},cache:"no-store"});if(!r.ok)throw new Error("job_status_failed");return await r.json()}
 
 function flattenChecks(validation){
@@ -454,52 +454,162 @@ function renderValidation(state){
 }
 function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]))}
 function resultUrl(job,download=false){return"/api/jobs/"+job.id+"/result?token="+encodeURIComponent(job.token)+(download?"&download=1":"")+"&v="+Date.now()}
-function showResult(state,final=false){
+function setReviewActions({approve=false,reject=false,skip=false,regenerate=false,inspect=false}={}){
+  $("action-approve").disabled=!approve;
+  $("action-reject").disabled=!reject;
+  $("action-skip").disabled=!skip;
+  $("action-regenerate").disabled=!regenerate;
+  $("action-inspect").disabled=!inspect;
+  $("mobile-inspect").disabled=!inspect;
+}
+function showResult(state,mode="review"){
   if(!currentJob)return;
   const img=$("result-image");img.onload=()=>{$("result-size").textContent=img.naturalWidth+" × "+img.naturalHeight};img.src=resultUrl(currentJob,false);img.hidden=false;
-  $("result-stage").classList.add("ready");$("result-badges").hidden=false;$("result-label").textContent=final?"FINAL · 4K":"RESULT · REVIEW";$("result-caption").textContent=final?"утверждён":"ожидает решения";
-  $("action-inspect").disabled=false;$("mobile-inspect").disabled=false;$("action-regenerate").disabled=false;
+  $("result-stage").classList.add("ready");$("result-badges").hidden=false;
+  const final=mode==="final",skipped=mode==="skipped";
+  $("result-label").textContent=final?"FINAL · 4K":skipped?"RESULT · ПРОПУЩЕН":"RESULT · REVIEW";
+  $("result-caption").textContent=final?"утверждён":skipped?"пропущен · можно вернуться позже":"ожидает решения";
   renderValidation(state);
 }
+function renderJobState(state){
+  if(!state)return null;
+  rememberCurrentItem(state);
+  const p=Number(state.progress||0),stage=state.stage||state.status||"queued";
+  setProgress(p,p+"%");
+  if(state.validation)renderValidation(state);
+  updateQueueNavigation();
+
+  if(state.status==="review"){
+    clearInterval(jobPollTimer);jobPollTimer=null;
+    showResult(state,"review");
+    $("action-process").disabled=true;$("mobile-process").disabled=true;
+    setReviewActions({approve:true,reject:true,skip:true,regenerate:true,inspect:true});
+    setStatus("Результат готов. Можно утвердить, отклонить, регенерировать или пропустить и заняться следующим файлом.","ok");
+    return state;
+  }
+  if(state.status==="done"){
+    clearInterval(jobPollTimer);jobPollTimer=null;
+    showResult(state,"final");
+    $("action-process").disabled=false;$("action-process").textContent="Скачать FINAL 4K";$("mobile-process").disabled=false;$("mobile-process").textContent="Скачать";
+    setReviewActions({regenerate:true,inspect:true});
+    setProgress(100,"100%");
+    setStatus("FINAL 4K утверждён. Результат можно скачать; новый исходник добавляется через основную навигацию.","ok");
+    return state;
+  }
+  if(state.status==="skipped"){
+    clearInterval(jobPollTimer);jobPollTimer=null;
+    showResult(state,"skipped");
+    $("action-process").disabled=false;$("action-process").textContent="Запустить заново";$("mobile-process").disabled=false;$("mobile-process").textContent="Заново";
+    setReviewActions({regenerate:true,inspect:true});
+    setProgress(100,"100%");
+    setStatus("Файл пропущен без утверждения. Он остаётся в текущей сессии — можно перейти дальше или вернуться к нему.","warn");
+    return state;
+  }
+  if(state.status==="failed"){
+    clearInterval(jobPollTimer);jobPollTimer=null;
+    $("action-process").disabled=false;$("mobile-process").disabled=false;$("action-process").textContent="Повторить";$("mobile-process").textContent="Повторить";
+    setReviewActions({regenerate:true,inspect:Boolean(state.result_available)});
+    renderValidation(state);
+    setStatus("Ошибка: "+(state.error||stage),"err");
+    return state;
+  }
+  if(state.status==="decision_pending"){
+    $("action-process").disabled=true;$("mobile-process").disabled=true;
+    setReviewActions({inspect:Boolean(state.result_available)});
+    const message=state.decision==="approve"?"Утверждение передано процессору…":state.decision==="reject"?"Отклонение передано процессору…":"Файл помечается как пропущенный; освобождаю процессор для следующего…";
+    setStatus(message);
+    return state;
+  }
+
+  $("action-process").disabled=true;$("mobile-process").disabled=true;
+  setReviewActions();
+  setStatus("Задача "+state.id.slice(0,8)+" · "+stage+" · "+p+"%");
+  return state;
+}
 async function pollCurrentJob(){
-  if(!currentJob)return;
+  if(!currentJob)return null;
+  const job=currentJob;
   try{
-    const state=await jobStatus(currentJob);const p=Number(state.progress||0),stage=state.stage||state.status||"queued";setProgress(p,p+"%");
-    if(state.validation)renderValidation(state);
-    if(state.status==="review"){
-      clearInterval(jobPollTimer);jobPollTimer=null;showResult(state,false);$("action-process").disabled=true;$("mobile-process").disabled=true;$("action-approve").disabled=false;$("action-reject").disabled=false;setStatus("Результат готов. Сравните SOURCE / RESULT и примите решение.","ok");return;
-    }
-    if(state.status==="done"){
-      clearInterval(jobPollTimer);jobPollTimer=null;showResult(state,true);$("action-process").disabled=false;$("action-process").textContent="Скачать FINAL 4K";$("mobile-process").disabled=false;$("mobile-process").textContent="Скачать";$("action-approve").disabled=true;$("action-reject").disabled=true;
-      $("upload-plus").classList.remove("hidden");$("upload-plus").classList.add("compact");$("upload-plus").title="Добавить следующий исходник";
-      setProgress(100,"100%");setStatus("FINAL 4K утверждён. Можно скачать результат или добавить следующий исходник.","ok");return;
-    }
-    if(state.status==="failed"){
-      clearInterval(jobPollTimer);jobPollTimer=null;$("action-process").disabled=false;$("mobile-process").disabled=false;$("action-process").textContent="Повторить";$("mobile-process").textContent="Повторить";$("action-regenerate").disabled=false;renderValidation(state);setStatus("Ошибка: "+(state.error||stage),"err");return;
-    }
-    if(state.status==="decision_pending"){$("action-approve").disabled=true;$("action-reject").disabled=true;setStatus(state.decision==="approve"?"Утверждение передано процессору…":"Отклонение передано процессору…");return}
-    setStatus("Задача "+state.id.slice(0,8)+" · "+stage+" · "+p+"%");
-  }catch(e){setStatus("Связь с очередью временно недоступна. Повторяю…","warn")}
+    const state=await jobStatus(job);
+    if(currentJob!==job)return state;
+    return renderJobState(state);
+  }catch(e){
+    if(currentJob===job)setStatus("Связь с очередью временно недоступна. Повторяю…","warn");
+    return null;
+  }
 }
 async function sendDecision(action){
-  if(!currentJob)return;
-  $("action-approve").disabled=true;$("action-reject").disabled=true;
-  try{const r=await fetch("/api/jobs/"+currentJob.id+"/decision",{method:"POST",headers:{"Content-Type":"application/json","X-Job-Token":currentJob.token},body:JSON.stringify({action})});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||"decision_failed");if(action==="reject"){$("upload-plus").classList.add("hidden");$("upload-plus").classList.remove("compact")}setStatus(action==="approve"?"Результат утверждён. Завершаю FINAL…":"Результат отклонён.","ok");await pollCurrentJob();clearInterval(jobPollTimer);jobPollTimer=setInterval(pollCurrentJob,1800)}
-  catch(e){$("action-approve").disabled=false;$("action-reject").disabled=false;toast("Решение не передано: "+e.message)}
+  if(!currentJob)return false;
+  $("action-approve").disabled=true;$("action-reject").disabled=true;$("action-skip").disabled=true;
+  try{
+    const r=await fetch("/api/jobs/"+currentJob.id+"/decision",{method:"POST",headers:{"Content-Type":"application/json","X-Job-Token":currentJob.token},body:JSON.stringify({action})});
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(d.error||"decision_failed");
+    if(d.job)rememberCurrentItem(d.job);
+    setStatus(action==="approve"?"Результат утверждён. Завершаю FINAL…":action==="reject"?"Результат отклонён.":"Файл пропущен. Освобождаю очередь для следующего…","ok");
+    clearInterval(jobPollTimer);
+    await pollCurrentJob();
+    jobPollTimer=setInterval(pollCurrentJob,1200);
+    return true;
+  }catch(e){
+    $("action-approve").disabled=false;$("action-reject").disabled=false;$("action-skip").disabled=false;
+    toast("Решение не передано: "+e.message);
+    return false;
+  }
+}
+async function releaseReviewForRegeneration(){
+  if(!currentJob)return true;
+  try{
+    const state=await jobStatus(currentJob);
+    if(state.status==="review"){
+      const r=await fetch("/api/jobs/"+currentJob.id+"/decision",{method:"POST",headers:{"Content-Type":"application/json","X-Job-Token":currentJob.token},body:JSON.stringify({action:"skip"})});
+      if(!r.ok)return false;
+      return true;
+    }
+    if(["queued","processing","decision_pending"].includes(state.status)){
+      toast("Текущее задание ещё выполняется. Дождитесь результата перед регенерацией.");
+      return false;
+    }
+    return true;
+  }catch{return true}
 }
 function confirmPaidGeneration(){return window.confirm("Запустить Nano Banana Pro? Будет выполнен платный API-запрос. LOCK-профиль будет применён к DONOR prompt.")}
 async function prepareJob(forceNew=false){
   if(!currentFile){toast("Сначала добавьте исходник.");return}
-  if(currentJob&&!forceNew){try{const s=await jobStatus(currentJob);if(s.status==="done"){location.href=resultUrl(currentJob,true);return}if(!["failed"].includes(s.status)){toast("Текущее задание ещё активно.");return}}catch{}}
+  if(currentJob&&!forceNew){
+    try{
+      const s=await jobStatus(currentJob);
+      if(s.status==="done"){location.href=resultUrl(currentJob,true);return}
+      if(!["failed","skipped"].includes(s.status)){toast("Текущее задание ещё активно.");return}
+    }catch{}
+  }
+  if(forceNew&&!(await releaseReviewForRegeneration()))return;
   if(!confirmPaidGeneration())return;
-  $("upload-plus").classList.add("hidden");$("upload-plus").classList.remove("compact");
-  currentJob=null;resetResult();$("action-process").disabled=true;$("mobile-process").disabled=true;$("action-process").textContent="Загрузка…";$("mobile-process").textContent="Загрузка…";setStatus("Передаю исходник и LOCK-профиль в временную очередь Cloudflare…");
+
+  currentJob=null;resetResult();setReviewActions();
+  $("action-process").disabled=true;$("mobile-process").disabled=true;$("action-process").textContent="Загрузка…";$("mobile-process").textContent="Загрузка…";
+  setStatus("Передаю исходник и LOCK-профиль во временную очередь Cloudflare…");
+
   const form=new FormData();form.append("file",currentFile,currentFile.name);form.append("locks",JSON.stringify(locks));form.append("mode","generative");
-  try{const session=await startCloudSession();const r=await fetch("/api/jobs",{method:"POST",headers:{"X-Session-Id":session.id,"X-Session-Token":session.token},body:form});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||"upload_failed");currentJob={id:d.id,token:d.token};$("action-process").textContent="Обработка…";$("mobile-process").textContent="Обработка";setStatus("Задача "+d.id.slice(0,8)+" принята. Облачный processor запускается.","ok");setProgress(d.progress||5,(d.progress||5)+"%");clearInterval(jobPollTimer);await pollCurrentJob();jobPollTimer=setInterval(pollCurrentJob,1800)}
-  catch(e){$("action-process").disabled=false;$("mobile-process").disabled=false;$("action-process").textContent="Запустить / продолжить";$("mobile-process").textContent="Обработка";setStatus("Не удалось создать облачную задачу: "+e.message,"err")}
+  try{
+    const session=await startCloudSession();
+    const r=await fetch("/api/jobs",{method:"POST",headers:{"X-Session-Id":session.id,"X-Session-Token":session.token},body:form});
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(d.error||"upload_failed");
+    currentJob={id:d.id,token:d.token};
+    const item=currentSourceItem();if(item){item.job=currentJob;item.lastState={id:d.id,status:d.status,stage:d.stage,progress:d.progress}}
+    $("action-process").textContent="Обработка…";$("mobile-process").textContent="Обработка";
+    setStatus("Задача "+d.id.slice(0,8)+" принята. Облачный processor запускается.","ok");setProgress(d.progress||5,(d.progress||5)+"%");
+    clearInterval(jobPollTimer);await pollCurrentJob();jobPollTimer=setInterval(pollCurrentJob,1800);
+  }catch(e){
+    $("action-process").disabled=false;$("mobile-process").disabled=false;$("action-process").textContent="Запустить / продолжить";$("mobile-process").textContent="Обработка";
+    setStatus("Не удалось создать облачную задачу: "+e.message,"err");
+  }
 }
 $("action-process").addEventListener("click",()=>prepareJob(false));$("mobile-process").addEventListener("click",()=>prepareJob(false));
-$("action-approve").addEventListener("click",()=>sendDecision("approve"));$("action-reject").addEventListener("click",()=>sendDecision("reject"));
+$("action-approve").addEventListener("click",()=>sendDecision("approve"));
+$("action-reject").addEventListener("click",()=>sendDecision("reject"));
+$("action-skip").addEventListener("click",()=>sendDecision("skip"));
 $("action-regenerate").addEventListener("click",()=>prepareJob(true));
 
 function openViewer(){
