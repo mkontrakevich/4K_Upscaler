@@ -34,6 +34,7 @@ JOBS_ROOT = Path(
 ).resolve()
 POLL_SECONDS = float(os.environ.get("MG4K_POLL_SECONDS", "4"))
 REQUEST_TIMEOUT = int(os.environ.get("MG4K_REQUEST_TIMEOUT", "60"))
+EXIT_WHEN_IDLE_SECONDS = float(os.environ.get("MG4K_EXIT_WHEN_IDLE_SECONDS", "0"))
 
 
 def save_json(path: Path, data: dict[str, Any]) -> None:
@@ -380,6 +381,7 @@ def main() -> int:
     print(f"Cloud: {CLOUD_URL}")
     token = ensure_pairing()
     JOBS_ROOT.mkdir(parents=True, exist_ok=True)
+    last_activity = time.monotonic()
 
     while True:
         try:
@@ -395,9 +397,13 @@ def main() -> int:
             r.raise_for_status()
             job = r.json().get("job")
             if not job:
+                if EXIT_WHEN_IDLE_SECONDS > 0 and (time.monotonic() - last_activity) >= EXIT_WHEN_IDLE_SECONDS:
+                    print(f"[CLOUD] Idle for {EXIT_WHEN_IDLE_SECONDS:.0f}s. Cloud processor exiting for scale-to-zero.")
+                    return 0
                 time.sleep(POLL_SECONDS)
                 continue
             process_job(token, job)
+            last_activity = time.monotonic()
         except KeyboardInterrupt:
             print("\n[CLOUD] Bridge stopped.")
             return 0
