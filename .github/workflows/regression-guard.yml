@@ -2,7 +2,7 @@ name: 4K Upscaler Regression Guard
 
 on:
   push:
-    branches: [main]
+    branches: [main, ui-r8-local-review]
   workflow_dispatch:
 
 jobs:
@@ -104,21 +104,31 @@ jobs:
           from pathlib import Path
           html = Path("site/index.html").read_text(encoding="utf-8")
           required = [
-              "CORE 8.8.1 R4 · UI R7",
-              'id="review-panel"',
-              'id="review-source"',
-              'id="review-result"',
-              'id="review-approve"',
-              'id="review-reject"',
-              'id="review-download"',
-              "RESULT · REVIEW",
-              "FINAL · 4K",
-              "showCloudReview",
+              "CORE 8.8.1 R4 · CLOUD UI R8",
+              'class="comparison"',
+              'id="source-image"',
+              'id="result-image"',
+              'id="lock-list"',
+              'id="analysis-panel"',
+              'id="check-list"',
+              'id="raw-validation"',
+              'id="action-approve"',
+              'id="action-reject"',
+              'id="action-regenerate"',
+              'id="viewer"',
+              'data-view="side"',
+              'data-view="split"',
+              'data-view="diff"',
+              'data-view="blink"',
+              "renderValidation",
               "sendDecision",
+              "confirmPaidGeneration",
           ]
           missing = [item for item in required if item not in html]
           assert not missing, f"Review UI regression: {missing}"
-          print("Cloud review UI contract: PASSED")
+          assert html.index('id="source-image"') < html.index('id="result-image"'), "SOURCE must precede RESULT"
+          assert "Подключить процессор" not in html, "Cloud UI must not require local processor pairing"
+          print("Cloud two-pane Visual Review contract: PASSED")
           PY
 
       - name: No paid generation in regression
