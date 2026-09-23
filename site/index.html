@@ -234,6 +234,9 @@ let currentFile = null;
 let currentObjectUrl = null;
 let currentJob = null;
 let jobPollTimer = null;
+let cloudSession = null;
+let heartbeatTimer = null;
+let sessionStartPromise = null;
 
 const $ = id => document.getElementById(id);
 const toast = text => {
@@ -355,6 +358,60 @@ function showCloudResult(job, label="RESULT"){
   $("preview-dimensions").textContent="облачный результат";
 }
 
+async function startCloudSession(){
+  if(cloudSession) return cloudSession;
+  if(sessionStartPromise) return sessionStartPromise;
+  sessionStartPromise=(async()=>{
+    const response=await fetch("/api/session/start",{method:"POST",cache:"no-store"});
+    const data=await response.json().catch(()=>({}));
+    if(!response.ok) throw new Error(data.error||"session_start_failed");
+    cloudSession={id:data.id,token:data.token};
+    if(heartbeatTimer) clearInterval(heartbeatTimer);
+    heartbeatTimer=setInterval(heartbeatCloudSession,60000);
+    return cloudSession;
+  })();
+  try{
+    return await sessionStartPromise;
+  }finally{
+    sessionStartPromise=null;
+  }
+}
+
+async function heartbeatCloudSession(){
+  if(!cloudSession) return;
+  try{
+    const response=await fetch("/api/session/heartbeat",{
+      method:"POST",
+      headers:{
+        "Content-Type":"application/json",
+        "X-Session-Id":cloudSession.id,
+        "X-Session-Token":cloudSession.token
+      },
+      body:JSON.stringify({})
+    });
+    if(response.status===403){
+      cloudSession=null;
+      await startCloudSession();
+    }
+  }catch{}
+}
+
+function finishCloudSession(){
+  if(!cloudSession) return;
+  const payload=JSON.stringify({
+    session_id:cloudSession.id,
+    session_token:cloudSession.token
+  });
+  try{
+    navigator.sendBeacon(
+      "/api/session/end",
+      new Blob([payload],{type:"application/json"})
+    );
+  }catch{}
+  cloudSession=null;
+  currentJob=null;
+}
+
 async function jobStatus(job){
   const response=await fetch(`/api/jobs/${job.id}`,{
     headers:{"X-Job-Token":job.token}
@@ -457,11 +514,18 @@ async function prepareJob(){
   form.append("mode","generative");
 
   try{
-    const response=await fetch("/api/jobs",{method:"POST",body:form});
+    const session=await startCloudSession();
+    const response=await fetch("/api/jobs",{
+      method:"POST",
+      headers:{
+        "X-Session-Id":session.id,
+        "X-Session-Token":session.token
+      },
+      body:form
+    });
     const data=await response.json().catch(()=>({}));
     if(!response.ok) throw new Error(data.error||"upload_failed");
     currentJob={id:data.id,token:data.token};
-    localStorage.setItem("mg4k.lastCloudJob",JSON.stringify(currentJob));
     $("status-text").textContent=`Задача ${data.id.slice(0,8)} поставлена в очередь.`;
     toast("Файл передан в облачную очередь.");
     if(jobPollTimer) clearInterval(jobPollTimer);
@@ -497,15 +561,20 @@ $("pair-processor").addEventListener("click",async()=>{
 });
 
 renderLocks();
+localStorage.removeItem("mg4k.lastCloudJob");
 
-try{
-  const restored=JSON.parse(localStorage.getItem("mg4k.lastCloudJob")||"null");
-  if(restored?.id&&restored?.token){
-    currentJob=restored;
-    pollCurrentJob();
-    jobPollTimer=setInterval(pollCurrentJob,2500);
-  }
-}catch{}
+startCloudSession()
+  .then(()=>{
+    if(!currentFile) $("status-text").textContent="Новая временная сессия готова. Добавьте изображение.";
+  })
+  .catch(()=>{
+    $("status-text").textContent="Не удалось открыть временную сессию. Обновите страницу.";
+  });
+
+window.addEventListener("pagehide",finishCloudSession);
+window.addEventListener("pageshow",event=>{
+  if(event.persisted) location.reload();
+});
 </script>
 </body>
 </html>
