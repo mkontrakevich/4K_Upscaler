@@ -2,7 +2,7 @@ name: 4K Upscaler Regression Guard
 
 on:
   push:
-    branches: [main, ui-r8-local-review, ui-r8-single-upload, ui-r8-next-source-plus]
+    branches: [main, ui-r8-local-review, ui-r8-single-upload, ui-r8-next-source-plus, fix-container-app-name]
   workflow_dispatch:
 
 jobs:
@@ -30,6 +30,20 @@ jobs:
 
       - name: Worker syntax
         run: node --check src/worker.js
+
+      - name: Container application naming contract
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          cfg = json.loads(Path("wrangler.jsonc").read_text(encoding="utf-8"))
+          containers = cfg.get("containers") or []
+          assert containers, "No Cloudflare Container configured"
+          name = containers[0].get("name", "")
+          assert name == "mg4k-upscaler-processor"
+          assert name[0].isalpha(), "Cloudflare Container application name must start with a letter"
+          print("Container application naming contract: PASSED")
+          PY
 
       - name: Cloudflare bundle dry-run
         run: |

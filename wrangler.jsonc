@@ -17,6 +17,7 @@
   },
   "containers": [
     {
+      "name": "mg4k-upscaler-processor",
       "class_name": "MG4KProcessor",
       "image": "./Dockerfile",
       "instance_type": "standard-1",
