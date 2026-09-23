@@ -131,12 +131,29 @@ jobs:
           assert html.count('id="upload-plus"') == 1, "Exactly one upload control is required"
           for obsolete in ['id="pick-file"', 'id="pick-cloud"', 'id="replace-file"', 'id="mobile-file"']:
               assert obsolete not in html, f"Duplicate upload control remains: {obsolete}"
-          assert '$("upload-plus").addEventListener("click",openPicker);' in html, "Single upload plus must open the picker"
-          assert '$("upload-plus").classList.add("hidden")' in html, "Upload plus must hide while current source is active"
-          assert '$("upload-plus").classList.add("compact")' in html, "Upload plus must return as compact next-source control"
-          assert 'Добавить следующий исходник' in html, "Next-source state must be explicit"
-          assert "FINAL 4K утверждён. Можно скачать результат или добавить следующий исходник." in html, "FINAL state must expose next-source flow"
-          print("Cloud two-pane Visual Review + next-source upload contract: PASSED")
+          assert '$("upload-plus").addEventListener("click",openPicker);' in html, "Initial upload plus must open the picker"
+          assert '$("upload-plus").classList.add("hidden")' in html, "Initial plus must disappear after a source is loaded"
+          for required_nav in ['id="action-prev"', 'id="action-add"', 'id="action-next"', 'id="action-skip"']:
+              assert required_nav in html, f"Missing source navigation control: {required_nav}"
+          assert '$("action-add").addEventListener("click",openPicker);' in html, "Add-file navigation must open the picker"
+          assert 'status==="skipped"' in html, "Skipped source state must remain reviewable"
+          assert 'sendDecision("skip")' in html, "Skip action must be wired"
+          assert 'Добавить следующий исходник' not in html, "Source addition must live in the navigation, not on the preview"
+          print("Cloud two-pane Visual Review + queue/skip contract: PASSED")
+          PY
+
+      - name: Cloud skip backend contract
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          worker = Path("src/worker.js").read_text(encoding="utf-8")
+          bridge = Path("cloudflare_bridge.py").read_text(encoding="utf-8")
+          assert '["approve", "reject", "skip"]' in worker
+          assert '"skip_sent"' in worker
+          assert '{"approve", "reject", "skip"}' in bridge
+          assert '"skipped_by_user"' in bridge
+          assert '"status": "skipped"' in bridge
+          print("Cloud skip backend contract: PASSED")
           PY
 
       - name: No paid generation in regression
