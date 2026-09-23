@@ -13,12 +13,14 @@
   },
   "kv_namespaces": [
     {
-      "binding": "SESSION_STATE_R7"
+      "binding": "SESSION_STATE_R7",
+      "id": "920e441971ce423fa8d664064606695e"
     }
   ],
   "r2_buckets": [
     {
-      "binding": "TEMP_BUFFER_R7"
+      "binding": "TEMP_BUFFER_R7",
+      "bucket_name": "4k-upscaler-temp-buffer-r7"
     }
   ]
 }
