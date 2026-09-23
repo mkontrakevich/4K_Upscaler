@@ -71,6 +71,7 @@ function publicJob(job) {
     result_available: Boolean(job.result_key),
     error: job.error || null,
     validation: job.validation || null,
+    decision: job.decision || null,
   };
 }
 
@@ -204,6 +205,24 @@ async function handleApi(request, env, ctx, url) {
     return json(publicJob(job));
   }
 
+  const jobDecisionMatch = path.match(/^\/api\/jobs\/([0-9a-f-]+)\/decision$/i);
+  if (jobDecisionMatch && method === "POST") {
+    const job = await readJob(env, jobDecisionMatch[1]);
+    if (!job) return json({ error: "job_not_found" }, 404);
+    if (!await authorizeJob(request, url, job)) return json({ error: "forbidden" }, 403);
+    if (job.status !== "review") return json({ error: "job_not_waiting_for_review", status: job.status }, 409);
+    let body = {};
+    try { body = await request.json(); } catch {}
+    const action = String(body.action || "").toLowerCase();
+    if (!["approve", "reject"].includes(action)) return json({ error: "invalid_decision" }, 400);
+    job.decision = action;
+    job.status = "decision_pending";
+    job.stage = action === "approve" ? "approval_sent" : "rejection_sent";
+    job.progress = 95;
+    await writeJob(env, job);
+    return json({ ok: true, job: publicJob(job) });
+  }
+
   const jobResultMatch = path.match(/^\/api\/jobs\/([0-9a-f-]+)\/result$/i);
   if (jobResultMatch && method === "GET") {
     const job = await readJob(env, jobResultMatch[1]);
@@ -309,6 +328,14 @@ async function handleApi(request, env, ctx, url) {
     return json({ ok: true, job: publicJob(job) });
   }
 
+  const processorDecisionMatch = path.match(/^\/api\/processor\/jobs\/([0-9a-f-]+)\/decision$/i);
+  if (processorDecisionMatch && method === "GET") {
+    if (!await authorizeProcessor(request, env)) return json({ error: "processor_unauthorized" }, 403);
+    const job = await readJob(env, processorDecisionMatch[1]);
+    if (!job) return json({ error: "job_not_found" }, 404);
+    return json({ decision: job.decision || null, status: job.status, stage: job.stage });
+  }
+
   const processorResultMatch = path.match(/^\/api\/processor\/jobs\/([0-9a-f-]+)\/result$/i);
   if (processorResultMatch && method === "POST") {
     if (!await authorizeProcessor(request, env)) return json({ error: "processor_unauthorized" }, 403);
@@ -338,6 +365,7 @@ async function handleApi(request, env, ctx, url) {
 
     let validation = null;
     try { validation = JSON.parse(String(form.get("validation") || "null")); } catch {}
+    const requestedStatus = String(form.get("status") || "done").toLowerCase();
 
     const resultName = cleanName(file.name || `4K_${job.filename}`);
     const resultKey = `result/${job.id}/${resultName}`;
@@ -347,11 +375,12 @@ async function handleApi(request, env, ctx, url) {
     });
 
     job.result_key = resultKey;
-    job.status = "done";
-    job.stage = "final";
-    job.progress = 100;
+    job.status = requestedStatus === "review" ? "review" : "done";
+    job.stage = requestedStatus === "review" ? "awaiting_approval" : "final";
+    job.progress = requestedStatus === "review" ? 90 : 100;
     job.validation = validation;
     job.error = null;
+    if (requestedStatus !== "review") job.decision = "approve";
     await writeJob(env, job);
 
     return json({ ok: true, job: publicJob(job) });
