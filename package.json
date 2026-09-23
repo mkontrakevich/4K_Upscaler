@@ -3,7 +3,7 @@
   "version": "8.8.1",
   "private": true,
   "scripts": {
-    "deploy": "wrangler deploy --x-provision --x-auto-create"
+    "deploy": "wrangler deploy"
   },
   "devDependencies": {
     "wrangler": "^4.68.0"
