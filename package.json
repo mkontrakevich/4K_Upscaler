@@ -3,9 +3,13 @@
   "version": "8.8.1",
   "private": true,
   "scripts": {
-    "deploy": "wrangler deploy"
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev"
   },
   "devDependencies": {
-    "wrangler": "^4.68.0"
+    "wrangler": "4.136.1"
+  },
+  "dependencies": {
+    "@cloudflare/containers": "0.0.30"
   }
 }
