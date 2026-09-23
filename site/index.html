@@ -343,7 +343,6 @@ function renderLocks(){
 }
 function resetResult(){
   $("result-image").hidden=true;$("result-image").removeAttribute("src");
-  $("upload-plus").classList.add("hidden");$("upload-plus").classList.remove("compact");
   $("result-stage").classList.remove("ready");$("result-badges").hidden=true;
   $("result-caption").textContent="ожидает обработки";$("analysis-panel").classList.remove("visible");
   $("action-approve").disabled=true;$("action-reject").disabled=true;$("action-regenerate").disabled=true;$("action-inspect").disabled=true;$("mobile-inspect").disabled=true;
@@ -445,6 +444,7 @@ async function prepareJob(forceNew=false){
   if(!currentFile){toast("Сначала добавьте исходник.");return}
   if(currentJob&&!forceNew){try{const s=await jobStatus(currentJob);if(s.status==="done"){location.href=resultUrl(currentJob,true);return}if(!["failed"].includes(s.status)){toast("Текущее задание ещё активно.");return}}catch{}}
   if(!confirmPaidGeneration())return;
+  $("upload-plus").classList.add("hidden");$("upload-plus").classList.remove("compact");
   currentJob=null;resetResult();$("action-process").disabled=true;$("mobile-process").disabled=true;$("action-process").textContent="Загрузка…";$("mobile-process").textContent="Загрузка…";setStatus("Передаю исходник и LOCK-профиль в временную очередь Cloudflare…");
   const form=new FormData();form.append("file",currentFile,currentFile.name);form.append("locks",JSON.stringify(locks));form.append("mode","generative");
   try{const session=await startCloudSession();const r=await fetch("/api/jobs",{method:"POST",headers:{"X-Session-Id":session.id,"X-Session-Token":session.token},body:form});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||"upload_failed");currentJob={id:d.id,token:d.token};$("action-process").textContent="Обработка…";$("mobile-process").textContent="Обработка";setStatus("Задача "+d.id.slice(0,8)+" принята. Облачный processor запускается.","ok");setProgress(d.progress||5,(d.progress||5)+"%");clearInterval(jobPollTimer);await pollCurrentJob();jobPollTimer=setInterval(pollCurrentJob,1800)}
