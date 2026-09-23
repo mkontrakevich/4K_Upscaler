@@ -208,7 +208,9 @@ async function handleApi(request, env, ctx, url) {
       worker: "4k-upscaler",
       session_ttl_seconds: SESSION_TTL,
       persistence: "ephemeral-session-only",
-      database: "none",
+      persistent_user_database: false,
+      session_store: "Cloudflare KV with sliding TTL",
+      image_buffer: "private Cloudflare R2, session-scoped",
     });
   }
 
@@ -372,7 +374,11 @@ async function handleApi(request, env, ctx, url) {
     object.writeHttpMetadata(headers);
     headers.set("etag", object.httpEtag);
     headers.set("cache-control", "private, no-store");
-    headers.set("content-disposition", `attachment; filename="4K_${cleanName(job.filename)}"`);
+    if (url.searchParams.get("download") === "1") {
+      headers.set("content-disposition", `attachment; filename="4K_${cleanName(job.filename)}"`);
+    } else {
+      headers.set("content-disposition", "inline");
+    }
     return new Response(object.body, { headers });
   }
 
