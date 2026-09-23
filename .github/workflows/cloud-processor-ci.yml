@@ -99,6 +99,8 @@ jobs:
           containers = cfg.get("containers", [])
           assert len(containers) == 1
           c = containers[0]
+          assert c["name"] == "mg4k-upscaler-processor"
+          assert c["name"][0].isalpha(), "Container application name must start with a letter"
           assert c["class_name"] == "MG4KProcessor"
           assert c["image"] == "./Dockerfile"
           assert c["instance_type"] == "standard-1"
