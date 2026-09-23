@@ -115,9 +115,17 @@ async function authorizeProcessor(request, env) {
   const auth = request.headers.get("authorization") || "";
   const token = auth.toLowerCase().startsWith("bearer ") ? auth.slice(7).trim() : "";
   if (!token) return false;
+
+  const tokenHash = await sha256(token);
+
+  const sharedSecret = String(env.PROCESSOR_SHARED_SECRET || "").trim();
+  if (sharedSecret && tokenHash === await sha256(sharedSecret)) {
+    return true;
+  }
+
   const expected = await env.SESSION_STATE_R7.get("processor:token_hash");
   if (!expected) return false;
-  return (await sha256(token)) === expected;
+  return tokenHash === expected;
 }
 
 async function listAllObjects(env, prefix) {
@@ -416,7 +424,10 @@ async function handleApi(request, env, ctx, url) {
 
   if (path === "/api/processor/claim" && method === "POST") {
     if (!await authorizeProcessor(request, env)) {
-      const configured = Boolean(await env.SESSION_STATE_R7.get("processor:token_hash"));
+      const configured = Boolean(
+        String(env.PROCESSOR_SHARED_SECRET || "").trim()
+        || await env.SESSION_STATE_R7.get("processor:token_hash")
+      );
       return json({ error: configured ? "processor_unauthorized" : "processor_not_paired" }, configured ? 403 : 428);
     }
 
