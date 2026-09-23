@@ -1,0 +1,121 @@
+name: 4K Upscaler Regression Guard
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install runtime dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Python syntax
+        run: |
+          python -m py_compile v8_safe_appearance.py
+          python -m py_compile cloudflare_bridge.py
+          python -m py_compile web_review_server.py
+          python -m py_compile safe_local_upscale.py
+
+      - name: Worker syntax
+        run: node --check src/worker.js
+
+      - name: Cloud UI inline JavaScript syntax
+        run: |
+          python - <<'PY'
+          import re
+          from pathlib import Path
+          html = Path("site/index.html").read_text(encoding="utf-8")
+          scripts = re.findall(r"<script>(.*?)</script>", html, flags=re.S|re.I)
+          assert scripts, "No inline site script found"
+          Path("/tmp/site-inline.js").write_text("\n".join(scripts), encoding="utf-8")
+          PY
+          node --check /tmp/site-inline.js
+
+      - name: Legacy local web console self-test
+        run: python web_review_server.py --self-test
+
+      - name: Existing ARCH LOCK offline checks
+        run: |
+          python canvas_integrity_self_test.py
+          python material_identity_self_test.py
+          python source_sky_recovery_self_test.py
+          python viewer_inspection_self_test.py
+          python retry_budget_self_test.py
+
+      - name: Lock Profile to DONOR prompt contract
+        run: |
+          python - <<'PY'
+          import json, os
+          import v8_safe_appearance as v
+
+          os.environ.pop("MG4K_LOCK_PROFILE_JSON", None)
+          assert v.donor_generation_prompt() == v.GENERATION_PROMPT, "Legacy local prompt changed"
+
+          profile = {
+              "camera": "soft",
+              "geometry": "hard",
+              "architecture": "hard",
+              "textures": "soft",
+              "vegetation": "free",
+              "people_vehicles": "hard",
+              "lighting": "free",
+              "sky": "soft",
+              "water": "hard",
+          }
+          os.environ["MG4K_LOCK_PROFILE_JSON"] = json.dumps(profile)
+          prompt = v.donor_generation_prompt()
+          required = [
+              "CAMERA [SOFT]",
+              "GEOMETRY [HARD]",
+              "ARCHITECTURE [HARD]",
+              "TEXTURES / MATERIAL IDENTITY [SOFT]",
+              "VEGETATION [FREE]",
+              "PEOPLE / VEHICLES / SMALL OBJECTS [HARD]",
+              "LIGHTING [FREE]",
+              "SKY / CLOUDS [SOFT]",
+              "WATER / REFLECTIONS / SHADOWS [HARD]",
+              "A FREE parameter grants freedom only to that parameter",
+          ]
+          missing = [item for item in required if item not in prompt]
+          assert not missing, f"Dynamic donor prompt missing: {missing}"
+          print("Dynamic DONOR prompt contract: PASSED")
+          PY
+
+      - name: Cloud review UI contract
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          html = Path("site/index.html").read_text(encoding="utf-8")
+          required = [
+              "CORE 8.8.1 R4 · UI R7",
+              'id="review-panel"',
+              'id="review-source"',
+              'id="review-result"',
+              'id="review-approve"',
+              'id="review-reject"',
+              'id="review-download"',
+              "RESULT · REVIEW",
+              "FINAL · 4K",
+              "showCloudReview",
+              "sendDecision",
+          ]
+          missing = [item for item in required if item not in html]
+          assert not missing, f"Review UI regression: {missing}"
+          print("Cloud review UI contract: PASSED")
+          PY
+
+      - name: No paid generation in regression
+        run: |
+          echo "Regression suite uses only offline/self-test paths; no OPENROUTER_API_KEY is provided."
