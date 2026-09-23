@@ -31,6 +31,11 @@ jobs:
       - name: Worker syntax
         run: node --check src/worker.js
 
+      - name: Cloudflare bundle dry-run
+        run: |
+          npm install
+          npx wrangler deploy --dry-run --outdir /tmp/mg4k-worker
+
       - name: Cloud UI inline JavaScript syntax
         run: |
           python - <<'PY'
