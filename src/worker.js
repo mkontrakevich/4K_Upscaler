@@ -1,5 +1,4 @@
-
-const JOB_TTL = 60 * 60 * 24 * 30;
+const SESSION_TTL = 60 * 60 * 2;
 const PAIR_TTL = 60 * 10;
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 
@@ -44,6 +43,17 @@ async function sha256(value) {
   return Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, "0")).join("");
 }
 
+async function readSession(env, id) {
+  if (!id) return null;
+  const raw = await env.JOBS.get(`session:${id}`);
+  return raw ? JSON.parse(raw) : null;
+}
+
+async function writeSession(env, session) {
+  session.updated_at = now();
+  await env.JOBS.put(`session:${session.id}`, JSON.stringify(session), { expirationTtl: SESSION_TTL });
+}
+
 async function readJob(env, id) {
   const raw = await env.JOBS.get(`job:${id}`);
   return raw ? JSON.parse(raw) : null;
@@ -51,7 +61,7 @@ async function readJob(env, id) {
 
 async function writeJob(env, job) {
   job.updated_at = now();
-  await env.JOBS.put(`job:${job.id}`, JSON.stringify(job), { expirationTtl: JOB_TTL });
+  await env.JOBS.put(`job:${job.id}`, JSON.stringify(job), { expirationTtl: SESSION_TTL });
 }
 
 function publicJob(job) {
@@ -79,10 +89,26 @@ function jobToken(request, url) {
   return request.headers.get("x-job-token") || url.searchParams.get("token") || "";
 }
 
+function sessionCredentials(request, url, body = null) {
+  return {
+    id: request.headers.get("x-session-id") || url.searchParams.get("session_id") || body?.session_id || "",
+    token: request.headers.get("x-session-token") || url.searchParams.get("session_token") || body?.session_token || "",
+  };
+}
+
 async function authorizeJob(request, url, job) {
   const token = jobToken(request, url);
   if (!token || !job?.access_hash) return false;
   return (await sha256(token)) === job.access_hash;
+}
+
+async function authorizeSession(request, url, env, body = null) {
+  const { id, token } = sessionCredentials(request, url, body);
+  if (!id || !token) return null;
+  const session = await readSession(env, id);
+  if (!session?.access_hash) return null;
+  if ((await sha256(token)) !== session.access_hash) return null;
+  return session;
 }
 
 async function authorizeProcessor(request, env) {
@@ -94,14 +120,56 @@ async function authorizeProcessor(request, env) {
   return (await sha256(token)) === expected;
 }
 
+async function listAllObjects(env, prefix) {
+  const objects = [];
+  let cursor;
+  do {
+    const page = await env.FILES.list({ prefix, cursor, limit: 1000 });
+    objects.push(...page.objects);
+    cursor = page.truncated ? page.cursor : undefined;
+  } while (cursor);
+  return objects;
+}
+
+async function deletePrefix(env, prefix) {
+  const objects = await listAllObjects(env, prefix);
+  const keys = objects.map(item => item.key);
+  for (let i = 0; i < keys.length; i += 1000) {
+    await env.FILES.delete(keys.slice(i, i + 1000));
+  }
+  return keys.length;
+}
+
+async function endSession(env, session) {
+  let deletedObjects = 0;
+  try {
+    deletedObjects = await deletePrefix(env, `sessions/${session.id}/`);
+  } catch (error) {
+    console.error("SESSION_R2_DELETE_ERROR", session.id, error);
+  }
+
+  for (const jobId of session.jobs || []) {
+    try { await env.JOBS.delete(`job:${jobId}`); } catch {}
+  }
+  await env.JOBS.delete(`session:${session.id}`);
+  return deletedObjects;
+}
+
 async function nextQueuedJob(env) {
-  const listed = await env.JOBS.list({ prefix: "job:", limit: 100 });
+  const listed = await env.JOBS.list({ prefix: "job:", limit: 1000 });
   let candidate = null;
   for (const key of listed.keys) {
     const raw = await env.JOBS.get(key.name);
     if (!raw) continue;
     const job = JSON.parse(raw);
     if (job.status !== "queued") continue;
+
+    const session = await readSession(env, job.session_id);
+    if (!session) {
+      await env.JOBS.delete(key.name);
+      continue;
+    }
+
     if (!candidate || String(job.created_at).localeCompare(String(candidate.created_at)) < 0) {
       candidate = job;
     }
@@ -109,8 +177,23 @@ async function nextQueuedJob(env) {
   return candidate;
 }
 
-async function serveAsset(request, env) {
-  return env.ASSETS.fetch(request);
+async function cleanupOrphanedR2(env) {
+  const objects = await listAllObjects(env, "sessions/");
+  const sessionIds = new Set();
+  for (const object of objects) {
+    const parts = object.key.split("/");
+    if (parts.length >= 2 && parts[0] === "sessions") sessionIds.add(parts[1]);
+  }
+
+  let sessionsCleaned = 0;
+  let objectsDeleted = 0;
+  for (const sessionId of sessionIds) {
+    const active = await readSession(env, sessionId);
+    if (active) continue;
+    objectsDeleted += await deletePrefix(env, `sessions/${sessionId}/`);
+    sessionsCleaned++;
+  }
+  console.log("MG4K_CLEANUP", { sessionsCleaned, objectsDeleted });
 }
 
 async function handleApi(request, env, ctx, url) {
@@ -121,13 +204,56 @@ async function handleApi(request, env, ctx, url) {
     return json({
       status: "ok",
       service: "MG 4K Cloud Intake",
-      version: "cloud-r1",
+      version: "cloud-r2-ephemeral",
       worker: "4k-upscaler",
-      queue: "r2+kv",
+      session_ttl_seconds: SESSION_TTL,
+      persistence: "ephemeral-session-only",
+      database: "none",
     });
   }
 
+  if (path === "/api/session/start" && method === "POST") {
+    const id = crypto.randomUUID();
+    const token = randomToken();
+    const session = {
+      id,
+      access_hash: await sha256(token),
+      created_at: now(),
+      updated_at: now(),
+      jobs: [],
+    };
+    await writeSession(env, session);
+    return json({ id, token, ttl_seconds: SESSION_TTL }, 201);
+  }
+
+  if (path === "/api/session/heartbeat" && method === "POST") {
+    let body = {};
+    try { body = await request.json(); } catch {}
+    const session = await authorizeSession(request, url, env, body);
+    if (!session) return json({ error: "session_unauthorized" }, 403);
+    await writeSession(env, session);
+
+    for (const jobId of session.jobs || []) {
+      const job = await readJob(env, jobId);
+      if (job) await writeJob(env, job);
+    }
+
+    return json({ ok: true, ttl_seconds: SESSION_TTL });
+  }
+
+  if (path === "/api/session/end" && method === "POST") {
+    let body = {};
+    try { body = await request.json(); } catch {}
+    const session = await authorizeSession(request, url, env, body);
+    if (!session) return json({ ok: true });
+    const deleted = await endSession(env, session);
+    return json({ ok: true, deleted_objects: deleted });
+  }
+
   if (path === "/api/jobs" && method === "POST") {
+    const session = await authorizeSession(request, url, env);
+    if (!session) return json({ error: "session_required" }, 403);
+
     let form;
     try {
       form = await request.formData();
@@ -160,15 +286,21 @@ async function handleApi(request, env, ctx, url) {
     const id = crypto.randomUUID();
     const accessToken = randomToken();
     const filename = cleanName(file.name || "source-image");
-    const sourceKey = `source/${id}/${filename}`;
+    const sourceKey = `sessions/${session.id}/jobs/${id}/source/${filename}`;
 
     await env.FILES.put(sourceKey, file.stream(), {
       httpMetadata: { contentType: type },
-      customMetadata: { job_id: id, original_name: filename },
+      customMetadata: {
+        session_id: session.id,
+        job_id: id,
+        kind: "source",
+        original_name: filename,
+      },
     });
 
     const job = {
       id,
+      session_id: session.id,
       access_hash: await sha256(accessToken),
       status: "queued",
       stage: "uploaded",
@@ -184,9 +316,12 @@ async function handleApi(request, env, ctx, url) {
       result_key: null,
       error: null,
       validation: null,
+      decision: null,
     };
 
     await writeJob(env, job);
+    if (!session.jobs.includes(id)) session.jobs.push(id);
+    await writeSession(env, session);
 
     return json({
       id,
@@ -248,7 +383,6 @@ async function handleApi(request, env, ctx, url) {
       code,
       token_hash: await sha256(token),
       created_at: now(),
-      approved: false,
     };
     await env.JOBS.put(`pair:${code}`, JSON.stringify(pair), { expirationTtl: PAIR_TTL });
     return json({ code, token, expires_in_seconds: PAIR_TTL }, 201);
@@ -343,6 +477,12 @@ async function handleApi(request, env, ctx, url) {
     const job = await readJob(env, processorResultMatch[1]);
     if (!job) return json({ error: "job_not_found" }, 404);
 
+    const session = await readSession(env, job.session_id);
+    if (!session) {
+      await env.JOBS.delete(`job:${job.id}`);
+      return json({ error: "session_expired" }, 410);
+    }
+
     const contentType = request.headers.get("content-type") || "";
     if (contentType.includes("application/json")) {
       let body = {};
@@ -368,10 +508,18 @@ async function handleApi(request, env, ctx, url) {
     const requestedStatus = String(form.get("status") || "done").toLowerCase();
 
     const resultName = cleanName(file.name || `4K_${job.filename}`);
-    const resultKey = `result/${job.id}/${resultName}`;
+    const resultKey = `sessions/${job.session_id}/jobs/${job.id}/result/${resultName}`;
+    if (job.result_key && job.result_key !== resultKey) {
+      try { await env.FILES.delete(job.result_key); } catch {}
+    }
     await env.FILES.put(resultKey, file.stream(), {
       httpMetadata: { contentType: String(file.type || "image/jpeg") },
-      customMetadata: { job_id: job.id, original_name: resultName },
+      customMetadata: {
+        session_id: job.session_id,
+        job_id: job.id,
+        kind: "result",
+        original_name: resultName,
+      },
     });
 
     job.result_key = resultKey;
@@ -382,6 +530,7 @@ async function handleApi(request, env, ctx, url) {
     job.error = null;
     if (requestedStatus !== "review") job.decision = "approve";
     await writeJob(env, job);
+    await writeSession(env, session);
 
     return json({ ok: true, job: publicJob(job) });
   }
@@ -403,6 +552,10 @@ export default {
         }, 500);
       }
     }
-    return serveAsset(request, env);
+    return env.ASSETS.fetch(request);
+  },
+
+  async scheduled(controller, env, ctx) {
+    ctx.waitUntil(cleanupOrphanedR2(env));
   },
 };
