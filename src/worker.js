@@ -428,10 +428,10 @@ async function handleApi(request, env, ctx, url) {
     let body = {};
     try { body = await request.json(); } catch {}
     const action = String(body.action || "").toLowerCase();
-    if (!["approve", "reject"].includes(action)) return json({ error: "invalid_decision" }, 400);
+    if (!["approve", "reject", "skip"].includes(action)) return json({ error: "invalid_decision" }, 400);
     job.decision = action;
     job.status = "decision_pending";
-    job.stage = action === "approve" ? "approval_sent" : "rejection_sent";
+    job.stage = action === "approve" ? "approval_sent" : action === "reject" ? "rejection_sent" : "skip_sent";
     job.progress = 95;
     await writeJob(env, job);
     return json({ ok: true, job: publicJob(job) });
