@@ -91,8 +91,10 @@ body{overflow-x:hidden}
 .segmented button.active[data-level="soft"]{background:#49340c;color:#ffd477}
 .segmented button.active[data-level="free"]{background:#223344;color:#d1dfeb}
 .lock-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:9px}
-.actions{display:grid;grid-template-columns:1.25fr 1.1fr 1fr 1.15fr 1fr;gap:9px;padding:10px}
+.actions{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:9px;padding:10px}
 .actions .btn{min-height:48px}
+.actions .queue-nav{background:#0d2031;border-color:#3b5b73}
+.actions .skip{background:#162536;border-color:#647b8e}
 .analysis-panel{display:none}
 .analysis-panel.visible{display:block}
 .analysis-summary{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;padding:10px}
@@ -154,11 +156,12 @@ body{overflow-x:hidden}
   .lock-list{grid-template-columns:1fr}
   .lock-row{grid-template-columns:minmax(0,1fr) 145px;padding:6px}
   .lock-name small{display:none}
-  .actions-panel{display:none}
+  .actions-panel{display:block}
+  .actions{grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;padding:7px}
+  .actions .btn{min-height:42px;padding:0 7px;font-size:10px}
   .analysis-summary{grid-template-columns:1fr 1fr}
   .analysis-grid{grid-template-columns:1fr}
-  .mobile-bar{position:fixed;left:0;right:0;bottom:0;z-index:60;display:grid;grid-template-columns:1.25fr 1fr;gap:6px;padding:7px 8px calc(7px + env(safe-area-inset-bottom));background:rgba(5,15,25,.95);border-top:1px solid var(--line);backdrop-filter:blur(14px)}
-  .mobile-bar .btn{min-height:44px;padding:0 7px;font-size:10px}
+  .mobile-bar{display:none!important}
   .viewer{width:100vw;height:100vh;border-radius:0;border:0}
   .viewer-toolbar{align-items:flex-start;flex-wrap:wrap}
   .viewer-title{width:100%}
@@ -240,13 +243,17 @@ body{overflow-x:hidden}
     </div>
   </section>
 
-  <section class="actions-panel">
+  <section class="actions-panel" id="actions-panel" hidden>
     <div class="actions">
+      <button class="btn queue-nav" id="action-prev" type="button" disabled>← Предыдущий файл</button>
+      <button class="btn queue-nav" id="action-add" type="button">＋ Добавить файл</button>
+      <button class="btn queue-nav" id="action-next" type="button" disabled>Следующий файл →</button>
       <button class="btn primary" id="action-process" type="button" disabled>▶ Запустить / продолжить</button>
-      <button class="btn approve" id="action-approve" type="button" disabled>✓ Утвердить и дальше</button>
-      <button class="btn reject" id="action-reject" type="button" disabled>× Отклонить</button>
-      <button class="btn generate" id="action-regenerate" type="button" disabled>↻ Новая генерация</button>
       <button class="btn ghost" id="action-inspect" type="button" disabled>Инспекция</button>
+      <button class="btn approve" id="action-approve" type="button" disabled>✓ Утвердить</button>
+      <button class="btn reject" id="action-reject" type="button" disabled>× Отклонить</button>
+      <button class="btn generate" id="action-regenerate" type="button" disabled>↻ Регенерировать</button>
+      <button class="btn skip" id="action-skip" type="button" disabled>⏭ Пропустить</button>
     </div>
   </section>
 
@@ -320,6 +327,7 @@ const $=id=>document.getElementById(id);
 let locks=JSON.parse(localStorage.getItem("mg4k.lockProfile")||"null")||Object.fromEntries(defaults.map(x=>[x.id,x.level]));
 let currentFile=null,currentObjectUrl=null,currentJob=null,cloudSession=null,sessionStartPromise=null,heartbeatTimer=null,jobPollTimer=null;
 let resultObjectUrl=null,viewerBlinkTimer=null;
+let sourceItems=[],currentSourceIndex=-1;
 
 function log(level,text){
   const now=new Date().toLocaleTimeString("ru-RU",{hour12:false});
@@ -337,7 +345,9 @@ function renderLocks(){
   $("lock-list").innerHTML=defaults.map(item=>'<div class="lock-row"><div class="lock-name"><strong>'+item.name+'</strong><small>'+item.hint+'</small></div><div class="segmented" data-lock="'+item.id+'">'+["hard","soft","free"].map(level=>'<button type="button" data-level="'+level+'" class="'+(locks[item.id]===level?"active":"")+'">'+level.toUpperCase()+'</button>').join("")+'</div></div>').join("");
   document.querySelectorAll(".segmented button").forEach(btn=>btn.addEventListener("click",()=>{
     const id=btn.closest(".segmented").dataset.lock;locks[id]=btn.dataset.level;
-    localStorage.setItem("mg4k.lockProfile",JSON.stringify(locks));renderLocks();
+    localStorage.setItem("mg4k.lockProfile",JSON.stringify(locks));
+    const item=currentSourceItem();if(item)item.locks={...locks};
+    renderLocks();
     setStatus("LOCK изменён: "+id.toUpperCase()+" → "+btn.dataset.level.toUpperCase());
   }));
 }
@@ -347,23 +357,61 @@ function resetResult(){
   $("result-caption").textContent="ожидает обработки";$("analysis-panel").classList.remove("visible");
   $("action-approve").disabled=true;$("action-reject").disabled=true;$("action-regenerate").disabled=true;$("action-inspect").disabled=true;$("mobile-inspect").disabled=true;
 }
-function setFile(file,source="Системный файловый менеджер"){
-  if(!file||(!String(file.type||"").startsWith("image/")&&!/\.(heic|heif)$/i.test(file.name))){toast("Выберите файл изображения.");return}
-  currentFile=file;currentJob=null;resetResult();
-  if(currentObjectUrl)URL.revokeObjectURL(currentObjectUrl);currentObjectUrl=URL.createObjectURL(file);
-  const img=$("source-image");img.onload=()=>{const dim=img.naturalWidth+"×"+img.naturalHeight;$("source-dimensions").textContent=dim;$("source-size").textContent=dim;$("meta-resolution").textContent=dim};
-  img.src=currentObjectUrl;img.hidden=false;$("upload-overlay").classList.add("hidden");$("source-badges").hidden=false;$("upload-plus").classList.remove("compact");$("upload-plus").classList.add("hidden");$("upload-plus").title="Добавить изображение";
-  $("source-name").textContent=file.name;$("meta-name").textContent=file.name;$("meta-size").textContent=humanSize(file.size);$("meta-source").textContent=source;$("current-file").textContent=file.name;
-  $("action-process").disabled=false;$("mobile-process").disabled=false;setProgress(0,"готов к запуску");setStatus("Источник загружен. Настройте LOCK и запустите обработку.","ok");
+function currentSourceItem(){return sourceItems[currentSourceIndex]||null}
+function updateQueueNavigation(){
+  const has=currentSourceIndex>=0&&currentSourceIndex<sourceItems.length;
+  $("actions-panel").hidden=!has;
+  $("action-prev").disabled=!has||currentSourceIndex<=0;
+  $("action-next").disabled=!has||currentSourceIndex>=sourceItems.length-1;
+  $("action-add").disabled=!has;
+  if(has)$("current-file").textContent=(currentSourceIndex+1)+"/"+sourceItems.length+" · "+sourceItems[currentSourceIndex].file.name;
 }
-function openPicker(){$("file-input").click()}
+function rememberCurrentItem(state=null){
+  const item=currentSourceItem();if(!item)return;
+  item.job=currentJob;item.locks={...locks};if(state)item.lastState=state;
+}
+async function selectSource(index){
+  if(index<0||index>=sourceItems.length)return;
+  rememberCurrentItem();
+  clearInterval(jobPollTimer);jobPollTimer=null;
+  currentSourceIndex=index;
+  const item=sourceItems[index];
+  currentFile=item.file;currentObjectUrl=item.objectUrl;currentJob=item.job||null;locks={...(item.locks||locks)};
+  renderLocks();resetResult();
+  $("upload-plus").classList.add("hidden");$("upload-plus").classList.remove("compact");
+  $("upload-overlay").classList.add("hidden");$("source-badges").hidden=false;
+  const img=$("source-image");
+  img.onload=()=>{const dim=img.naturalWidth+"×"+img.naturalHeight;item.resolution=dim;$("source-dimensions").textContent=dim;$("source-size").textContent=dim;$("meta-resolution").textContent=dim};
+  img.src=currentObjectUrl;img.hidden=false;
+  $("source-name").textContent=item.file.name;$("meta-name").textContent=item.file.name;$("meta-size").textContent=humanSize(item.file.size);$("meta-source").textContent=item.source||"Системный файловый менеджер";$("meta-resolution").textContent=item.resolution||"—";
+  $("action-process").textContent="▶ Запустить / продолжить";$("mobile-process").textContent="Обработка";$("action-process").disabled=false;$("mobile-process").disabled=false;
+  updateQueueNavigation();
+  if(currentJob){
+    const state=item.lastState||await jobStatus(currentJob).catch(()=>null);
+    if(state){item.lastState=state;renderJobState(state)}
+    if(state&&!["review","done","failed","skipped"].includes(state.status)){jobPollTimer=setInterval(pollCurrentJob,1800)}
+  }else{
+    setProgress(0,"готов к запуску");setStatus("Исходник "+(index+1)+" из "+sourceItems.length+". Настройте LOCK и запустите обработку.","ok");
+  }
+}
+function addSourceFile(file,source="Системный файловый менеджер"){
+  if(!file||(!String(file.type||"").startsWith("image/")&&!/\.(heic|heif)$/i.test(file.name))){toast("Выберите файл изображения.");return}
+  const item={file,source,objectUrl:URL.createObjectURL(file),job:null,lastState:null,locks:{...locks},resolution:null};
+  sourceItems.push(item);
+  $("upload-plus").classList.add("hidden");
+  selectSource(sourceItems.length-1);
+}
+function openPicker(){$("file-input").value="";$("file-input").click()}
 $("upload-plus").addEventListener("click",openPicker);
-$("file-input").addEventListener("change",e=>setFile(e.target.files?.[0]));
+$("action-add").addEventListener("click",openPicker);
+$("file-input").addEventListener("change",e=>addSourceFile(e.target.files?.[0]));
 const stage=$("source-stage");
 ["dragenter","dragover"].forEach(t=>stage.addEventListener(t,e=>{e.preventDefault();stage.style.outline="1px solid #16c5f4"}));
 ["dragleave","drop"].forEach(t=>stage.addEventListener(t,e=>{e.preventDefault();stage.style.outline=""}));
-stage.addEventListener("drop",e=>setFile(e.dataTransfer?.files?.[0],"Drag & Drop"));
-$("reset-locks").addEventListener("click",()=>{locks=Object.fromEntries(defaults.map(x=>[x.id,x.level]));localStorage.setItem("mg4k.lockProfile",JSON.stringify(locks));renderLocks();toast("Базовый ARCH LOCK восстановлен.")});
+stage.addEventListener("drop",e=>addSourceFile(e.dataTransfer?.files?.[0],"Drag & Drop"));
+$("action-prev").addEventListener("click",()=>selectSource(currentSourceIndex-1));
+$("action-next").addEventListener("click",()=>selectSource(currentSourceIndex+1));
+$("reset-locks").addEventListener("click",()=>{locks=Object.fromEntries(defaults.map(x=>[x.id,x.level]));localStorage.setItem("mg4k.lockProfile",JSON.stringify(locks));const item=currentSourceItem();if(item)item.locks={...locks};renderLocks();toast("Базовый ARCH LOCK восстановлен.")});
 $("copy-profile").addEventListener("click",async()=>{try{await navigator.clipboard.writeText(JSON.stringify({version:"cloud-ui-r8",locks},null,2));toast("LOCK-профиль скопирован.")}catch{toast("Не удалось скопировать.")}});
 
 async function startCloudSession(){
