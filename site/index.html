@@ -135,7 +135,7 @@ button{color:inherit}
       <div class="mark">MG</div>
       <div class="brand-copy"><strong>MG 4K</strong><span>ARCH LOCK SYSTEM</span></div>
     </div>
-    <div class="version">CORE 8.8.1 R4 · UI R5</div>
+    <div class="version">CORE 8.8.1 R4 · UI R6</div>
   </header>
 
   <main class="main-grid">
@@ -422,7 +422,7 @@ async function jobStatus(job){
 
 function downloadResult(){
   if(!currentJob) return;
-  window.location.href=`/api/jobs/${currentJob.id}/result?token=${encodeURIComponent(currentJob.token)}`;
+  window.location.href=`/api/jobs/${currentJob.id}/result?token=${encodeURIComponent(currentJob.token)}&download=1`;
 }
 
 async function pollCurrentJob(){
