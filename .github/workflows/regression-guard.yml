@@ -2,7 +2,7 @@ name: 4K Upscaler Regression Guard
 
 on:
   push:
-    branches: [main, ui-r8-local-review]
+    branches: [main, ui-r8-local-review, ui-r8-single-upload]
   workflow_dispatch:
 
 jobs:
@@ -128,7 +128,11 @@ jobs:
           assert not missing, f"Review UI regression: {missing}"
           assert html.index('id="source-image"') < html.index('id="result-image"'), "SOURCE must precede RESULT"
           assert "Подключить процессор" not in html, "Cloud UI must not require local processor pairing"
-          print("Cloud two-pane Visual Review contract: PASSED")
+          assert html.count('id="upload-plus"') == 1, "Exactly one upload control is required"
+          for obsolete in ['id="pick-file"', 'id="pick-cloud"', 'id="replace-file"', 'id="mobile-file"']:
+              assert obsolete not in html, f"Duplicate upload control remains: {obsolete}"
+          assert '$("upload-plus").addEventListener("click",openPicker);' in html, "Single upload plus must open the picker"
+          print("Cloud two-pane Visual Review + single-upload contract: PASSED")
           PY
 
       - name: No paid generation in regression
