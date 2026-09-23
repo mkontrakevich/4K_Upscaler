@@ -1,3 +1,23 @@
+import { Container, getContainer } from "@cloudflare/containers";
+
+export class MG4KProcessor extends Container {
+  defaultPort = 8080;
+  sleepAfter = "15m";
+  enableInternet = true;
+
+  onStart() {
+    console.log("MG4K_PROCESSOR_STARTED");
+  }
+
+  onStop() {
+    console.log("MG4K_PROCESSOR_STOPPED");
+  }
+
+  onError(error) {
+    console.error("MG4K_PROCESSOR_ERROR", error);
+  }
+}
+
 const SESSION_TTL = 60 * 60 * 2;
 const PAIR_TTL = 60 * 10;
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
@@ -204,6 +224,40 @@ async function cleanupOrphanedR2(env) {
   console.log("MG4K_CLEANUP", { sessionsCleaned, objectsDeleted });
 }
 
+async function ensureCloudProcessor(env, origin) {
+  const processorToken = String(env.PROCESSOR_SHARED_SECRET || "").trim();
+  const openRouterKey = String(env.OPENROUTER_API_KEY || "").trim();
+
+  if (!processorToken) {
+    throw new Error("PROCESSOR_SHARED_SECRET is not configured.");
+  }
+  if (!openRouterKey) {
+    throw new Error("OPENROUTER_API_KEY is not configured.");
+  }
+
+  const container = getContainer(env.MG4K_PROCESSOR, "primary");
+  await container.startAndWaitForPorts({
+    ports: [8080],
+    startOptions: {
+      envVars: {
+        MG4K_CLOUD_URL: origin,
+        MG4K_PROCESSOR_TOKEN: processorToken,
+        OPENROUTER_API_KEY: openRouterKey,
+        MG4K_HEADLESS: "1",
+        MG4K_RUNTIME_DIR: "/runtime/bridge",
+        MG4K_JOBS_ROOT: "/tmp/mg4k-jobs",
+        MG4K_HEALTH_PORT: "8080",
+        MG4K_EXIT_WHEN_IDLE_SECONDS: "45",
+      },
+      enableInternet: true,
+    },
+    cancellationOptions: {
+      portReadyTimeoutMS: 60_000,
+    },
+  });
+  return container;
+}
+
 async function handleApi(request, env, ctx, url) {
   const path = url.pathname;
   const method = request.method.toUpperCase();
@@ -332,6 +386,21 @@ async function handleApi(request, env, ctx, url) {
     await writeJob(env, job);
     if (!session.jobs.includes(id)) session.jobs.push(id);
     await writeSession(env, session);
+
+    ctx.waitUntil((async () => {
+      try {
+        await ensureCloudProcessor(env, url.origin);
+      } catch (error) {
+        console.error("MG4K_PROCESSOR_START_FAILED", error);
+        const current = await readJob(env, id);
+        if (current && current.status === "queued") {
+          current.status = "failed";
+          current.stage = "processor_start_failed";
+          current.error = error?.message || String(error);
+          await writeJob(env, current);
+        }
+      }
+    })());
 
     return json({
       id,
