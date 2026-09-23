@@ -97,34 +97,189 @@ def active_cloud_lock_profile() -> dict[str, str]:
 
 
 def cloud_lock_prompt() -> str:
+    """Build the authoritative per-job DONOR instructions from the UI Lock Profile."""
     profile = active_cloud_lock_profile()
     labels = {
         "camera": "CAMERA",
         "geometry": "GEOMETRY",
         "architecture": "ARCHITECTURE",
-        "textures": "TEXTURES",
+        "textures": "TEXTURES / MATERIAL IDENTITY",
         "vegetation": "VEGETATION",
         "people_vehicles": "PEOPLE / VEHICLES / SMALL OBJECTS",
         "lighting": "LIGHTING",
         "sky": "SKY / CLOUDS",
         "water": "WATER / REFLECTIONS / SHADOWS",
     }
-    meanings = {
-        "hard": "HARD_LOCK: preserve exactly; enhancement only.",
-        "soft": "SOFT_LOCK: preserve global identity and causal logic; minor local refinement is allowed.",
-        "free": "FREE: may vary when useful for image quality, while still avoiding unrelated scene redesign.",
+    rules: dict[str, dict[str, str]] = {
+        "camera": {
+            "hard": (
+                "HARD_LOCK. Preserve exact viewpoint, camera height, azimuth, tilt, roll, focal length, "
+                "field of view, perspective, crop, horizon and normalized landmark coordinates. No reframing."
+            ),
+            "soft": (
+                "SOFT_LOCK. Preserve the recognizable viewpoint, composition, perspective family and subject scale. "
+                "Only subtle optical/framing correction is allowed; do not choose a new viewpoint."
+            ),
+            "free": (
+                "FREE. Controlled reframing or perspective refinement is allowed when it materially improves image quality, "
+                "but the same scene and primary subject must remain unmistakably continuous with the source."
+            ),
+        },
+        "geometry": {
+            "hard": (
+                "HARD_LOCK. Preserve exact contours, massing, proportions, structural edges, terrain boundaries "
+                "and spatial relationships. Enhancement only."
+            ),
+            "soft": (
+                "SOFT_LOCK. Preserve the same massing and spatial logic; allow only minor cleanup of ambiguous local edges "
+                "that does not change proportions or object placement."
+            ),
+            "free": (
+                "FREE. Local geometric reconstruction may resolve unclear source detail, but must not transform the scene "
+                "into a different building, landscape or spatial arrangement."
+            ),
+        },
+        "architecture": {
+            "hard": (
+                "HARD_LOCK. Preserve all architectural elements, facade axes, floor count, openings, rooflines, "
+                "window rhythm, balconies, railings and design language exactly. No redesign, additions or deletions."
+            ),
+            "soft": (
+                "SOFT_LOCK. Preserve architectural identity and all major elements; minor cleanup of unresolved small details "
+                "is allowed without changing facade logic or design language."
+            ),
+            "free": (
+                "FREE. Architectural micro-detail may be interpreted where the source is ambiguous, but the building must "
+                "remain the same recognizable project with the same major massing and function."
+            ),
+        },
+        "textures": {
+            "hard": (
+                "HARD_LOCK. Preserve exact material category, colour family, finish, joint logic, texture orientation and scale. "
+                "Recover existing micro-detail only; never substitute or invent a new material pattern."
+            ),
+            "soft": (
+                "SOFT_LOCK. Preserve material identity and colour family while allowing subtle physically plausible refinement "
+                "of roughness, pores and fine texture."
+            ),
+            "free": (
+                "FREE. Surface appearance may be refined more actively for realism, but do not create implausible or unrelated "
+                "materials and do not obscure architectural structure."
+            ),
+        },
+        "vegetation": {
+            "hard": (
+                "HARD_LOCK. Preserve count, position, crown silhouette, scale, volume, density and vegetation character exactly."
+            ),
+            "soft": (
+                "SOFT_LOCK. Preserve placement, type and overall crown mass; allow natural local leaf/branch refinement."
+            ),
+            "free": (
+                "FREE. Vegetation detail, density and local shape may be improved for realism while preserving scene coherence "
+                "and avoiding unrelated new landscaping."
+            ),
+        },
+        "people_vehicles": {
+            "hard": (
+                "HARD_LOCK. Preserve count, position, scale, orientation, silhouette and identity of people, vehicles "
+                "and small objects. Do not add, remove, move or replace them."
+            ),
+            "soft": (
+                "SOFT_LOCK. Preserve count and placement; allow local detail cleanup while keeping identity and orientation."
+            ),
+            "free": (
+                "FREE. Small people, vehicles and secondary objects may be plausibly reconstructed where unclear, provided "
+                "they do not alter the scene narrative or obstruct locked architecture."
+            ),
+        },
+        "lighting": {
+            "hard": (
+                "HARD_LOCK. Preserve exact time-of-day reading, exposure relationship, main light direction, shadow logic, "
+                "contrast hierarchy and scene mood."
+            ),
+            "soft": (
+                "SOFT_LOCK. Preserve time of day, main light direction and mood; allow moderate local exposure, contrast "
+                "and shadow-quality refinement."
+            ),
+            "free": (
+                "FREE. Lighting may be enhanced more substantially for photographic quality, while maintaining physically "
+                "coherent illumination and avoiding fantasy or unrelated relighting."
+            ),
+        },
+        "sky": {
+            "hard": (
+                "HARD_LOCK. Preserve cloud distribution, silhouettes, weather, atmosphere, horizon tone and sky structure exactly."
+            ),
+            "soft": (
+                "SOFT_LOCK. Preserve overall cloud mass balance, weather and atmosphere; minor local cloud-shape refinement is allowed."
+            ),
+            "free": (
+                "FREE. Sky detail and cloud structure may vary for quality and realism, but weather and lighting must remain "
+                "physically coherent with the scene."
+            ),
+        },
+        "water": {
+            "hard": (
+                "HARD_LOCK. Preserve water boundaries, reflection placement, shadow geometry, direction, scale and causal logic exactly."
+            ),
+            "soft": (
+                "SOFT_LOCK. Preserve location and global causal logic; allow local water microstructure, reflection texture "
+                "and shadow softness refinement."
+            ),
+            "free": (
+                "FREE. Water, reflection and shadow microstructure may be interpreted more freely for realism, while remaining "
+                "physically consistent with visible objects and lighting."
+            ),
+        },
     }
+
     lines = [
         "",
-        "ACTIVE USER LOCK PROFILE — THIS PROFILE OVERRIDES DEFAULT LOCK LEVEL LABELS IN THE GENERIC INSTRUCTIONS:",
+        "ACTIVE USER LOCK PROFILE — HIGHEST-PRIORITY PER-PARAMETER POLICY FOR THIS DONOR REQUEST.",
+        "These levels are supplied by the user interface for this exact job. They supersede any generic default lock labels.",
     ]
     for key, label in labels.items():
-        lines.append(f"- {label}: {meanings[profile[key]]}")
-    lines.append(
-        "All parameters not explicitly marked FREE remain source-authoritative. "
-        "Canvas integrity and corruption/artifact checks always remain mandatory."
-    )
+        level = profile[key]
+        lines.append(f"- {label} [{level.upper()}]: {rules[key][level]}")
+    lines.extend([
+        "",
+        "GLOBAL SAFETY BOUNDARY:",
+        "- Return one coherent photographic scene, never a collage, frame-within-frame, inset, poster, screen or duplicated canvas.",
+        "- Preserve existing text, logos and signage; never invent readable wording that is absent or illegible in SOURCE.",
+        "- Do not introduce corruption, duplicated objects, melted forms, blank zones, border seams, fake UI or watermarks.",
+        "- A FREE parameter grants freedom only to that parameter. It never silently unlocks the other parameters.",
+    ])
     return "\n".join(lines)
+
+
+CLOUD_GENERATION_PROMPT = """NANO BANANA PRO — SOURCE-FAITHFUL 4K DONOR RECONSTRUCTION.
+
+Create one high-resolution photographic DONOR from the supplied SOURCE. The objective is to recover clarity, optical fidelity,
+surface readability and high-frequency detail while respecting the ACTIVE USER LOCK PROFILE appended below.
+
+The ACTIVE USER LOCK PROFILE is the sole authority for HARD / SOFT / FREE behaviour of each listed visual parameter.
+Do not infer a stricter or looser lock level from generic restoration language. Apply each parameter independently.
+
+The source image remains the identity reference for the scene. Even when one parameter is FREE, do not turn the task into an
+unrelated redesign, a different project, a different location or a new narrative. Locked parameters must remain independent
+and must not drift merely because another parameter is allowed to vary.
+
+EXACT TEXT AND SIGNAGE SAFETY. Preserve existing letters, numerals, logos, road markings and symbols in position and silhouette.
+If text is too small to resolve reliably, preserve its visual shape instead of guessing or rewriting it.
+
+EDGE-TO-EDGE CANVAS INTEGRITY. Return one complete coherent image. Never create picture-in-picture, inset plates, inner frames,
+side wedges, reflected margins, duplicated edge strips, outpainted surrounds, blank borders, fake screens or poster-like layouts.
+
+QUALITY TARGET. Natural photographic restoration, believable material response, clean fine detail and stable local continuity.
+No plastic CGI look, fantasy styling, watermark, excessive sharpening, synthetic halos, melted forms or unfinished regions.
+"""
+
+
+def donor_generation_prompt() -> str:
+    """Preserve the legacy local R4 prompt; use dynamic Lock Profile only for cloud jobs."""
+    if os.environ.get("MG4K_LOCK_PROFILE_JSON", "").strip():
+        return CLOUD_GENERATION_PROMPT + cloud_lock_prompt()
+    return GENERATION_PROMPT
 
 
 GENERATION_PROMPT = """NANO BANANA PRO — SOURCE-FAITHFUL DETAIL RECONSTRUCTION FOR UPSCALING.
@@ -794,14 +949,22 @@ def _post_json(endpoint: str, key: str, payload: dict[str, Any], trace_name: str
 
 def generate_image(key: str, reference: Path, trace_name: str, seed: int) -> tuple[Image.Image, dict[str, Any]]:
     aspect = generation_aspect_request(reference)
-    request_prompt = (
-        GENERATION_PROMPT
-        + "\nOUTPUT CANVAS CONTRACT: return exactly one complete "
-        + str(aspect["aspect_ratio"])
-        + " image. Preserve the source framing inside that canvas; do not crop, pad, extend, "
-          "recenter, zoom, rotate or change the camera."
-        + cloud_lock_prompt()
-    )
+    if os.environ.get("MG4K_LOCK_PROFILE_JSON", "").strip():
+        request_prompt = (
+            donor_generation_prompt()
+            + "\nOUTPUT CANVAS CONTRACT: return exactly one complete "
+            + str(aspect["aspect_ratio"])
+            + " image. The scene must fill the canvas edge to edge with no padding, frame, inset or duplicated border. "
+              "Camera/framing behaviour must follow the ACTIVE CAMERA lock level for this job."
+        )
+    else:
+        request_prompt = (
+            donor_generation_prompt()
+            + "\nOUTPUT CANVAS CONTRACT: return exactly one complete "
+            + str(aspect["aspect_ratio"])
+            + " image. Preserve the source framing inside that canvas; do not crop, pad, extend, "
+              "recenter, zoom, rotate or change the camera."
+        )
     payload: dict[str, Any] = {
         "model": CFG["model"],
         "prompt": request_prompt,
