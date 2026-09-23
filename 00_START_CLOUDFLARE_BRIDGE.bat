@@ -7,7 +7,7 @@ set "ACTIVE_ROOT="
 if exist "%~dp0.venv\Scripts\python.exe" if exist "%~dp0v8_safe_appearance.py" set "ACTIVE_ROOT=%~dp0"
 
 if not defined ACTIVE_ROOT (
-  for /f "usebackq delims=" %%I in (`powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -Command "$p=Get-ChildItem -LiteralPath 'D:\Work' -Filter python.exe -File -Recurse -ErrorAction SilentlyContinue ^| Where-Object { $_.FullName -match '\\\\.venv\\Scripts\\python\\.exe$' -and (Test-Path -LiteralPath (Join-Path $_.Directory.Parent.Parent.FullName 'v8_safe_appearance.py')) } ^| Select-Object -First 1; if($p){$p.Directory.Parent.Parent.FullName}"`) do set "ACTIVE_ROOT=%%I\"
+  for /f "usebackq delims=" %%I in (`powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -Command "$p=Get-ChildItem -LiteralPath 'D:\Work' -Filter python.exe -File -Recurse -ErrorAction SilentlyContinue ^| Where-Object { $_.FullName -like '*\\.venv\\Scripts\\python.exe' -and (Test-Path -LiteralPath (Join-Path $_.Directory.Parent.Parent.FullName 'v8_safe_appearance.py')) } ^| Select-Object -First 1; if($p){$p.Directory.Parent.Parent.FullName}"`) do set "ACTIVE_ROOT=%%I\"
 )
 
 if not defined ACTIVE_ROOT goto :NO_ACTIVE_INSTALL
