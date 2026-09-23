@@ -275,7 +275,7 @@ def wait_for_decision(token: str, job_id: str) -> str:
         r = api("GET", f"/api/processor/jobs/{job_id}/decision", token)
         if r.status_code == 200:
             decision = str(r.json().get("decision") or "")
-            if decision in {"approve", "reject"}:
+            if decision in {"approve", "reject", "skip"}:
                 return decision
         elif r.status_code in {401, 403}:
             raise RuntimeError("Cloud processor authorization was lost.")
@@ -341,6 +341,22 @@ def process_job(token: str, job: dict[str, Any]) -> None:
         upload_candidate(token, job_id, candidate, validation, "review")
 
         decision = wait_for_decision(token, job_id)
+        if decision == "skip":
+            progress(token, job_id, 100, "skipped_by_user", validation=validation)
+            r = api(
+                "POST",
+                f"/api/processor/jobs/{job_id}/result",
+                token,
+                json_body={
+                    "status": "skipped",
+                    "stage": "skipped_by_user",
+                    "progress": 100,
+                },
+            )
+            r.raise_for_status()
+            print(f"[CLOUD] Job {job_id[:8]} skipped by user; processor released for the next file.")
+            return
+
         if decision == "reject":
             progress(token, job_id, 96, "operator_reject")
             run_pipeline(["--reject-final"], env, log_file)
