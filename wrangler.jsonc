@@ -3,6 +3,10 @@
   "name": "4k-upscaler",
   "main": "src/worker.js",
   "compatibility_date": "2026-09-23",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": {
+    "enabled": true
+  },
   "assets": {
     "directory": "./site",
     "binding": "ASSETS",
@@ -11,6 +15,28 @@
   "triggers": {
     "crons": ["17 * * * *"]
   },
+  "containers": [
+    {
+      "class_name": "MG4KProcessor",
+      "image": "./Dockerfile",
+      "instance_type": "standard-1",
+      "max_instances": 1
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "class_name": "MG4KProcessor",
+        "name": "MG4K_PROCESSOR"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "new_sqlite_classes": ["MG4KProcessor"],
+      "tag": "v1"
+    }
+  ],
   "kv_namespaces": [
     {
       "binding": "SESSION_STATE_R7",
@@ -22,5 +48,6 @@
       "binding": "TEMP_BUFFER_R7",
       "bucket_name": "4k-upscaler-temp-buffer-r7"
     }
-  ]
+  ],
+  "upload_source_maps": true
 }

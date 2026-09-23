@@ -19,11 +19,22 @@ CLOUD_URL = os.environ.get(
     "MG4K_CLOUD_URL",
     "https://4k-upscaler.marinsgroup.workers.dev",
 ).rstrip("/")
-BRIDGE_DIR = ROOT / "_diagnostics" / "cloudflare_bridge"
+BRIDGE_DIR = Path(
+    os.environ.get(
+        "MG4K_RUNTIME_DIR",
+        str(ROOT / "_diagnostics" / "cloudflare_bridge"),
+    )
+).resolve()
 BRIDGE_STATE = BRIDGE_DIR / "bridge.json"
-JOBS_ROOT = ROOT / "_cloud_jobs"
-POLL_SECONDS = 4
-REQUEST_TIMEOUT = 60
+JOBS_ROOT = Path(
+    os.environ.get(
+        "MG4K_JOBS_ROOT",
+        str(ROOT / "_cloud_jobs"),
+    )
+).resolve()
+POLL_SECONDS = float(os.environ.get("MG4K_POLL_SECONDS", "4"))
+REQUEST_TIMEOUT = int(os.environ.get("MG4K_REQUEST_TIMEOUT", "60"))
+EXIT_WHEN_IDLE_SECONDS = float(os.environ.get("MG4K_EXIT_WHEN_IDLE_SECONDS", "0"))
 
 
 def save_json(path: Path, data: dict[str, Any]) -> None:
@@ -75,6 +86,17 @@ def paired(token: str) -> bool:
 
 def ensure_pairing() -> str:
     BRIDGE_DIR.mkdir(parents=True, exist_ok=True)
+
+    static_token = os.environ.get("MG4K_PROCESSOR_TOKEN", "").strip()
+    if static_token:
+        if paired(static_token):
+            print("[CLOUD] Static processor token accepted. Processor is online.")
+            return static_token
+        raise RuntimeError(
+            "MG4K_PROCESSOR_TOKEN was provided but Cloudflare rejected it. "
+            "No interactive pairing was attempted."
+        )
+
     saved = load_json(BRIDGE_STATE, {}) or {}
     existing = str(saved.get("token", "")).strip()
     if existing and paired(existing):
@@ -102,10 +124,11 @@ def ensure_pairing() -> str:
         print("Open the cloud interface and click: Подключить процессор")
         print(CLOUD_URL)
         print("=" * 62)
-        try:
-            webbrowser.open(CLOUD_URL)
-        except Exception:
-            pass
+        if os.environ.get("MG4K_HEADLESS", "").strip().lower() not in {"1", "true", "yes", "on"}:
+            try:
+                webbrowser.open(CLOUD_URL)
+            except Exception:
+                pass
 
         deadline = time.time() + int(pair.get("expires_in_seconds", 600))
         while time.time() < deadline:
@@ -358,6 +381,7 @@ def main() -> int:
     print(f"Cloud: {CLOUD_URL}")
     token = ensure_pairing()
     JOBS_ROOT.mkdir(parents=True, exist_ok=True)
+    last_activity = time.monotonic()
 
     while True:
         try:
@@ -373,9 +397,13 @@ def main() -> int:
             r.raise_for_status()
             job = r.json().get("job")
             if not job:
+                if EXIT_WHEN_IDLE_SECONDS > 0 and (time.monotonic() - last_activity) >= EXIT_WHEN_IDLE_SECONDS:
+                    print(f"[CLOUD] Idle for {EXIT_WHEN_IDLE_SECONDS:.0f}s. Cloud processor exiting for scale-to-zero.")
+                    return 0
                 time.sleep(POLL_SECONDS)
                 continue
             process_job(token, job)
+            last_activity = time.monotonic()
         except KeyboardInterrupt:
             print("\n[CLOUD] Bridge stopped.")
             return 0

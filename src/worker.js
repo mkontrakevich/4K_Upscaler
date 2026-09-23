@@ -1,3 +1,23 @@
+import { Container, getContainer } from "@cloudflare/containers";
+
+export class MG4KProcessor extends Container {
+  defaultPort = 8080;
+  sleepAfter = "15m";
+  enableInternet = true;
+
+  onStart() {
+    console.log("MG4K_PROCESSOR_STARTED");
+  }
+
+  onStop() {
+    console.log("MG4K_PROCESSOR_STOPPED");
+  }
+
+  onError(error) {
+    console.error("MG4K_PROCESSOR_ERROR", error);
+  }
+}
+
 const SESSION_TTL = 60 * 60 * 2;
 const PAIR_TTL = 60 * 10;
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
@@ -115,9 +135,17 @@ async function authorizeProcessor(request, env) {
   const auth = request.headers.get("authorization") || "";
   const token = auth.toLowerCase().startsWith("bearer ") ? auth.slice(7).trim() : "";
   if (!token) return false;
+
+  const tokenHash = await sha256(token);
+
+  const sharedSecret = String(env.PROCESSOR_SHARED_SECRET || "").trim();
+  if (sharedSecret && tokenHash === await sha256(sharedSecret)) {
+    return true;
+  }
+
   const expected = await env.SESSION_STATE_R7.get("processor:token_hash");
   if (!expected) return false;
-  return (await sha256(token)) === expected;
+  return tokenHash === expected;
 }
 
 async function listAllObjects(env, prefix) {
@@ -194,6 +222,40 @@ async function cleanupOrphanedR2(env) {
     sessionsCleaned++;
   }
   console.log("MG4K_CLEANUP", { sessionsCleaned, objectsDeleted });
+}
+
+async function ensureCloudProcessor(env, origin) {
+  const processorToken = String(env.PROCESSOR_SHARED_SECRET || "").trim();
+  const openRouterKey = String(env.OPENROUTER_API_KEY || "").trim();
+
+  if (!processorToken) {
+    throw new Error("PROCESSOR_SHARED_SECRET is not configured.");
+  }
+  if (!openRouterKey) {
+    throw new Error("OPENROUTER_API_KEY is not configured.");
+  }
+
+  const container = getContainer(env.MG4K_PROCESSOR, "primary");
+  await container.startAndWaitForPorts({
+    ports: [8080],
+    startOptions: {
+      envVars: {
+        MG4K_CLOUD_URL: origin,
+        MG4K_PROCESSOR_TOKEN: processorToken,
+        OPENROUTER_API_KEY: openRouterKey,
+        MG4K_HEADLESS: "1",
+        MG4K_RUNTIME_DIR: "/runtime/bridge",
+        MG4K_JOBS_ROOT: "/tmp/mg4k-jobs",
+        MG4K_HEALTH_PORT: "8080",
+        MG4K_EXIT_WHEN_IDLE_SECONDS: "45",
+      },
+      enableInternet: true,
+    },
+    cancellationOptions: {
+      portReadyTimeoutMS: 60_000,
+    },
+  });
+  return container;
 }
 
 async function handleApi(request, env, ctx, url) {
@@ -325,6 +387,21 @@ async function handleApi(request, env, ctx, url) {
     if (!session.jobs.includes(id)) session.jobs.push(id);
     await writeSession(env, session);
 
+    ctx.waitUntil((async () => {
+      try {
+        await ensureCloudProcessor(env, url.origin);
+      } catch (error) {
+        console.error("MG4K_PROCESSOR_START_FAILED", error);
+        const current = await readJob(env, id);
+        if (current && current.status === "queued") {
+          current.status = "failed";
+          current.stage = "processor_start_failed";
+          current.error = error?.message || String(error);
+          await writeJob(env, current);
+        }
+      }
+    })());
+
     return json({
       id,
       token: accessToken,
@@ -416,7 +493,10 @@ async function handleApi(request, env, ctx, url) {
 
   if (path === "/api/processor/claim" && method === "POST") {
     if (!await authorizeProcessor(request, env)) {
-      const configured = Boolean(await env.SESSION_STATE_R7.get("processor:token_hash"));
+      const configured = Boolean(
+        String(env.PROCESSOR_SHARED_SECRET || "").trim()
+        || await env.SESSION_STATE_R7.get("processor:token_hash")
+      );
       return json({ error: configured ? "processor_unauthorized" : "processor_not_paired" }, configured ? 403 : 428);
     }
 
