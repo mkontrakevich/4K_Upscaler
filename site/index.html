@@ -187,6 +187,7 @@ button{color:inherit}
         <div class="profile-actions">
           <button class="btn ghost" id="reset-locks" type="button">По умолчанию</button>
           <button class="btn ghost" id="copy-profile" type="button">Копировать профиль</button>
+          <button class="btn ghost" id="pair-processor" type="button">Подключить процессор</button>
         </div>
       </div>
     </section>
@@ -199,7 +200,7 @@ button{color:inherit}
     </div>
     <div class="run">
       <button class="btn ghost" id="save-profile" type="button">Сохранить настройки</button>
-      <button class="btn primary" id="prepare-job" type="button" disabled>Подготовить обработку</button>
+      <button class="btn primary" id="prepare-job" type="button" disabled>Отправить в обработку</button>
     </div>
   </section>
 </div>
@@ -227,6 +228,8 @@ const defaults = [
 let locks = JSON.parse(localStorage.getItem("mg4k.lockProfile") || "null") || Object.fromEntries(defaults.map(x=>[x.id,x.level]));
 let currentFile = null;
 let currentObjectUrl = null;
+let currentJob = null;
+let jobPollTimer = null;
 
 const $ = id => document.getElementById(id);
 const toast = text => {
@@ -320,22 +323,123 @@ $("save-profile").addEventListener("click",()=>{
   toast("Настройки сохранены на этом устройстве.");
 });
 
-function prepareJob(){
-  if(!currentFile){toast("Сначала добавьте изображение.");return;}
-  const manifest={
-    schema:"mg4k-job-v1",
-    created_at:new Date().toISOString(),
-    source:{name:currentFile.name,size:currentFile.size,type:currentFile.type},
-    locks
-  };
-  localStorage.setItem("mg4k.lastJob",JSON.stringify(manifest));
-  $("status-text").textContent="Задание подготовлено. Lock-профиль привязан к исходнику.";
-  toast("Задание подготовлено.");
+function setRunButtons(disabled, label){
+  $("prepare-job").disabled=disabled;
+  $("mobile-prepare").disabled=disabled;
+  if(label){
+    $("prepare-job").textContent=label;
+    $("mobile-prepare").textContent=label==="Скачать результат"?"Скачать":"Обработка";
+  }
 }
+
+async function jobStatus(job){
+  const response=await fetch(`/api/jobs/${job.id}`,{
+    headers:{"X-Job-Token":job.token}
+  });
+  if(!response.ok) throw new Error("Не удалось получить статус задачи");
+  return await response.json();
+}
+
+function downloadResult(){
+  if(!currentJob) return;
+  window.location.href=`/api/jobs/${currentJob.id}/result?token=${encodeURIComponent(currentJob.token)}`;
+}
+
+async function pollCurrentJob(){
+  if(!currentJob) return;
+  try{
+    const state=await jobStatus(currentJob);
+    const stage=state.stage||state.status||"queued";
+    const progress=Number(state.progress||0);
+    if(state.status==="done"){
+      clearInterval(jobPollTimer); jobPollTimer=null;
+      $("status-text").textContent=`Готово · ${state.filename} · ARCH LOCK validation завершён`;
+      setRunButtons(false,"Скачать результат");
+      toast("4K результат готов.");
+      return;
+    }
+    if(state.status==="failed"){
+      clearInterval(jobPollTimer); jobPollTimer=null;
+      $("status-text").textContent=`Ошибка обработки · ${state.error||"см. диагностику"}`;
+      setRunButtons(false,"Повторить");
+      toast("Обработка остановлена с ошибкой.");
+      return;
+    }
+    $("status-text").textContent=`Задача ${state.id.slice(0,8)} · ${stage} · ${progress}%`;
+    setRunButtons(true,"Обработка…");
+  }catch(error){
+    $("status-text").textContent="Связь с очередью временно недоступна. Повторяю…";
+  }
+}
+
+async function prepareJob(){
+  if(currentJob){
+    try{
+      const state=await jobStatus(currentJob);
+      if(state.status==="done"){downloadResult();return;}
+      if(!["failed","done"].includes(state.status)){toast("Задача уже находится в обработке.");return;}
+      currentJob=null;
+    }catch{currentJob=null;}
+  }
+  if(!currentFile){toast("Сначала добавьте изображение.");return;}
+
+  setRunButtons(true,"Загрузка…");
+  $("status-text").textContent="Загрузка исходника в защищённую очередь Cloudflare…";
+  const form=new FormData();
+  form.append("file",currentFile,currentFile.name);
+  form.append("locks",JSON.stringify(locks));
+  form.append("mode","generative");
+
+  try{
+    const response=await fetch("/api/jobs",{method:"POST",body:form});
+    const data=await response.json().catch(()=>({}));
+    if(!response.ok) throw new Error(data.error||"upload_failed");
+    currentJob={id:data.id,token:data.token};
+    localStorage.setItem("mg4k.lastCloudJob",JSON.stringify(currentJob));
+    $("status-text").textContent=`Задача ${data.id.slice(0,8)} поставлена в очередь.`;
+    toast("Файл передан в облачную очередь.");
+    if(jobPollTimer) clearInterval(jobPollTimer);
+    await pollCurrentJob();
+    jobPollTimer=setInterval(pollCurrentJob,2500);
+  }catch(error){
+    currentJob=null;
+    setRunButtons(false,"Отправить в обработку");
+    $("status-text").textContent="Не удалось создать облачную задачу.";
+    toast("Ошибка отправки: "+error.message);
+  }
+}
+
 $("prepare-job").addEventListener("click",prepareJob);
 $("mobile-prepare").addEventListener("click",prepareJob);
 
+$("pair-processor").addEventListener("click",async()=>{
+  const code=prompt("Введите код, который показывает локальный MG 4K процессор:");
+  if(!code) return;
+  try{
+    const response=await fetch("/api/processor/pair/approve",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({code:code.trim()})
+    });
+    const data=await response.json().catch(()=>({}));
+    if(!response.ok) throw new Error(data.error||"pair_failed");
+    toast("Локальный процессор подключён.");
+    $("status-text").textContent="Cloudflare связан с локальным ARCH LOCK процессором.";
+  }catch(error){
+    toast("Не удалось подключить процессор: "+error.message);
+  }
+});
+
 renderLocks();
+
+try{
+  const restored=JSON.parse(localStorage.getItem("mg4k.lastCloudJob")||"null");
+  if(restored?.id&&restored?.token){
+    currentJob=restored;
+    pollCurrentJob();
+    jobPollTimer=setInterval(pollCurrentJob,2500);
+  }
+}catch{}
 </script>
 </body>
 </html>
