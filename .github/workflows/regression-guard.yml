@@ -2,7 +2,7 @@ name: 4K Upscaler Regression Guard
 
 on:
   push:
-    branches: [main, ui-r8-local-review, ui-r8-single-upload]
+    branches: [main, ui-r8-local-review, ui-r8-single-upload, ui-r8-next-source-plus]
   workflow_dispatch:
 
 jobs:
@@ -132,7 +132,11 @@ jobs:
           for obsolete in ['id="pick-file"', 'id="pick-cloud"', 'id="replace-file"', 'id="mobile-file"']:
               assert obsolete not in html, f"Duplicate upload control remains: {obsolete}"
           assert '$("upload-plus").addEventListener("click",openPicker);' in html, "Single upload plus must open the picker"
-          print("Cloud two-pane Visual Review + single-upload contract: PASSED")
+          assert '$("upload-plus").classList.add("hidden")' in html, "Upload plus must hide while current source is active"
+          assert '$("upload-plus").classList.add("compact")' in html, "Upload plus must return as compact next-source control"
+          assert 'Добавить следующий исходник' in html, "Next-source state must be explicit"
+          assert "FINAL 4K утверждён. Можно скачать результат или добавить следующий исходник." in html, "FINAL state must expose next-source flow"
+          print("Cloud two-pane Visual Review + next-source upload contract: PASSED")
           PY
 
       - name: No paid generation in regression
