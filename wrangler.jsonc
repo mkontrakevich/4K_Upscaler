@@ -13,12 +13,12 @@
   },
   "kv_namespaces": [
     {
-      "binding": "JOBS"
+      "binding": "SESSION_STATE_R7"
     }
   ],
   "r2_buckets": [
     {
-      "binding": "FILES"
+      "binding": "TEMP_BUFFER_R7"
     }
   ]
 }
