@@ -56,6 +56,7 @@ body{overflow-x:hidden}
 .upload-plus{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:5;width:64px;height:64px;padding:0;border:1px solid #4d718b;border-radius:50%;background:#0b2639;color:var(--cyan);font-size:34px;font-weight:300;line-height:1;cursor:pointer;box-shadow:0 10px 28px rgba(0,0,0,.28);transition:.18s}
 .upload-plus:hover{border-color:var(--cyan);background:#0d3046}
 .upload-plus.compact{left:auto;top:auto;right:9px;bottom:9px;transform:none;width:42px;height:42px;font-size:25px;background:rgba(8,24,38,.9);backdrop-filter:blur(8px)}
+.upload-plus.hidden{display:none}
 #file-input{display:none}
 .badges{position:absolute;left:9px;right:9px;top:9px;display:flex;justify-content:space-between;gap:8px;pointer-events:none}
 .badge{max-width:72%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:6px 8px;border-radius:6px;background:rgba(4,12,20,.84);border:1px solid rgba(92,121,145,.55);font:11px Consolas,monospace;color:#d5e3ee;backdrop-filter:blur(8px)}
@@ -90,8 +91,10 @@ body{overflow-x:hidden}
 .segmented button.active[data-level="soft"]{background:#49340c;color:#ffd477}
 .segmented button.active[data-level="free"]{background:#223344;color:#d1dfeb}
 .lock-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:9px}
-.actions{display:grid;grid-template-columns:1.25fr 1.1fr 1fr 1.15fr 1fr;gap:9px;padding:10px}
+.actions{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:9px;padding:10px}
 .actions .btn{min-height:48px}
+.actions .queue-nav{background:#0d2031;border-color:#3b5b73}
+.actions .skip{background:#162536;border-color:#647b8e}
 .analysis-panel{display:none}
 .analysis-panel.visible{display:block}
 .analysis-summary{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;padding:10px}
@@ -153,11 +156,12 @@ body{overflow-x:hidden}
   .lock-list{grid-template-columns:1fr}
   .lock-row{grid-template-columns:minmax(0,1fr) 145px;padding:6px}
   .lock-name small{display:none}
-  .actions-panel{display:none}
+  .actions-panel{display:block}
+  .actions{grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;padding:7px}
+  .actions .btn{min-height:42px;padding:0 7px;font-size:10px}
   .analysis-summary{grid-template-columns:1fr 1fr}
   .analysis-grid{grid-template-columns:1fr}
-  .mobile-bar{position:fixed;left:0;right:0;bottom:0;z-index:60;display:grid;grid-template-columns:1.25fr 1fr;gap:6px;padding:7px 8px calc(7px + env(safe-area-inset-bottom));background:rgba(5,15,25,.95);border-top:1px solid var(--line);backdrop-filter:blur(14px)}
-  .mobile-bar .btn{min-height:44px;padding:0 7px;font-size:10px}
+  .mobile-bar{display:none!important}
   .viewer{width:100vw;height:100vh;border-radius:0;border:0}
   .viewer-toolbar{align-items:flex-start;flex-wrap:wrap}
   .viewer-title{width:100%}
@@ -239,13 +243,17 @@ body{overflow-x:hidden}
     </div>
   </section>
 
-  <section class="actions-panel">
+  <section class="actions-panel" id="actions-panel" hidden>
     <div class="actions">
+      <button class="btn queue-nav" id="action-prev" type="button" disabled>← Предыдущий файл</button>
+      <button class="btn queue-nav" id="action-add" type="button">＋ Добавить файл</button>
+      <button class="btn queue-nav" id="action-next" type="button" disabled>Следующий файл →</button>
       <button class="btn primary" id="action-process" type="button" disabled>▶ Запустить / продолжить</button>
-      <button class="btn approve" id="action-approve" type="button" disabled>✓ Утвердить и дальше</button>
-      <button class="btn reject" id="action-reject" type="button" disabled>× Отклонить</button>
-      <button class="btn generate" id="action-regenerate" type="button" disabled>↻ Новая генерация</button>
       <button class="btn ghost" id="action-inspect" type="button" disabled>Инспекция</button>
+      <button class="btn approve" id="action-approve" type="button" disabled>✓ Утвердить</button>
+      <button class="btn reject" id="action-reject" type="button" disabled>× Отклонить</button>
+      <button class="btn generate" id="action-regenerate" type="button" disabled>↻ Регенерировать</button>
+      <button class="btn skip" id="action-skip" type="button" disabled>⏭ Пропустить</button>
     </div>
   </section>
 
@@ -319,6 +327,7 @@ const $=id=>document.getElementById(id);
 let locks=JSON.parse(localStorage.getItem("mg4k.lockProfile")||"null")||Object.fromEntries(defaults.map(x=>[x.id,x.level]));
 let currentFile=null,currentObjectUrl=null,currentJob=null,cloudSession=null,sessionStartPromise=null,heartbeatTimer=null,jobPollTimer=null;
 let resultObjectUrl=null,viewerBlinkTimer=null;
+let sourceItems=[],currentSourceIndex=-1;
 
 function log(level,text){
   const now=new Date().toLocaleTimeString("ru-RU",{hour12:false});
@@ -336,7 +345,9 @@ function renderLocks(){
   $("lock-list").innerHTML=defaults.map(item=>'<div class="lock-row"><div class="lock-name"><strong>'+item.name+'</strong><small>'+item.hint+'</small></div><div class="segmented" data-lock="'+item.id+'">'+["hard","soft","free"].map(level=>'<button type="button" data-level="'+level+'" class="'+(locks[item.id]===level?"active":"")+'">'+level.toUpperCase()+'</button>').join("")+'</div></div>').join("");
   document.querySelectorAll(".segmented button").forEach(btn=>btn.addEventListener("click",()=>{
     const id=btn.closest(".segmented").dataset.lock;locks[id]=btn.dataset.level;
-    localStorage.setItem("mg4k.lockProfile",JSON.stringify(locks));renderLocks();
+    localStorage.setItem("mg4k.lockProfile",JSON.stringify(locks));
+    const item=currentSourceItem();if(item)item.locks={...locks};
+    renderLocks();
     setStatus("LOCK изменён: "+id.toUpperCase()+" → "+btn.dataset.level.toUpperCase());
   }));
 }
@@ -346,23 +357,61 @@ function resetResult(){
   $("result-caption").textContent="ожидает обработки";$("analysis-panel").classList.remove("visible");
   $("action-approve").disabled=true;$("action-reject").disabled=true;$("action-regenerate").disabled=true;$("action-inspect").disabled=true;$("mobile-inspect").disabled=true;
 }
-function setFile(file,source="Системный файловый менеджер"){
-  if(!file||(!String(file.type||"").startsWith("image/")&&!/\.(heic|heif)$/i.test(file.name))){toast("Выберите файл изображения.");return}
-  currentFile=file;currentJob=null;resetResult();
-  if(currentObjectUrl)URL.revokeObjectURL(currentObjectUrl);currentObjectUrl=URL.createObjectURL(file);
-  const img=$("source-image");img.onload=()=>{const dim=img.naturalWidth+"×"+img.naturalHeight;$("source-dimensions").textContent=dim;$("source-size").textContent=dim;$("meta-resolution").textContent=dim};
-  img.src=currentObjectUrl;img.hidden=false;$("upload-overlay").classList.add("hidden");$("source-badges").hidden=false;$("upload-plus").classList.add("compact");$("upload-plus").title="Заменить изображение";
-  $("source-name").textContent=file.name;$("meta-name").textContent=file.name;$("meta-size").textContent=humanSize(file.size);$("meta-source").textContent=source;$("current-file").textContent=file.name;
-  $("action-process").disabled=false;$("mobile-process").disabled=false;setProgress(0,"готов к запуску");setStatus("Источник загружен. Настройте LOCK и запустите обработку.","ok");
+function currentSourceItem(){return sourceItems[currentSourceIndex]||null}
+function updateQueueNavigation(){
+  const has=currentSourceIndex>=0&&currentSourceIndex<sourceItems.length;
+  $("actions-panel").hidden=!has;
+  $("action-prev").disabled=!has||currentSourceIndex<=0;
+  $("action-next").disabled=!has||currentSourceIndex>=sourceItems.length-1;
+  $("action-add").disabled=!has;
+  if(has)$("current-file").textContent=(currentSourceIndex+1)+"/"+sourceItems.length+" · "+sourceItems[currentSourceIndex].file.name;
 }
-function openPicker(){$("file-input").click()}
+function rememberCurrentItem(state=null){
+  const item=currentSourceItem();if(!item)return;
+  item.job=currentJob;item.locks={...locks};if(state)item.lastState=state;
+}
+async function selectSource(index){
+  if(index<0||index>=sourceItems.length)return;
+  rememberCurrentItem();
+  clearInterval(jobPollTimer);jobPollTimer=null;
+  currentSourceIndex=index;
+  const item=sourceItems[index];
+  currentFile=item.file;currentObjectUrl=item.objectUrl;currentJob=item.job||null;locks={...(item.locks||locks)};
+  renderLocks();resetResult();
+  $("upload-plus").classList.add("hidden");$("upload-plus").classList.remove("compact");
+  $("upload-overlay").classList.add("hidden");$("source-badges").hidden=false;
+  const img=$("source-image");
+  img.onload=()=>{const dim=img.naturalWidth+"×"+img.naturalHeight;item.resolution=dim;$("source-dimensions").textContent=dim;$("source-size").textContent=dim;$("meta-resolution").textContent=dim};
+  img.src=currentObjectUrl;img.hidden=false;
+  $("source-name").textContent=item.file.name;$("meta-name").textContent=item.file.name;$("meta-size").textContent=humanSize(item.file.size);$("meta-source").textContent=item.source||"Системный файловый менеджер";$("meta-resolution").textContent=item.resolution||"—";
+  $("action-process").textContent="▶ Запустить / продолжить";$("mobile-process").textContent="Обработка";$("action-process").disabled=false;$("mobile-process").disabled=false;
+  updateQueueNavigation();
+  if(currentJob){
+    const state=item.lastState||await jobStatus(currentJob).catch(()=>null);
+    if(state){item.lastState=state;renderJobState(state)}
+    if(state&&!["review","done","failed","skipped"].includes(state.status)){jobPollTimer=setInterval(pollCurrentJob,1800)}
+  }else{
+    setProgress(0,"готов к запуску");setStatus("Исходник "+(index+1)+" из "+sourceItems.length+". Настройте LOCK и запустите обработку.","ok");
+  }
+}
+function addSourceFile(file,source="Системный файловый менеджер"){
+  if(!file||(!String(file.type||"").startsWith("image/")&&!/\.(heic|heif)$/i.test(file.name))){toast("Выберите файл изображения.");return}
+  const item={file,source,objectUrl:URL.createObjectURL(file),job:null,lastState:null,locks:{...locks},resolution:null};
+  sourceItems.push(item);
+  $("upload-plus").classList.add("hidden");
+  selectSource(sourceItems.length-1);
+}
+function openPicker(){$("file-input").value="";$("file-input").click()}
 $("upload-plus").addEventListener("click",openPicker);
-$("file-input").addEventListener("change",e=>setFile(e.target.files?.[0]));
+$("action-add").addEventListener("click",openPicker);
+$("file-input").addEventListener("change",e=>addSourceFile(e.target.files?.[0]));
 const stage=$("source-stage");
 ["dragenter","dragover"].forEach(t=>stage.addEventListener(t,e=>{e.preventDefault();stage.style.outline="1px solid #16c5f4"}));
 ["dragleave","drop"].forEach(t=>stage.addEventListener(t,e=>{e.preventDefault();stage.style.outline=""}));
-stage.addEventListener("drop",e=>setFile(e.dataTransfer?.files?.[0],"Drag & Drop"));
-$("reset-locks").addEventListener("click",()=>{locks=Object.fromEntries(defaults.map(x=>[x.id,x.level]));localStorage.setItem("mg4k.lockProfile",JSON.stringify(locks));renderLocks();toast("Базовый ARCH LOCK восстановлен.")});
+stage.addEventListener("drop",e=>addSourceFile(e.dataTransfer?.files?.[0],"Drag & Drop"));
+$("action-prev").addEventListener("click",()=>selectSource(currentSourceIndex-1));
+$("action-next").addEventListener("click",()=>selectSource(currentSourceIndex+1));
+$("reset-locks").addEventListener("click",()=>{locks=Object.fromEntries(defaults.map(x=>[x.id,x.level]));localStorage.setItem("mg4k.lockProfile",JSON.stringify(locks));const item=currentSourceItem();if(item)item.locks={...locks};renderLocks();toast("Базовый ARCH LOCK восстановлен.")});
 $("copy-profile").addEventListener("click",async()=>{try{await navigator.clipboard.writeText(JSON.stringify({version:"cloud-ui-r8",locks},null,2));toast("LOCK-профиль скопирован.")}catch{toast("Не удалось скопировать.")}});
 
 async function startCloudSession(){
@@ -371,7 +420,7 @@ async function startCloudSession(){
   try{return await sessionStartPromise}finally{sessionStartPromise=null}
 }
 async function heartbeatCloudSession(){if(!cloudSession)return;try{const r=await fetch("/api/session/heartbeat",{method:"POST",headers:{"Content-Type":"application/json","X-Session-Id":cloudSession.id,"X-Session-Token":cloudSession.token},body:"{}"});if(r.status===403){cloudSession=null;await startCloudSession()}}catch{}}
-function finishCloudSession(){if(!cloudSession)return;try{navigator.sendBeacon("/api/session/end",new Blob([JSON.stringify({session_id:cloudSession.id,session_token:cloudSession.token})],{type:"application/json"}))}catch{}cloudSession=null;currentJob=null}
+function finishCloudSession(){if(cloudSession){try{navigator.sendBeacon("/api/session/end",new Blob([JSON.stringify({session_id:cloudSession.id,session_token:cloudSession.token})],{type:"application/json"}))}catch{}}sourceItems.forEach(item=>{try{URL.revokeObjectURL(item.objectUrl)}catch{}});cloudSession=null;currentJob=null}
 async function jobStatus(job){const r=await fetch("/api/jobs/"+job.id,{headers:{"X-Job-Token":job.token},cache:"no-store"});if(!r.ok)throw new Error("job_status_failed");return await r.json()}
 
 function flattenChecks(validation){
@@ -405,49 +454,162 @@ function renderValidation(state){
 }
 function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]))}
 function resultUrl(job,download=false){return"/api/jobs/"+job.id+"/result?token="+encodeURIComponent(job.token)+(download?"&download=1":"")+"&v="+Date.now()}
-function showResult(state,final=false){
+function setReviewActions({approve=false,reject=false,skip=false,regenerate=false,inspect=false}={}){
+  $("action-approve").disabled=!approve;
+  $("action-reject").disabled=!reject;
+  $("action-skip").disabled=!skip;
+  $("action-regenerate").disabled=!regenerate;
+  $("action-inspect").disabled=!inspect;
+  $("mobile-inspect").disabled=!inspect;
+}
+function showResult(state,mode="review"){
   if(!currentJob)return;
   const img=$("result-image");img.onload=()=>{$("result-size").textContent=img.naturalWidth+" × "+img.naturalHeight};img.src=resultUrl(currentJob,false);img.hidden=false;
-  $("result-stage").classList.add("ready");$("result-badges").hidden=false;$("result-label").textContent=final?"FINAL · 4K":"RESULT · REVIEW";$("result-caption").textContent=final?"утверждён":"ожидает решения";
-  $("action-inspect").disabled=false;$("mobile-inspect").disabled=false;$("action-regenerate").disabled=false;
+  $("result-stage").classList.add("ready");$("result-badges").hidden=false;
+  const final=mode==="final",skipped=mode==="skipped";
+  $("result-label").textContent=final?"FINAL · 4K":skipped?"RESULT · ПРОПУЩЕН":"RESULT · REVIEW";
+  $("result-caption").textContent=final?"утверждён":skipped?"пропущен · можно вернуться позже":"ожидает решения";
   renderValidation(state);
 }
+function renderJobState(state){
+  if(!state)return null;
+  rememberCurrentItem(state);
+  const p=Number(state.progress||0),stage=state.stage||state.status||"queued";
+  setProgress(p,p+"%");
+  if(state.validation)renderValidation(state);
+  updateQueueNavigation();
+
+  if(state.status==="review"){
+    clearInterval(jobPollTimer);jobPollTimer=null;
+    showResult(state,"review");
+    $("action-process").disabled=true;$("mobile-process").disabled=true;
+    setReviewActions({approve:true,reject:true,skip:true,regenerate:true,inspect:true});
+    setStatus("Результат готов. Можно утвердить, отклонить, регенерировать или пропустить и заняться следующим файлом.","ok");
+    return state;
+  }
+  if(state.status==="done"){
+    clearInterval(jobPollTimer);jobPollTimer=null;
+    showResult(state,"final");
+    $("action-process").disabled=false;$("action-process").textContent="Скачать FINAL 4K";$("mobile-process").disabled=false;$("mobile-process").textContent="Скачать";
+    setReviewActions({regenerate:true,inspect:true});
+    setProgress(100,"100%");
+    setStatus("FINAL 4K утверждён. Результат можно скачать; новый исходник добавляется через основную навигацию.","ok");
+    return state;
+  }
+  if(state.status==="skipped"){
+    clearInterval(jobPollTimer);jobPollTimer=null;
+    showResult(state,"skipped");
+    $("action-process").disabled=false;$("action-process").textContent="Запустить заново";$("mobile-process").disabled=false;$("mobile-process").textContent="Заново";
+    setReviewActions({regenerate:true,inspect:true});
+    setProgress(100,"100%");
+    setStatus("Файл пропущен без утверждения. Он остаётся в текущей сессии — можно перейти дальше или вернуться к нему.","warn");
+    return state;
+  }
+  if(state.status==="failed"){
+    clearInterval(jobPollTimer);jobPollTimer=null;
+    $("action-process").disabled=false;$("mobile-process").disabled=false;$("action-process").textContent="Повторить";$("mobile-process").textContent="Повторить";
+    setReviewActions({regenerate:true,inspect:Boolean(state.result_available)});
+    renderValidation(state);
+    setStatus("Ошибка: "+(state.error||stage),"err");
+    return state;
+  }
+  if(state.status==="decision_pending"){
+    $("action-process").disabled=true;$("mobile-process").disabled=true;
+    setReviewActions({inspect:Boolean(state.result_available)});
+    const message=state.decision==="approve"?"Утверждение передано процессору…":state.decision==="reject"?"Отклонение передано процессору…":"Файл помечается как пропущенный; освобождаю процессор для следующего…";
+    setStatus(message);
+    return state;
+  }
+
+  $("action-process").disabled=true;$("mobile-process").disabled=true;
+  setReviewActions();
+  setStatus("Задача "+state.id.slice(0,8)+" · "+stage+" · "+p+"%");
+  return state;
+}
 async function pollCurrentJob(){
-  if(!currentJob)return;
+  if(!currentJob)return null;
+  const job=currentJob;
   try{
-    const state=await jobStatus(currentJob);const p=Number(state.progress||0),stage=state.stage||state.status||"queued";setProgress(p,p+"%");
-    if(state.validation)renderValidation(state);
-    if(state.status==="review"){
-      clearInterval(jobPollTimer);jobPollTimer=null;showResult(state,false);$("action-process").disabled=true;$("mobile-process").disabled=true;$("action-approve").disabled=false;$("action-reject").disabled=false;setStatus("Результат готов. Сравните SOURCE / RESULT и примите решение.","ok");return;
-    }
-    if(state.status==="done"){
-      clearInterval(jobPollTimer);jobPollTimer=null;showResult(state,true);$("action-process").disabled=false;$("action-process").textContent="Скачать FINAL 4K";$("mobile-process").disabled=false;$("mobile-process").textContent="Скачать";$("action-approve").disabled=true;$("action-reject").disabled=true;setProgress(100,"100%");setStatus("FINAL 4K утверждён и готов к скачиванию.","ok");return;
-    }
-    if(state.status==="failed"){
-      clearInterval(jobPollTimer);jobPollTimer=null;$("action-process").disabled=false;$("mobile-process").disabled=false;$("action-process").textContent="Повторить";$("mobile-process").textContent="Повторить";$("action-regenerate").disabled=false;renderValidation(state);setStatus("Ошибка: "+(state.error||stage),"err");return;
-    }
-    if(state.status==="decision_pending"){$("action-approve").disabled=true;$("action-reject").disabled=true;setStatus(state.decision==="approve"?"Утверждение передано процессору…":"Отклонение передано процессору…");return}
-    setStatus("Задача "+state.id.slice(0,8)+" · "+stage+" · "+p+"%");
-  }catch(e){setStatus("Связь с очередью временно недоступна. Повторяю…","warn")}
+    const state=await jobStatus(job);
+    if(currentJob!==job)return state;
+    return renderJobState(state);
+  }catch(e){
+    if(currentJob===job)setStatus("Связь с очередью временно недоступна. Повторяю…","warn");
+    return null;
+  }
 }
 async function sendDecision(action){
-  if(!currentJob)return;
-  $("action-approve").disabled=true;$("action-reject").disabled=true;
-  try{const r=await fetch("/api/jobs/"+currentJob.id+"/decision",{method:"POST",headers:{"Content-Type":"application/json","X-Job-Token":currentJob.token},body:JSON.stringify({action})});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||"decision_failed");setStatus(action==="approve"?"Результат утверждён. Завершаю FINAL…":"Результат отклонён.","ok");await pollCurrentJob();clearInterval(jobPollTimer);jobPollTimer=setInterval(pollCurrentJob,1800)}
-  catch(e){$("action-approve").disabled=false;$("action-reject").disabled=false;toast("Решение не передано: "+e.message)}
+  if(!currentJob)return false;
+  $("action-approve").disabled=true;$("action-reject").disabled=true;$("action-skip").disabled=true;
+  try{
+    const r=await fetch("/api/jobs/"+currentJob.id+"/decision",{method:"POST",headers:{"Content-Type":"application/json","X-Job-Token":currentJob.token},body:JSON.stringify({action})});
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(d.error||"decision_failed");
+    if(d.job)rememberCurrentItem(d.job);
+    setStatus(action==="approve"?"Результат утверждён. Завершаю FINAL…":action==="reject"?"Результат отклонён.":"Файл пропущен. Освобождаю очередь для следующего…","ok");
+    clearInterval(jobPollTimer);
+    await pollCurrentJob();
+    jobPollTimer=setInterval(pollCurrentJob,1200);
+    return true;
+  }catch(e){
+    $("action-approve").disabled=false;$("action-reject").disabled=false;$("action-skip").disabled=false;
+    toast("Решение не передано: "+e.message);
+    return false;
+  }
+}
+async function releaseReviewForRegeneration(){
+  if(!currentJob)return true;
+  try{
+    const state=await jobStatus(currentJob);
+    if(state.status==="review"){
+      const r=await fetch("/api/jobs/"+currentJob.id+"/decision",{method:"POST",headers:{"Content-Type":"application/json","X-Job-Token":currentJob.token},body:JSON.stringify({action:"skip"})});
+      if(!r.ok)return false;
+      return true;
+    }
+    if(["queued","processing","decision_pending"].includes(state.status)){
+      toast("Текущее задание ещё выполняется. Дождитесь результата перед регенерацией.");
+      return false;
+    }
+    return true;
+  }catch{return true}
 }
 function confirmPaidGeneration(){return window.confirm("Запустить Nano Banana Pro? Будет выполнен платный API-запрос. LOCK-профиль будет применён к DONOR prompt.")}
 async function prepareJob(forceNew=false){
   if(!currentFile){toast("Сначала добавьте исходник.");return}
-  if(currentJob&&!forceNew){try{const s=await jobStatus(currentJob);if(s.status==="done"){location.href=resultUrl(currentJob,true);return}if(!["failed"].includes(s.status)){toast("Текущее задание ещё активно.");return}}catch{}}
+  if(currentJob&&!forceNew){
+    try{
+      const s=await jobStatus(currentJob);
+      if(s.status==="done"){location.href=resultUrl(currentJob,true);return}
+      if(!["failed","skipped"].includes(s.status)){toast("Текущее задание ещё активно.");return}
+    }catch{}
+  }
+  if(forceNew&&!(await releaseReviewForRegeneration()))return;
   if(!confirmPaidGeneration())return;
-  currentJob=null;resetResult();$("action-process").disabled=true;$("mobile-process").disabled=true;$("action-process").textContent="Загрузка…";$("mobile-process").textContent="Загрузка…";setStatus("Передаю исходник и LOCK-профиль в временную очередь Cloudflare…");
+
+  currentJob=null;resetResult();setReviewActions();
+  $("action-process").disabled=true;$("mobile-process").disabled=true;$("action-process").textContent="Загрузка…";$("mobile-process").textContent="Загрузка…";
+  setStatus("Передаю исходник и LOCK-профиль во временную очередь Cloudflare…");
+
   const form=new FormData();form.append("file",currentFile,currentFile.name);form.append("locks",JSON.stringify(locks));form.append("mode","generative");
-  try{const session=await startCloudSession();const r=await fetch("/api/jobs",{method:"POST",headers:{"X-Session-Id":session.id,"X-Session-Token":session.token},body:form});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||"upload_failed");currentJob={id:d.id,token:d.token};$("action-process").textContent="Обработка…";$("mobile-process").textContent="Обработка";setStatus("Задача "+d.id.slice(0,8)+" принята. Облачный processor запускается.","ok");setProgress(d.progress||5,(d.progress||5)+"%");clearInterval(jobPollTimer);await pollCurrentJob();jobPollTimer=setInterval(pollCurrentJob,1800)}
-  catch(e){$("action-process").disabled=false;$("mobile-process").disabled=false;$("action-process").textContent="Запустить / продолжить";$("mobile-process").textContent="Обработка";setStatus("Не удалось создать облачную задачу: "+e.message,"err")}
+  try{
+    const session=await startCloudSession();
+    const r=await fetch("/api/jobs",{method:"POST",headers:{"X-Session-Id":session.id,"X-Session-Token":session.token},body:form});
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(d.error||"upload_failed");
+    currentJob={id:d.id,token:d.token};
+    const item=currentSourceItem();if(item){item.job=currentJob;item.lastState={id:d.id,status:d.status,stage:d.stage,progress:d.progress}}
+    $("action-process").textContent="Обработка…";$("mobile-process").textContent="Обработка";
+    setStatus("Задача "+d.id.slice(0,8)+" принята. Облачный processor запускается.","ok");setProgress(d.progress||5,(d.progress||5)+"%");
+    clearInterval(jobPollTimer);await pollCurrentJob();jobPollTimer=setInterval(pollCurrentJob,1800);
+  }catch(e){
+    $("action-process").disabled=false;$("mobile-process").disabled=false;$("action-process").textContent="Запустить / продолжить";$("mobile-process").textContent="Обработка";
+    setStatus("Не удалось создать облачную задачу: "+e.message,"err");
+  }
 }
 $("action-process").addEventListener("click",()=>prepareJob(false));$("mobile-process").addEventListener("click",()=>prepareJob(false));
-$("action-approve").addEventListener("click",()=>sendDecision("approve"));$("action-reject").addEventListener("click",()=>sendDecision("reject"));
+$("action-approve").addEventListener("click",()=>sendDecision("approve"));
+$("action-reject").addEventListener("click",()=>sendDecision("reject"));
+$("action-skip").addEventListener("click",()=>sendDecision("skip"));
 $("action-regenerate").addEventListener("click",()=>prepareJob(true));
 
 function openViewer(){
