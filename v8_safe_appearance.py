@@ -29,7 +29,7 @@ from source_queue_policy import discover_source_files, recover_service_active_st
 
 ROOT = Path(__file__).resolve().parent
 CFG = json.loads((ROOT / "config.json").read_text(encoding="utf-8"))
-SOURCE = Path(CFG["source"])
+SOURCE = Path(os.environ.get("MG4K_SOURCE", str(CFG["source"])))
 OUTPUT = SOURCE / CFG["output_folder"]
 REFERENCE_FOLDER = OUTPUT / "00_SOURCE_REFERENCE"
 CONTROL_FOLDER = OUTPUT / "01_STRUCTURE_CONTROL"
@@ -67,6 +67,64 @@ GENERATION_ASPECT_RATIOS: tuple[tuple[str, float], ...] = (
     ("9:16", 9.0 / 16.0),
     ("21:9", 21.0 / 9.0),
 )
+
+
+def active_cloud_lock_profile() -> dict[str, str]:
+    """Optional per-job lock profile supplied by the Cloudflare intake bridge."""
+    defaults = {
+        "camera": "hard",
+        "geometry": "hard",
+        "architecture": "hard",
+        "textures": "hard",
+        "vegetation": "hard",
+        "people_vehicles": "hard",
+        "lighting": "soft",
+        "sky": "soft",
+        "water": "soft",
+    }
+    raw = os.environ.get("MG4K_LOCK_PROFILE_JSON", "").strip()
+    if not raw:
+        return defaults
+    try:
+        incoming = json.loads(raw)
+    except Exception:
+        logging.warning("LOCK PROFILE | Invalid MG4K_LOCK_PROFILE_JSON; canonical defaults retained.")
+        return defaults
+    for key in defaults:
+        value = str(incoming.get(key, defaults[key])).lower()
+        defaults[key] = value if value in {"hard", "soft", "free"} else defaults[key]
+    return defaults
+
+
+def cloud_lock_prompt() -> str:
+    profile = active_cloud_lock_profile()
+    labels = {
+        "camera": "CAMERA",
+        "geometry": "GEOMETRY",
+        "architecture": "ARCHITECTURE",
+        "textures": "TEXTURES",
+        "vegetation": "VEGETATION",
+        "people_vehicles": "PEOPLE / VEHICLES / SMALL OBJECTS",
+        "lighting": "LIGHTING",
+        "sky": "SKY / CLOUDS",
+        "water": "WATER / REFLECTIONS / SHADOWS",
+    }
+    meanings = {
+        "hard": "HARD_LOCK: preserve exactly; enhancement only.",
+        "soft": "SOFT_LOCK: preserve global identity and causal logic; minor local refinement is allowed.",
+        "free": "FREE: may vary when useful for image quality, while still avoiding unrelated scene redesign.",
+    }
+    lines = [
+        "",
+        "ACTIVE USER LOCK PROFILE — THIS PROFILE OVERRIDES DEFAULT LOCK LEVEL LABELS IN THE GENERIC INSTRUCTIONS:",
+    ]
+    for key, label in labels.items():
+        lines.append(f"- {label}: {meanings[profile[key]]}")
+    lines.append(
+        "All parameters not explicitly marked FREE remain source-authoritative. "
+        "Canvas integrity and corruption/artifact checks always remain mandatory."
+    )
+    return "\n".join(lines)
 
 
 GENERATION_PROMPT = """NANO BANANA PRO — SOURCE-FAITHFUL DETAIL RECONSTRUCTION FOR UPSCALING.
@@ -742,6 +800,7 @@ def generate_image(key: str, reference: Path, trace_name: str, seed: int) -> tup
         + str(aspect["aspect_ratio"])
         + " image. Preserve the source framing inside that canvas; do not crop, pad, extend, "
           "recenter, zoom, rotate or change the camera."
+        + cloud_lock_prompt()
     )
     payload: dict[str, Any] = {
         "model": CFG["model"],
