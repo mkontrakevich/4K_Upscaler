@@ -78,6 +78,8 @@ try {
         "quality_gate_reason_catalog.py",
         "viewer_inspection_self_test.py",
         "version_guard.py",
+        "cloudflare_bridge.py",
+        "00_START_CLOUDFLARE_BRIDGE.bat",
         "01_INSTALL.bat"
     )) {
         $criticalSource = Join-Path -Path $sourceDir -ChildPath $criticalName
