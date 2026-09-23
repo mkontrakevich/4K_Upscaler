@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -340,11 +341,16 @@ def process_job(token: str, job: dict[str, Any]) -> None:
             "exception_type": type(exc).__name__,
             "exception": str(exc),
             "traceback": traceback.format_exc(),
-            "log_file": str(log_file),
             "api_secrets_included": False,
+            "user_image_bytes_included": False,
         }
-        save_json(job_dir / "bridge_diagnostic.json", diagnostic)
+        save_json(BRIDGE_DIR / "failures" / f"{job_id}.json", diagnostic)
         print(f"[CLOUD] Job {job_id[:8]} failed: {detail}")
+    finally:
+        try:
+            shutil.rmtree(job_dir, ignore_errors=True)
+        except Exception:
+            pass
 
 
 def main() -> int:
