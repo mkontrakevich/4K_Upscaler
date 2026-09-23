@@ -1,0 +1,108 @@
+name: V8.8.1 Cloud Processor CI
+
+on:
+  push:
+    branches: [cloud-docker-v881]
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install runtime dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Python syntax
+        run: |
+          python -m py_compile v8_safe_appearance.py
+          python -m py_compile cloudflare_bridge.py
+          python -m py_compile cloud_processor_service.py
+          python -m py_compile web_review_server.py
+          python -m py_compile safe_local_upscale.py
+
+      - name: Existing ARCH LOCK offline regressions
+        run: |
+          python canvas_integrity_self_test.py
+          python material_identity_self_test.py
+          python source_sky_recovery_self_test.py
+          python viewer_inspection_self_test.py
+          python retry_budget_self_test.py
+          python web_review_server.py --self-test
+
+      - name: Local defaults remain unchanged
+        run: |
+          python - <<'PY'
+          import os
+          import v8_safe_appearance as v
+          os.environ.pop("MG4K_LOCK_PROFILE_JSON", None)
+          assert v.donor_generation_prompt() == v.GENERATION_PROMPT
+          print("Legacy local DONOR prompt unchanged: PASSED")
+          PY
+
+      - name: Cloud source and lock profile contract
+        run: |
+          python - <<'PY'
+          import json, os, subprocess, sys, tempfile
+          from pathlib import Path
+
+          source = Path(tempfile.mkdtemp(prefix="mg4k-source-"))
+          profile = {
+              "camera": "hard",
+              "geometry": "hard",
+              "architecture": "hard",
+              "textures": "hard",
+              "vegetation": "soft",
+              "people_vehicles": "hard",
+              "lighting": "free",
+              "sky": "soft",
+              "water": "soft",
+          }
+          env = os.environ.copy()
+          env["MG4K_SOURCE"] = str(source)
+          env["MG4K_LOCK_PROFILE_JSON"] = json.dumps(profile)
+          code = """
+          import v8_safe_appearance as v
+          assert str(v.SOURCE) == r'""" + str(source) + """'
+          p=v.donor_generation_prompt()
+          assert 'CAMERA [HARD]' in p
+          assert 'VEGETATION [SOFT]' in p
+          assert 'LIGHTING [FREE]' in p
+          print('Cloud source/lock contract: PASSED')
+          """
+          subprocess.run([sys.executable, "-c", code], env=env, check=True)
+          PY
+
+      - name: Worker syntax
+        run: node --check src/worker.js
+
+      - name: Static processor auth contract present
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          worker = Path("src/worker.js").read_text(encoding="utf-8")
+          bridge = Path("cloudflare_bridge.py").read_text(encoding="utf-8")
+          assert "PROCESSOR_SHARED_SECRET" in worker
+          assert "MG4K_PROCESSOR_TOKEN" in bridge
+          assert "No interactive pairing was attempted" in bridge
+          print("Static processor auth contract: PASSED")
+          PY
+
+      - name: Docker build
+        run: docker build -t mg4k-cloud-processor:ci .
+
+      - name: Docker image contains no obvious secret files
+        run: |
+          docker run --rm --entrypoint sh mg4k-cloud-processor:ci -c \
+            'test ! -e /app/API.txt && test ! -e /app/OPENROUTER_API_KEY.txt && test ! -e /app/.env'
+
+      - name: No paid generation in CI
+        run: echo "No OPENROUTER_API_KEY is provided to tests or Docker build."
