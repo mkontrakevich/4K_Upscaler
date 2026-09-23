@@ -81,8 +81,39 @@ jobs:
           subprocess.run([sys.executable, "-c", code], env=env, check=True)
           PY
 
+      - name: Install Worker dependencies
+        run: npm install
+
       - name: Worker syntax
         run: node --check src/worker.js
+
+      - name: Native Container config dry-run
+        run: npm run deploy -- --dry-run --outdir /tmp/mg4k-cloud-worker
+
+      - name: Native Container contract
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          cfg = json.loads(Path("wrangler.jsonc").read_text(encoding="utf-8"))
+          containers = cfg.get("containers", [])
+          assert len(containers) == 1
+          c = containers[0]
+          assert c["class_name"] == "MG4KProcessor"
+          assert c["image"] == "./Dockerfile"
+          assert c["instance_type"] == "standard-1"
+          assert c["max_instances"] == 1
+          bindings = cfg["durable_objects"]["bindings"]
+          assert any(b["name"] == "MG4K_PROCESSOR" and b["class_name"] == "MG4KProcessor" for b in bindings)
+          migrations = cfg["migrations"]
+          assert any("MG4KProcessor" in m.get("new_sqlite_classes", []) for m in migrations)
+          worker = Path("src/worker.js").read_text(encoding="utf-8")
+          assert 'import { Container, getContainer } from "@cloudflare/containers";' in worker
+          assert "ensureCloudProcessor" in worker
+          assert 'getContainer(env.MG4K_PROCESSOR, "primary")' in worker
+          assert 'instance_type' not in worker
+          print("Native Cloudflare Container contract: PASSED")
+          PY
 
       - name: Static processor auth contract present
         run: |
