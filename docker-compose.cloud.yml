@@ -1,0 +1,20 @@
+services:
+  processor:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: mg4k-cloud-processor:8.8.1
+    restart: unless-stopped
+    environment:
+      MG4K_CLOUD_URL: ${MG4K_CLOUD_URL:-https://4k-upscaler.marinsgroup.workers.dev}
+      MG4K_PROCESSOR_TOKEN: ${MG4K_PROCESSOR_TOKEN:?set MG4K_PROCESSOR_TOKEN}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:?set OPENROUTER_API_KEY}
+      MG4K_HEADLESS: "1"
+      MG4K_RUNTIME_DIR: /runtime/bridge
+      MG4K_JOBS_ROOT: /tmp/mg4k-jobs
+      MG4K_HEALTH_PORT: "8080"
+    ports:
+      - "8080:8080"
+    tmpfs:
+      - /runtime
+      - /tmp/mg4k-jobs
