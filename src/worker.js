@@ -45,23 +45,23 @@ async function sha256(value) {
 
 async function readSession(env, id) {
   if (!id) return null;
-  const raw = await env.JOBS.get(`session:${id}`);
+  const raw = await env.SESSION_STATE_R7.get(`session:${id}`);
   return raw ? JSON.parse(raw) : null;
 }
 
 async function writeSession(env, session) {
   session.updated_at = now();
-  await env.JOBS.put(`session:${session.id}`, JSON.stringify(session), { expirationTtl: SESSION_TTL });
+  await env.SESSION_STATE_R7.put(`session:${session.id}`, JSON.stringify(session), { expirationTtl: SESSION_TTL });
 }
 
 async function readJob(env, id) {
-  const raw = await env.JOBS.get(`job:${id}`);
+  const raw = await env.SESSION_STATE_R7.get(`job:${id}`);
   return raw ? JSON.parse(raw) : null;
 }
 
 async function writeJob(env, job) {
   job.updated_at = now();
-  await env.JOBS.put(`job:${job.id}`, JSON.stringify(job), { expirationTtl: SESSION_TTL });
+  await env.SESSION_STATE_R7.put(`job:${job.id}`, JSON.stringify(job), { expirationTtl: SESSION_TTL });
 }
 
 function publicJob(job) {
@@ -115,7 +115,7 @@ async function authorizeProcessor(request, env) {
   const auth = request.headers.get("authorization") || "";
   const token = auth.toLowerCase().startsWith("bearer ") ? auth.slice(7).trim() : "";
   if (!token) return false;
-  const expected = await env.JOBS.get("processor:token_hash");
+  const expected = await env.SESSION_STATE_R7.get("processor:token_hash");
   if (!expected) return false;
   return (await sha256(token)) === expected;
 }
@@ -124,7 +124,7 @@ async function listAllObjects(env, prefix) {
   const objects = [];
   let cursor;
   do {
-    const page = await env.FILES.list({ prefix, cursor, limit: 1000 });
+    const page = await env.TEMP_BUFFER_R7.list({ prefix, cursor, limit: 1000 });
     objects.push(...page.objects);
     cursor = page.truncated ? page.cursor : undefined;
   } while (cursor);
@@ -135,7 +135,7 @@ async function deletePrefix(env, prefix) {
   const objects = await listAllObjects(env, prefix);
   const keys = objects.map(item => item.key);
   for (let i = 0; i < keys.length; i += 1000) {
-    await env.FILES.delete(keys.slice(i, i + 1000));
+    await env.TEMP_BUFFER_R7.delete(keys.slice(i, i + 1000));
   }
   return keys.length;
 }
@@ -149,24 +149,24 @@ async function endSession(env, session) {
   }
 
   for (const jobId of session.jobs || []) {
-    try { await env.JOBS.delete(`job:${jobId}`); } catch {}
+    try { await env.SESSION_STATE_R7.delete(`job:${jobId}`); } catch {}
   }
-  await env.JOBS.delete(`session:${session.id}`);
+  await env.SESSION_STATE_R7.delete(`session:${session.id}`);
   return deletedObjects;
 }
 
 async function nextQueuedJob(env) {
-  const listed = await env.JOBS.list({ prefix: "job:", limit: 1000 });
+  const listed = await env.SESSION_STATE_R7.list({ prefix: "job:", limit: 1000 });
   let candidate = null;
   for (const key of listed.keys) {
-    const raw = await env.JOBS.get(key.name);
+    const raw = await env.SESSION_STATE_R7.get(key.name);
     if (!raw) continue;
     const job = JSON.parse(raw);
     if (job.status !== "queued") continue;
 
     const session = await readSession(env, job.session_id);
     if (!session) {
-      await env.JOBS.delete(key.name);
+      await env.SESSION_STATE_R7.delete(key.name);
       continue;
     }
 
@@ -290,7 +290,7 @@ async function handleApi(request, env, ctx, url) {
     const filename = cleanName(file.name || "source-image");
     const sourceKey = `sessions/${session.id}/jobs/${id}/source/${filename}`;
 
-    await env.FILES.put(sourceKey, file.stream(), {
+    await env.TEMP_BUFFER_R7.put(sourceKey, file.stream(), {
       httpMetadata: { contentType: type },
       customMetadata: {
         session_id: session.id,
@@ -367,7 +367,7 @@ async function handleApi(request, env, ctx, url) {
     if (!await authorizeJob(request, url, job)) return json({ error: "forbidden" }, 403);
     if (!job.result_key) return json({ error: "result_not_ready", status: job.status }, 409);
 
-    const object = await env.FILES.get(job.result_key);
+    const object = await env.TEMP_BUFFER_R7.get(job.result_key);
     if (!object) return json({ error: "result_missing" }, 404);
 
     const headers = new Headers();
@@ -390,7 +390,7 @@ async function handleApi(request, env, ctx, url) {
       token_hash: await sha256(token),
       created_at: now(),
     };
-    await env.JOBS.put(`pair:${code}`, JSON.stringify(pair), { expirationTtl: PAIR_TTL });
+    await env.SESSION_STATE_R7.put(`pair:${code}`, JSON.stringify(pair), { expirationTtl: PAIR_TTL });
     return json({ code, token, expires_in_seconds: PAIR_TTL }, 201);
   }
 
@@ -400,12 +400,12 @@ async function handleApi(request, env, ctx, url) {
     const code = String(body.code || "").trim().toUpperCase();
     if (!code) return json({ error: "pair_code_required" }, 400);
 
-    const raw = await env.JOBS.get(`pair:${code}`);
+    const raw = await env.SESSION_STATE_R7.get(`pair:${code}`);
     if (!raw) return json({ error: "pair_code_invalid_or_expired" }, 404);
     const pair = JSON.parse(raw);
 
-    await env.JOBS.put("processor:token_hash", pair.token_hash);
-    await env.JOBS.delete(`pair:${code}`);
+    await env.SESSION_STATE_R7.put("processor:token_hash", pair.token_hash);
+    await env.SESSION_STATE_R7.delete(`pair:${code}`);
     return json({ paired: true });
   }
 
@@ -416,7 +416,7 @@ async function handleApi(request, env, ctx, url) {
 
   if (path === "/api/processor/claim" && method === "POST") {
     if (!await authorizeProcessor(request, env)) {
-      const configured = Boolean(await env.JOBS.get("processor:token_hash"));
+      const configured = Boolean(await env.SESSION_STATE_R7.get("processor:token_hash"));
       return json({ error: configured ? "processor_unauthorized" : "processor_not_paired" }, configured ? 403 : 428);
     }
 
@@ -442,7 +442,7 @@ async function handleApi(request, env, ctx, url) {
     if (!await authorizeProcessor(request, env)) return json({ error: "processor_unauthorized" }, 403);
     const job = await readJob(env, processorSourceMatch[1]);
     if (!job) return json({ error: "job_not_found" }, 404);
-    const object = await env.FILES.get(job.source_key);
+    const object = await env.TEMP_BUFFER_R7.get(job.source_key);
     if (!object) return json({ error: "source_missing" }, 404);
 
     const headers = new Headers();
@@ -485,7 +485,7 @@ async function handleApi(request, env, ctx, url) {
 
     const session = await readSession(env, job.session_id);
     if (!session) {
-      await env.JOBS.delete(`job:${job.id}`);
+      await env.SESSION_STATE_R7.delete(`job:${job.id}`);
       return json({ error: "session_expired" }, 410);
     }
 
@@ -516,9 +516,9 @@ async function handleApi(request, env, ctx, url) {
     const resultName = cleanName(file.name || `4K_${job.filename}`);
     const resultKey = `sessions/${job.session_id}/jobs/${job.id}/result/${resultName}`;
     if (job.result_key && job.result_key !== resultKey) {
-      try { await env.FILES.delete(job.result_key); } catch {}
+      try { await env.TEMP_BUFFER_R7.delete(job.result_key); } catch {}
     }
-    await env.FILES.put(resultKey, file.stream(), {
+    await env.TEMP_BUFFER_R7.put(resultKey, file.stream(), {
       httpMetadata: { contentType: String(file.type || "image/jpeg") },
       customMetadata: {
         session_id: job.session_id,
