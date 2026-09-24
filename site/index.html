@@ -367,6 +367,7 @@ function logExportText(){
     "Stage: "+(latestJobState?.stage||"—"),
     "Progress: "+(latestJobState?.progress!=null?latestJobState.progress+"%":($("analysis-progress")?.textContent||$("progress-label")?.textContent||"—")),
     "ARCH LOCK: "+(latestJobState?.validation?.decision||$("analysis-validation")?.textContent||"—"),
+    "Diagnostic: "+(latestJobState?.diagnostic_excerpt||"—"),
     "Locks: "+JSON.stringify(locks),
     "",
     "PROCESS LOG"
@@ -577,6 +578,7 @@ function renderJobState(state){
     setReviewActions({regenerate:true,inspect:Boolean(state.result_available)});
     renderValidation(state);
     setStatus("Ошибка: "+(state.error||stage),"err");
+    if(state.diagnostic_excerpt)log("err","Диагностика pipeline: "+state.diagnostic_excerpt);
     return state;
   }
   if(state.status==="decision_pending"){

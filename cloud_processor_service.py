@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import mimetypes
 import os
+import re
 import shutil
 import threading
 import time
@@ -61,10 +62,23 @@ def _public_state(job_id: str) -> dict[str, Any] | None:
             "stage": state.get("stage", "queued"),
             "progress": int(state.get("progress", 0) or 0),
             "error": state.get("error"),
+            "diagnostic_excerpt": state.get("diagnostic_excerpt"),
             "validation": state.get("validation"),
             "decision": state.get("decision"),
             "result_available": bool(state.get("result_path") and Path(str(state.get("result_path"))).is_file()),
         }
+
+
+def _safe_pipeline_tail(path: Path, max_chars: int = 5000) -> str:
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except Exception:
+        return ""
+    # Never expose credentials or embedded image payloads in cloud diagnostics.
+    text = re.sub(r"sk-or-v1-[A-Za-z0-9_-]+", "<OPENROUTER_KEY_REDACTED>", text)
+    text = re.sub(r"Bearer\s+[A-Za-z0-9._-]+", "Bearer <REDACTED>", text, flags=re.I)
+    text = re.sub(r"data:image/[^;]+;base64,[A-Za-z0-9+/=]+", "<EMBEDDED_IMAGE_REDACTED>", text)
+    return text[-max_chars:].strip()
 
 
 def _wait_for_decision(job_id: str) -> str:
@@ -111,9 +125,12 @@ def _process_job(job_id: str) -> None:
         active = bridge.active_state(source_dir)
         status = str(active.get("status") or "")
         if generation_rc not in {0, 3, 4, 5, 7}:
+            tail = _safe_pipeline_tail(log_file)
+            _set_state(job_id, diagnostic_excerpt=tail)
             raise RuntimeError(
                 "Nano Banana generation subprocess failed. "
                 f"exit={generation_rc}; state={status or 'unknown'}"
+                + (f" | pipeline_tail: {tail[-1800:]}" if tail else "")
             )
 
         if status == "AWAITING_RAW_REVIEW":
@@ -207,11 +224,13 @@ def _process_job(job_id: str) -> None:
         }
         diag_path = job_dir / "failure.json"
         diag_path.write_text(json.dumps(diagnostic, ensure_ascii=False, indent=2), encoding="utf-8")
+        tail = _safe_pipeline_tail(log_file)
         _set_state(
             job_id,
             status="failed",
             stage="container_processing_failed",
             error=detail[:1800],
+            diagnostic_excerpt=tail,
         )
 
 
