@@ -580,10 +580,19 @@ function renderJobState(state){
   }
   if(state.status==="failed"){
     clearInterval(jobPollTimer);jobPollTimer=null;
-    $("action-process").disabled=false;$("mobile-process").disabled=false;$("action-process").textContent="Повторить";$("mobile-process").textContent="Повторить";
+    $("action-process").disabled=false;$("mobile-process").disabled=false;
+    const manualRetry=Boolean(state.manual_retry_required);
+    $("action-process").textContent=manualRetry?"Регенерировать вручную":"Повторить";
+    $("mobile-process").textContent=manualRetry?"Регенерация":"Повторить";
     setReviewActions({regenerate:true,inspect:Boolean(state.result_available)});
     renderValidation(state);
-    setStatus("Ошибка: "+(state.error||stage),"err");
+    if(stage==="result_lost_after_container_restart"){
+      setStatus("RESULT был сформирован, но временный Container перезапустился до сохранения файла. Автоповтор заблокирован; регенерация только вручную.","warn");
+    }else if(manualRetry){
+      setStatus("Обработка прервана после потери состояния Container. Автоповтор заблокирован, чтобы не выполнить повторный платный запрос.","warn");
+    }else{
+      setStatus("Ошибка: "+(state.error||stage),"err");
+    }
     if(state.diagnostic_excerpt)log("err","Диагностика pipeline: "+state.diagnostic_excerpt);
     return state;
   }
