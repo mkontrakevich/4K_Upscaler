@@ -113,6 +113,8 @@ body{overflow-x:hidden}
 .check.warn i{background:var(--amber)}
 .check code{font:9px Consolas,monospace;color:#8aa1b4}
 .raw-analysis pre{margin:0;padding:9px 10px;max-height:250px;overflow:auto;white-space:pre-wrap;word-break:break-word;font:9px/1.45 Consolas,monospace;color:#91a7bb}
+.log-tools{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.log-tools .btn{min-height:32px;padding:0 10px;font-size:10px}
 .log-lines{padding:8px 12px;min-height:90px;max-height:220px;overflow:auto;font:10px/1.55 Consolas,monospace;color:#9fb4c5}
 .log-line{display:grid;grid-template-columns:74px 80px 1fr;gap:8px}
 .log-line .ok{color:#42d680}.log-line .err{color:#ff6576}.log-line .info{color:#21c9f6}.log-line .warn{color:#ffb42c}
@@ -279,7 +281,14 @@ body{overflow-x:hidden}
   </section>
 
   <section class="log-panel">
-    <div class="section-head"><strong>ЛОГ ПРОЦЕССА</strong><span>события текущей сессии</span></div>
+    <div class="section-head">
+      <strong>ЛОГ ПРОЦЕССА</strong>
+      <div class="log-tools">
+        <span>события текущей сессии</span>
+        <button class="btn ghost" id="log-copy" type="button">Копировать</button>
+        <button class="btn ghost" id="log-save" type="button">Сохранить .txt</button>
+      </div>
+    </div>
     <div class="log-lines" id="log-lines"></div>
   </section>
 </div>
@@ -337,6 +346,50 @@ function log(level,text){
   $("log-lines").appendChild(row);$("log-lines").scrollTop=$("log-lines").scrollHeight;
 }
 function toast(text){const el=$("toast");el.textContent=text;el.classList.add("show");clearTimeout(window.__toast);window.__toast=setTimeout(()=>el.classList.remove("show"),2300)}
+function logExportText(){
+  const rows=Array.from($("log-lines").querySelectorAll(".log-line")).map(row=>{
+    const cols=Array.from(row.children).map(el=>el.textContent.trim());
+    return cols.join(" ");
+  });
+  const item=currentSourceItem();
+  const header=[
+    "MG 4K / ARCH LOCK — PROCESS LOG",
+    "UI: CORE 8.8.1 R4 · CLOUD UI R8",
+    "Exported: "+new Date().toISOString(),
+    "Job: "+(currentJob?.id||"—"),
+    "Source: "+(item?.file?.name||currentFile?.name||"—"),
+    "Queue: "+(sourceItems.length?(currentSourceIndex+1)+"/"+sourceItems.length:"—"),
+    "Status: "+($("analysis-status")?.textContent||"—"),
+    "Progress: "+($("analysis-progress")?.textContent||$("progress-label")?.textContent||"—"),
+    "ARCH LOCK: "+($("analysis-validation")?.textContent||"—"),
+    "Locks: "+JSON.stringify(locks),
+    "",
+    "PROCESS LOG"
+  ];
+  return header.concat(rows.length?rows:["—"]).join("\n");
+}
+async function copyProcessLog(){
+  const text=logExportText();
+  try{
+    await navigator.clipboard.writeText(text);
+    toast("Лог скопирован.");
+  }catch{
+    const area=document.createElement("textarea");area.value=text;area.style.position="fixed";area.style.opacity="0";
+    document.body.appendChild(area);area.select();
+    try{document.execCommand("copy");toast("Лог скопирован.");}catch{toast("Не удалось скопировать лог.");}
+    area.remove();
+  }
+}
+function saveProcessLog(){
+  const text=logExportText();
+  const stamp=new Date().toISOString().replace(/[:.]/g,"-");
+  const job=(currentJob?.id||"session").slice(0,8);
+  const blob=new Blob([text],{type:"text/plain;charset=utf-8"});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");a.href=url;a.download="MG4K_LOG_"+job+"_"+stamp+".txt";
+  document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+  toast("Лог сохранён в TXT.");
+}
 function humanSize(bytes){if(!bytes)return"0 B";const u=["B","KB","MB","GB"];let i=Math.min(u.length-1,Math.floor(Math.log(bytes)/Math.log(1024)));return(bytes/Math.pow(1024,i)).toFixed(i?1:0)+" "+u[i]}
 function setProgress(n,label){n=Math.max(0,Math.min(100,Number(n||0)));$("progress-bar").style.width=n+"%";$("progress-label").textContent=label||n+"%"}
 function setStatus(text,level="info"){ $("status-text").textContent=text; log(level,text); }
@@ -611,6 +664,8 @@ $("action-approve").addEventListener("click",()=>sendDecision("approve"));
 $("action-reject").addEventListener("click",()=>sendDecision("reject"));
 $("action-skip").addEventListener("click",()=>sendDecision("skip"));
 $("action-regenerate").addEventListener("click",()=>prepareJob(true));
+$("log-copy").addEventListener("click",copyProcessLog);
+$("log-save").addEventListener("click",saveProcessLog);
 
 function openViewer(){
   if(!currentObjectUrl||!currentJob){toast("Для инспекции нужны SOURCE и RESULT.");return}
