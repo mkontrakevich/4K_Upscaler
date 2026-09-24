@@ -20,7 +20,7 @@ export class MG4KProcessor extends Container {
   }
 }
 
-const SESSION_TTL = 60 * 60 * 2;
+const SESSION_TTL = 60 * 10;
 const PAIR_TTL = 60 * 10;
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 
@@ -690,6 +690,22 @@ async function handleApi(request, env, ctx, url) {
     job.progress = 95;
     await writeJob(env, job);
     return json({ ok: true, job: publicJob(job) });
+  }
+
+  const jobSourceMatch = path.match(/^\/api\/jobs\/([0-9a-f-]+)\/source$/i);
+  if (jobSourceMatch && method === "GET") {
+    const job = await readJob(env, jobSourceMatch[1]);
+    if (!job) return json({ error: "job_not_found" }, 404);
+    if (!await authorizeJob(request, url, job)) return json({ error: "forbidden" }, 403);
+    const object = await env.TEMP_BUFFER_R7.get(job.source_key);
+    if (!object) return json({ error: "source_missing" }, 404);
+
+    const headers = new Headers();
+    object.writeHttpMetadata(headers);
+    headers.set("etag", object.httpEtag);
+    headers.set("cache-control", "private, no-store");
+    headers.set("content-disposition", "inline");
+    return new Response(object.body, { headers });
   }
 
   const jobResultMatch = path.match(/^\/api\/jobs\/([0-9a-f-]+)\/result$/i);
