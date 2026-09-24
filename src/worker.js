@@ -387,27 +387,40 @@ async function handleApi(request, env, ctx, url) {
     if (!session.jobs.includes(id)) session.jobs.push(id);
     await writeSession(env, session);
 
-    ctx.waitUntil((async () => {
-      try {
-        await ensureCloudProcessor(env, url.origin);
-      } catch (error) {
-        console.error("MG4K_PROCESSOR_START_FAILED", error);
-        const current = await readJob(env, id);
-        if (current && current.status === "queued") {
-          current.status = "failed";
-          current.stage = "processor_start_failed";
-          current.error = error?.message || String(error);
-          await writeJob(env, current);
-        }
+    try {
+      const starting = await readJob(env, id);
+      if (starting && starting.status === "queued") {
+        starting.stage = "processor_starting";
+        starting.progress = Math.max(Number(starting.progress || 0), 6);
+        await writeJob(env, starting);
       }
-    })());
 
+      await ensureCloudProcessor(env, url.origin);
+
+      const ready = await readJob(env, id);
+      if (ready && ready.status === "queued") {
+        ready.stage = "processor_ready_waiting_claim";
+        ready.progress = Math.max(Number(ready.progress || 0), 8);
+        await writeJob(env, ready);
+      }
+    } catch (error) {
+      console.error("MG4K_PROCESSOR_START_FAILED", error);
+      const current = await readJob(env, id);
+      if (current && current.status === "queued") {
+        current.status = "failed";
+        current.stage = "processor_start_failed";
+        current.error = error?.message || String(error);
+        await writeJob(env, current);
+      }
+    }
+
+    const created = await readJob(env, id) || job;
     return json({
       id,
       token: accessToken,
-      status: job.status,
-      stage: job.stage,
-      progress: job.progress,
+      status: created.status,
+      stage: created.stage,
+      progress: created.progress,
     }, 201);
   }
 
