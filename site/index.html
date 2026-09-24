@@ -547,6 +547,12 @@ function renderJobState(state){
   updateQueueNavigation();
 
   if(state.status==="review"){
+    if(!state.result_available){
+      $("action-process").disabled=true;$("mobile-process").disabled=true;
+      setReviewActions();
+      setStatus("ARCH LOCK завершён. Синхронизирую RESULT в облачное хранилище…","info");
+      return state;
+    }
     clearInterval(jobPollTimer);jobPollTimer=null;
     showResult(state,"review");
     $("action-process").disabled=true;$("mobile-process").disabled=true;
@@ -591,7 +597,11 @@ function renderJobState(state){
 
   $("action-process").disabled=true;$("mobile-process").disabled=true;
   setReviewActions();
-  setStatus("Задача "+state.id.slice(0,8)+" · "+stage+" · "+p+"%");
+  if(state.result_sync_warning && stage==="result_sync_retry"){
+    setStatus("RESULT сформирован. Повторяю синхронизацию результата…","warn");
+  }else{
+    setStatus("Задача "+state.id.slice(0,8)+" · "+stage+" · "+p+"%");
+  }
   return state;
 }
 async function pollCurrentJob(){
