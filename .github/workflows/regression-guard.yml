@@ -2,7 +2,7 @@ name: 4K Upscaler Regression Guard
 
 on:
   push:
-    branches: [main, ui-r8-local-review, ui-r8-single-upload, ui-r8-next-source-plus, fix-container-app-name, ui-r8-log-export, ui-r8-fix-upload-plus-layout, fix-cloud-job-start-generation, fix-container-internal-worker-egress, fix-push-container-jobs, fix-container-job-runner-watchdog, diag-openrouter-generation-failure, fix-review-sync-metadata, fix-review-result-loss-guard]
+    branches: [main, ui-r8-local-review, ui-r8-single-upload, ui-r8-next-source-plus, fix-container-app-name, ui-r8-log-export, ui-r8-fix-upload-plus-layout, fix-cloud-job-start-generation, fix-container-internal-worker-egress, fix-push-container-jobs, fix-container-job-runner-watchdog, diag-openrouter-generation-failure, fix-review-sync-metadata, fix-review-result-loss-guard, fix-r2-result-sync-buffered]
   workflow_dispatch:
 
 jobs:
@@ -304,7 +304,7 @@ jobs:
           ui = Path("site/index.html").read_text(encoding="utf-8")
 
           assert 'await writeJob(env, job);\n\n  if (state.result_available' in worker
-          assert 'job.status = "processing";\n      job.stage = "result_sync_retry";' in worker
+          assert 'job.stage = "result_sync_retry";' in worker
           assert 'container_review_status' in worker
           assert 'result_sync_warning' in worker
           assert 'if (!["review", "done"].includes(job.status))' in worker
@@ -316,7 +316,7 @@ jobs:
 
           assert 'if(!state.result_available)' in ui
           assert 'ARCH LOCK завершён. Синхронизирую RESULT' in ui
-          assert 'RESULT сформирован. Повторяю синхронизацию результата' in ui
+          assert 'RESULT сформирован. Повторяю синхронизацию в R2' in ui
           print("Review sync metadata contract: PASSED")
           PY
 
@@ -339,6 +339,33 @@ jobs:
           assert 'Автоповтор заблокирован' in ui
           assert 'Регенерировать вручную' in ui
           print("Paid redispatch safety contract: PASSED")
+          PY
+
+      - name: Buffered RESULT sync contract
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          worker = Path("src/worker.js").read_text(encoding="utf-8")
+          ui = Path("site/index.html").read_text(encoding="utf-8")
+
+          assert 'const bytes = await response.arrayBuffer();' in worker
+          assert 'container_result_empty' in worker
+          assert 'container_result_size_mismatch' in worker
+          assert 'result_sync_attempts' in worker
+          assert 'job.result_sync_attempts >= 5' in worker
+          assert 'stage = "result_sync_failed"' in worker
+          assert 'Paid regeneration was not started.' in worker
+          assert 'result_bytes' in worker
+          assert 'result_content_type' in worker
+
+          assert 'Result sync attempts:' in ui
+          assert 'Result sync warning:' in ui
+          assert 'Result bytes:' in ui
+          assert 'Result content type:' in ui
+          assert 'startsWith("REJECTED")' in ui
+          assert 'утверждение заблокировано' in ui
+          assert 'result_sync_failed' in ui
+          print("Buffered RESULT sync + rejected review contract: PASSED")
           PY
 
       - name: V8.8.1 first-pass state preparation smoke test
