@@ -206,7 +206,7 @@ jobs:
 
           assert 'worker-push-runner-watchdog' in service
           assert 'queue.Queue' not in service
-          assert 'def _process_job(job_id: str)' in service
+          assert 'def _process_job(job_id: str, release_processing_slot:' in service
           assert 'def _runner_entry(job_id: str)' in service
           assert 'def _ensure_job_runner(job_id: str)' in service
           assert 'daemon=False' in service
