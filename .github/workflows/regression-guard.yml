@@ -2,7 +2,7 @@ name: 4K Upscaler Regression Guard
 
 on:
   push:
-    branches: [main, ui-r8-local-review, ui-r8-single-upload, ui-r8-next-source-plus, fix-container-app-name, ui-r8-log-export, ui-r8-fix-upload-plus-layout, fix-cloud-job-start-generation, fix-container-internal-worker-egress, fix-push-container-jobs, fix-container-job-runner-watchdog]
+    branches: [main, ui-r8-local-review, ui-r8-single-upload, ui-r8-next-source-plus, fix-container-app-name, ui-r8-log-export, ui-r8-fix-upload-plus-layout, fix-cloud-job-start-generation, fix-container-internal-worker-egress, fix-push-container-jobs, fix-container-job-runner-watchdog, diag-openrouter-generation-failure]
   workflow_dispatch:
 
 jobs:
@@ -262,6 +262,37 @@ jobs:
           assert state["status"] == "processing", state
           assert state["stage"] == "fake_processing", state
           print("Container job runner watchdog: PASSED")
+          PY
+
+      - name: Sanitized cloud diagnostics contract
+        run: |
+          python - <<'PY'
+          import os, tempfile
+          from pathlib import Path
+          os.environ["MG4K_JOBS_ROOT"] = tempfile.mkdtemp(prefix="mg4k-diag-")
+          import cloud_processor_service as svc
+
+          p = Path(os.environ["MG4K_JOBS_ROOT"]) / "pipeline.log"
+          p.write_text(
+              "Authorization: Bearer secret-token\n"
+              "key=sk-or-v1-THIS_MUST_NOT_LEAK\n"
+              "image=data:image/png;base64,QUJDREVGRw==\n"
+              "nano_banana_generation HTTP 429: provider rate limited\n",
+              encoding="utf-8",
+          )
+          tail = svc._safe_pipeline_tail(p)
+          assert "THIS_MUST_NOT_LEAK" not in tail
+          assert "secret-token" not in tail
+          assert "QUJDREVGRw==" not in tail
+          assert "<OPENROUTER_KEY_REDACTED>" in tail
+          assert "HTTP 429" in tail
+
+          worker = Path("src/worker.js").read_text(encoding="utf-8")
+          ui = Path("site/index.html").read_text(encoding="utf-8")
+          assert "diagnostic_excerpt" in worker
+          assert '"Diagnostic: "+(latestJobState?.diagnostic_excerpt||"—")' in ui
+          assert 'Диагностика pipeline:' in ui
+          print("Sanitized cloud diagnostics: PASSED")
           PY
 
       - name: V8.8.1 first-pass state preparation smoke test
