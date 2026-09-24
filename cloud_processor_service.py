@@ -298,7 +298,7 @@ class ProcessorHandler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         job_id = self._job_id("start")
         if job_id:
-            length = int(self.headers.get("content-length") or "0")
+            length = int(self.headers.get("content-length") or self.headers.get("x-mg4k-source-size") or "0")
             if length <= 0 or length > 50 * 1024 * 1024:
                 self._json(413 if length > 50 * 1024 * 1024 else 400, {"error": "invalid_source_size"})
                 return
