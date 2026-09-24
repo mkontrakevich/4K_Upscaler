@@ -1,4 +1,6 @@
-import { Container, getContainer } from "@cloudflare/containers";
+import { Container, ContainerProxy, getContainer } from "@cloudflare/containers";
+
+export { ContainerProxy };
 
 export class MG4KProcessor extends Container {
   defaultPort = 8080;
@@ -240,7 +242,8 @@ async function ensureCloudProcessor(env, origin) {
     ports: [8080],
     startOptions: {
       envVars: {
-        MG4K_CLOUD_URL: origin,
+        MG4K_CLOUD_URL: "http://mg4k.worker",
+        MG4K_PUBLIC_ORIGIN: origin,
         MG4K_PROCESSOR_TOKEN: processorToken,
         OPENROUTER_API_KEY: openRouterKey,
         MG4K_HEADLESS: "1",
@@ -257,6 +260,16 @@ async function ensureCloudProcessor(env, origin) {
   });
   return container;
 }
+
+MG4KProcessor.outboundByHost = {
+  "mg4k.worker": async (request, env) => {
+    const url = new URL(request.url);
+    if (!url.pathname.startsWith("/api/processor/")) {
+      return json({ error: "container_internal_route_forbidden" }, 403);
+    }
+    return handleApi(request, env, null, url);
+  },
+};
 
 async function handleApi(request, env, ctx, url) {
   const path = url.pathname;
