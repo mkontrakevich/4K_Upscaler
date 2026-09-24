@@ -368,6 +368,10 @@ function logExportText(){
     "Progress: "+(latestJobState?.progress!=null?latestJobState.progress+"%":($("analysis-progress")?.textContent||$("progress-label")?.textContent||"—")),
     "ARCH LOCK: "+(latestJobState?.validation?.decision||$("analysis-validation")?.textContent||"—"),
     "Diagnostic: "+(latestJobState?.diagnostic_excerpt||"—"),
+    "Result sync attempts: "+(latestJobState?.result_sync_attempts??0),
+    "Result sync warning: "+(latestJobState?.result_sync_warning||"—"),
+    "Result bytes: "+(latestJobState?.result_bytes||0),
+    "Result content type: "+(latestJobState?.result_content_type||"—"),
     "Locks: "+JSON.stringify(locks),
     "",
     "PROCESS LOG"
@@ -556,8 +560,16 @@ function renderJobState(state){
     clearInterval(jobPollTimer);jobPollTimer=null;
     showResult(state,"review");
     $("action-process").disabled=true;$("mobile-process").disabled=true;
-    setReviewActions({approve:true,reject:true,skip:true,regenerate:true,inspect:true});
-    setStatus("Результат готов. Можно утвердить, отклонить, регенерировать или пропустить и заняться следующим файлом.","ok");
+    const rejected=String(state.validation?.decision||"").toUpperCase().startsWith("REJECTED")
+      || (state.validation?.mandatory_failures||[]).length>0
+      || (state.validation?.passed===false);
+    setReviewActions({approve:!rejected,reject:true,skip:true,regenerate:true,inspect:true});
+    setStatus(
+      rejected
+        ?"Кандидат сформирован, но ARCH LOCK отклонил его. Доступны инспекция, отклонение, регенерация или пропуск; утверждение заблокировано."
+        :"Результат готов. Можно утвердить, отклонить, регенерировать или пропустить и заняться следующим файлом.",
+      rejected?"warn":"ok"
+    );
     return state;
   }
   if(state.status==="done"){
@@ -588,6 +600,8 @@ function renderJobState(state){
     renderValidation(state);
     if(stage==="result_lost_after_container_restart"){
       setStatus("RESULT был сформирован, но временный Container перезапустился до сохранения файла. Автоповтор заблокирован; регенерация только вручную.","warn");
+    }else if(stage==="result_sync_failed"){
+      setStatus("RESULT сформирован, но не удалось сохранить его в R2 после "+(state.result_sync_attempts||0)+" попыток. Платная регенерация не запускалась. Ошибка: "+(state.result_sync_warning||"неизвестно"),"err");
     }else if(manualRetry){
       setStatus("Обработка прервана после потери состояния Container. Автоповтор заблокирован, чтобы не выполнить повторный платный запрос.","warn");
     }else{
@@ -607,7 +621,7 @@ function renderJobState(state){
   $("action-process").disabled=true;$("mobile-process").disabled=true;
   setReviewActions();
   if(state.result_sync_warning && stage==="result_sync_retry"){
-    setStatus("RESULT сформирован. Повторяю синхронизацию результата…","warn");
+    setStatus("RESULT сформирован. Повторяю синхронизацию в R2 ("+(state.result_sync_attempts||0)+"/5): "+state.result_sync_warning,"warn");
   }else{
     setStatus("Задача "+state.id.slice(0,8)+" · "+stage+" · "+p+"%");
   }
