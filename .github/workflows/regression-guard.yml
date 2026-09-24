@@ -2,7 +2,7 @@ name: 4K Upscaler Regression Guard
 
 on:
   push:
-    branches: [main, ui-r8-local-review, ui-r8-single-upload, ui-r8-next-source-plus, fix-container-app-name, ui-r8-log-export, ui-r8-fix-upload-plus-layout, fix-cloud-job-start-generation, fix-container-internal-worker-egress, fix-push-container-jobs, fix-container-job-runner-watchdog, diag-openrouter-generation-failure]
+    branches: [main, ui-r8-local-review, ui-r8-single-upload, ui-r8-next-source-plus, fix-container-app-name, ui-r8-log-export, ui-r8-fix-upload-plus-layout, fix-cloud-job-start-generation, fix-container-internal-worker-egress, fix-push-container-jobs, fix-container-job-runner-watchdog, diag-openrouter-generation-failure, fix-review-sync-metadata]
   workflow_dispatch:
 
 jobs:
@@ -293,6 +293,31 @@ jobs:
           assert '"Diagnostic: "+(latestJobState?.diagnostic_excerpt||"—")' in ui
           assert 'Диагностика pipeline:' in ui
           print("Sanitized cloud diagnostics: PASSED")
+          PY
+
+      - name: Review sync metadata contract
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          worker = Path("src/worker.js").read_text(encoding="utf-8")
+          bridge = Path("cloudflare_bridge.py").read_text(encoding="utf-8")
+          ui = Path("site/index.html").read_text(encoding="utf-8")
+
+          assert 'await writeJob(env, job);\n\n  if (state.result_available' in worker
+          assert 'job.status = "processing";\n      job.stage = "result_sync_retry";' in worker
+          assert 'container_review_status' in worker
+          assert 'result_sync_warning' in worker
+          assert 'if (!["review", "done"].includes(job.status))' in worker
+
+          assert 'fallback_from_pipeline_state' in bridge
+          assert 'mandatory_failures' in bridge
+          assert 'technical_decision' in bridge
+          assert 'source_state' in bridge
+
+          assert 'if(!state.result_available)' in ui
+          assert 'ARCH LOCK завершён. Синхронизирую RESULT' in ui
+          assert 'RESULT сформирован. Повторяю синхронизацию результата' in ui
+          print("Review sync metadata contract: PASSED")
           PY
 
       - name: V8.8.1 first-pass state preparation smoke test

@@ -103,6 +103,7 @@ function publicJob(job) {
     result_available: Boolean(job.result_key),
     error: job.error || null,
     diagnostic_excerpt: job.diagnostic_excerpt || null,
+    result_sync_warning: job.result_sync_warning || null,
     validation: job.validation || null,
     decision: job.decision || null,
   };
@@ -369,11 +370,28 @@ async function syncJobFromContainer(env, job, origin) {
   const previousStatus = job.status;
   applyContainerState(job, state);
 
+  // Persist authoritative Container state before copying large result bytes.
+  // A transient R2/result transfer failure must never rewrite a valid REVIEW
+  // state into a contradictory terminal-looking sync error.
+  await writeJob(env, job);
+
   if (state.result_available && (!hadResult || (state.status === "done" && previousStatus !== "done"))) {
-    await storeContainerResult(env, container, job);
+    try {
+      await storeContainerResult(env, container, job);
+      job.result_sync_warning = null;
+      job.error = state.error || null;
+      await writeJob(env, job);
+    } catch (error) {
+      job.container_review_status = String(state.status || job.status || "");
+      job.status = "processing";
+      job.stage = "result_sync_retry";
+      job.progress = Math.min(89, Math.max(1, Number(state.progress || job.progress || 0)));
+      job.result_sync_warning = error?.message || String(error);
+      job.error = null;
+      await writeJob(env, job);
+    }
   }
 
-  await writeJob(env, job);
   return job;
 }
 
@@ -572,8 +590,10 @@ async function handleApi(request, env, ctx, url) {
         job = await syncJobFromContainer(env, job, url.origin);
       } catch (error) {
         console.error("MG4K_CONTAINER_SYNC_FAILED", job.id, error);
-        job.stage = "container_sync_retry";
-        job.error = error?.message || String(error);
+        job.result_sync_warning = error?.message || String(error);
+        if (!["review", "done"].includes(job.status)) {
+          job.stage = "container_sync_retry";
+        }
         await writeJob(env, job);
       }
     }
