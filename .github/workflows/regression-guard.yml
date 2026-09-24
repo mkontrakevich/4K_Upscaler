@@ -2,7 +2,7 @@ name: 4K Upscaler Regression Guard
 
 on:
   push:
-    branches: [main, ui-r8-local-review, ui-r8-single-upload, ui-r8-next-source-plus, fix-container-app-name, ui-r8-log-export, ui-r8-fix-upload-plus-layout, fix-cloud-job-start-generation]
+    branches: [main, ui-r8-local-review, ui-r8-single-upload, ui-r8-next-source-plus, fix-container-app-name, ui-r8-log-export, ui-r8-fix-upload-plus-layout, fix-cloud-job-start-generation, fix-container-internal-worker-egress]
   workflow_dispatch:
 
 jobs:
@@ -185,6 +185,13 @@ jobs:
           worker = Path("src/worker.js").read_text(encoding="utf-8")
           bridge = Path("cloudflare_bridge.py").read_text(encoding="utf-8")
           ui = Path("site/index.html").read_text(encoding="utf-8")
+          package = Path("package.json").read_text(encoding="utf-8")
+
+          assert 'ContainerProxy' in worker and 'export { ContainerProxy };' in worker
+          assert 'MG4KProcessor.outboundByHost' in worker
+          assert '"mg4k.worker"' in worker
+          assert 'MG4K_CLOUD_URL: "http://mg4k.worker"' in worker
+          assert '@cloudflare/containers": "0.3.7"' in package
 
           assert 'await ensureCloudProcessor(env, url.origin);' in worker
           start_pos = worker.index('await ensureCloudProcessor(env, url.origin);')
