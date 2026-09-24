@@ -2,7 +2,7 @@ name: 4K Upscaler Regression Guard
 
 on:
   push:
-    branches: [main, ui-r8-local-review, ui-r8-single-upload, ui-r8-next-source-plus, fix-container-app-name, ui-r8-log-export, ui-r8-fix-upload-plus-layout, fix-cloud-job-start-generation, fix-container-internal-worker-egress, fix-push-container-jobs]
+    branches: [main, ui-r8-local-review, ui-r8-single-upload, ui-r8-next-source-plus, fix-container-app-name, ui-r8-log-export, ui-r8-fix-upload-plus-layout, fix-cloud-job-start-generation, fix-container-internal-worker-egress, fix-push-container-jobs, fix-container-job-runner-watchdog]
   workflow_dispatch:
 
 jobs:
@@ -204,10 +204,15 @@ jobs:
           assert 'await dispatchJobToContainer(env, starting, url.origin);' in worker
           assert 'job = await syncJobFromContainer(env, job, url.origin);' in worker
 
-          assert 'worker-push-no-processor-claim' in service
-          assert 'queue.Queue' in service
+          assert 'worker-push-runner-watchdog' in service
+          assert 'queue.Queue' not in service
           assert 'def _process_job(job_id: str)' in service
-          assert 'def _worker_loop()' in service
+          assert 'def _runner_entry(job_id: str)' in service
+          assert 'def _ensure_job_runner(job_id: str)' in service
+          assert 'daemon=False' in service
+          assert '_PROCESSING_LOCK' in service
+          assert 'if state.get("status") == "queued":' in service
+          assert '_ensure_job_runner(job_id)' in service
           assert 'self._job_id("start")' in service
           assert 'self._job_id("status")' in service
           assert 'self._job_id("result")' in service
