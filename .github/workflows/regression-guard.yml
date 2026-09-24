@@ -2,7 +2,7 @@ name: 4K Upscaler Regression Guard
 
 on:
   push:
-    branches: [main, ui-r8-local-review, ui-r8-single-upload, ui-r8-next-source-plus, fix-container-app-name]
+    branches: [main, ui-r8-local-review, ui-r8-single-upload, ui-r8-next-source-plus, fix-container-app-name, ui-r8-log-export]
   workflow_dispatch:
 
 jobs:
@@ -153,7 +153,10 @@ jobs:
           assert 'status==="skipped"' in html, "Skipped source state must remain reviewable"
           assert 'sendDecision("skip")' in html, "Skip action must be wired"
           assert 'Добавить следующий исходник' not in html, "Source addition must live in the navigation, not on the preview"
-          print("Cloud two-pane Visual Review + queue/skip contract: PASSED")
+          for log_control in ['id="log-copy"', 'id="log-save"', "function logExportText()", "function copyProcessLog()", "function saveProcessLog()"]:
+              assert log_control in html, f"Missing process log export control: {log_control}"
+          assert 'MG4K_LOG_' in html, "Saved log filename contract missing"
+          print("Cloud two-pane Visual Review + queue/skip + log export contract: PASSED")
           PY
 
       - name: Cloud skip backend contract
