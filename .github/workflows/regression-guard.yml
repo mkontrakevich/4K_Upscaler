@@ -2,7 +2,7 @@ name: 4K Upscaler Regression Guard
 
 on:
   push:
-    branches: [main, ui-r8-local-review, ui-r8-single-upload, ui-r8-next-source-plus, fix-container-app-name, ui-r8-log-export, ui-r8-fix-upload-plus-layout, fix-cloud-job-start-generation, fix-container-internal-worker-egress]
+    branches: [main, ui-r8-local-review, ui-r8-single-upload, ui-r8-next-source-plus, fix-container-app-name, ui-r8-log-export, ui-r8-fix-upload-plus-layout, fix-cloud-job-start-generation, fix-container-internal-worker-egress, fix-push-container-jobs]
   workflow_dispatch:
 
 jobs:
@@ -25,6 +25,7 @@ jobs:
         run: |
           python -m py_compile v8_safe_appearance.py
           python -m py_compile cloudflare_bridge.py
+          python -m py_compile cloud_processor_service.py
           python -m py_compile web_review_server.py
           python -m py_compile safe_local_upscale.py
 
@@ -170,47 +171,58 @@ jobs:
           from pathlib import Path
           worker = Path("src/worker.js").read_text(encoding="utf-8")
           bridge = Path("cloudflare_bridge.py").read_text(encoding="utf-8")
+          service = Path("cloud_processor_service.py").read_text(encoding="utf-8")
           assert '["approve", "reject", "skip"]' in worker
           assert '"skip_sent"' in worker
           assert '{"approve", "reject", "skip"}' in bridge
           assert '"skipped_by_user"' in bridge
           assert '"status": "skipped"' in bridge
+          assert '{"approve", "reject", "skip"}' in service
+          assert 'status="skipped"' in service
+          assert 'sendContainerDecision' in worker
           print("Cloud skip backend contract: PASSED")
           PY
 
-      - name: Cloud processor startup and generation-state contract
+      - name: Cloud push processor contract
         run: |
           python - <<'PY'
           from pathlib import Path
           worker = Path("src/worker.js").read_text(encoding="utf-8")
-          bridge = Path("cloudflare_bridge.py").read_text(encoding="utf-8")
+          service = Path("cloud_processor_service.py").read_text(encoding="utf-8")
           ui = Path("site/index.html").read_text(encoding="utf-8")
           package = Path("package.json").read_text(encoding="utf-8")
 
-          assert 'ContainerProxy' in worker and 'export { ContainerProxy };' in worker
-          assert 'MG4KProcessor.outboundByHost' in worker
-          assert '"mg4k.worker"' in worker
-          assert 'MG4K_CLOUD_URL: "http://mg4k.worker"' in worker
           assert '@cloudflare/containers": "0.3.7"' in package
+          assert 'async function dispatchJobToContainer' in worker
+          assert 'async function syncJobFromContainer' in worker
+          assert 'async function sendContainerDecision' in worker
+          assert 'http://container/jobs/${job.id}/start' in worker
+          assert 'http://container/jobs/${job.id}/status' in worker
+          assert 'http://container/jobs/${job.id}/result' in worker
+          assert 'http://container/jobs/${job.id}/decision' in worker
+          assert '"processor_ready_waiting_claim"' in worker, "Old 8% jobs must be recoverable"
+          assert 'await dispatchJobToContainer(env, starting, url.origin);' in worker
+          assert 'job = await syncJobFromContainer(env, job, url.origin);' in worker
 
-          assert 'await ensureCloudProcessor(env, url.origin);' in worker
-          start_pos = worker.index('await ensureCloudProcessor(env, url.origin);')
-          wait_until_pos = worker.find('ctx.waitUntil', max(0, start_pos - 2000), start_pos + 2000)
-          assert wait_until_pos == -1, "Processor startup must not be delegated to waitUntil"
-          assert '"processor_starting"' in worker
-          assert '"processor_ready_waiting_claim"' in worker
+          assert 'worker-push-no-processor-claim' in service
+          assert 'queue.Queue' in service
+          assert 'def _process_job(job_id: str)' in service
+          assert 'def _worker_loop()' in service
+          assert 'self._job_id("start")' in service
+          assert 'self._job_id("status")' in service
+          assert 'self._job_id("result")' in service
+          assert 'self._job_id("decision")' in service
+          assert 'cloudflare_bridge.main()' not in service
 
-          assert 'run_pipeline(["--limit", "1"], env, log_file)' in bridge
-          prep = bridge.index('run_pipeline(["--limit", "1"], env, log_file)')
-          paid = bridge.index('"--auto-generate-current"', prep)
-          assert prep < paid, "Non-paid state preparation must happen before paid generation"
-          assert 'AWAITING_EXPLICIT_DONOR_GENERATION' in bridge
-          assert 'Authentication will be verified on claim' in bridge
+          prep = service.index('bridge.run_pipeline(["--limit", "1"], env, log_file)')
+          paid = service.index('"--auto-generate-current"', prep)
+          assert prep < paid, "Non-paid V8.8.1 preparation must precede paid generation"
+          assert 'AWAITING_EXPLICIT_DONOR_GENERATION' in service
 
           assert 'latestJobState=state;' in ui
           assert 'signature!==lastStatusSignature' in ui
           assert '"Stage: "+(latestJobState?.stage||"—")' in ui
-          print("Cloud processor startup/state sequencing + log dedupe contract: PASSED")
+          print("Cloud push processor + V8.8.1 sequencing contract: PASSED")
           PY
 
       - name: V8.8.1 first-pass state preparation smoke test
