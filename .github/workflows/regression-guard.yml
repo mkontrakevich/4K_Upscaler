@@ -2,7 +2,7 @@ name: 4K Upscaler Regression Guard
 
 on:
   push:
-    branches: [main, ui-r8-local-review, ui-r8-single-upload, ui-r8-next-source-plus, fix-container-app-name, ui-r8-log-export, ui-r8-fix-upload-plus-layout, fix-cloud-job-start-generation, fix-container-internal-worker-egress, fix-push-container-jobs, fix-container-job-runner-watchdog, diag-openrouter-generation-failure, fix-review-sync-metadata, fix-review-result-loss-guard, fix-r2-result-sync-buffered]
+    branches: [main, ui-r8-local-review, ui-r8-single-upload, ui-r8-next-source-plus, fix-container-app-name, ui-r8-log-export, ui-r8-fix-upload-plus-layout, fix-cloud-job-start-generation, fix-container-internal-worker-egress, fix-push-container-jobs, fix-container-job-runner-watchdog, diag-openrouter-generation-failure, fix-review-sync-metadata, fix-review-result-loss-guard, fix-r2-result-sync-buffered, fix-release-processing-slot-on-review]
   workflow_dispatch:
 
 jobs:
@@ -366,6 +366,55 @@ jobs:
           assert 'утверждение заблокировано' in ui
           assert 'result_sync_failed' in ui
           print("Buffered RESULT sync + rejected review contract: PASSED")
+          PY
+
+      - name: Human review releases processing slot
+        run: |
+          python - <<'PY'
+          import ast
+          from pathlib import Path
+
+          source = Path("cloud_processor_service.py").read_text(encoding="utf-8")
+          tree = ast.parse(source)
+
+          funcs = {n.name: n for n in tree.body if isinstance(n, ast.FunctionDef)}
+          process = funcs["_process_job"]
+          runner = funcs["_runner_entry"]
+
+          def lock_with_nodes(fn):
+              out = []
+              for node in ast.walk(fn):
+                  if not isinstance(node, ast.With):
+                      continue
+                  text = ast.get_source_segment(source, node.items[0].context_expr) or ""
+                  if "_PROCESSING_LOCK" in text:
+                      out.append(node)
+              return out
+
+          process_locks = lock_with_nodes(process)
+          runner_locks = lock_with_nodes(runner)
+          assert not runner_locks, "_runner_entry must never own the processing slot for the full job lifecycle"
+          assert len(process_locks) >= 3, "Expected compute, reject and approve processing-slot sections"
+
+          wait_calls = [
+              node for node in ast.walk(process)
+              if isinstance(node, ast.Call)
+              and isinstance(node.func, ast.Name)
+              and node.func.id == "_wait_for_decision"
+          ]
+          assert len(wait_calls) == 1
+          wait_line = wait_calls[0].lineno
+          assert all(not (node.lineno <= wait_line <= node.end_lineno) for node in process_locks),               "Human review wait must be outside every processing lock"
+
+          source_received = source.index('stage="source_received"')
+          waiting_slot = source.index('stage="waiting_for_processing_slot"')
+          decision = source.index('decision = _wait_for_decision(job_id)')
+          approve_wait = source.index('stage="operator_approve_waiting_slot"')
+          reject_wait = source.index('stage="operator_reject_waiting_slot"')
+          assert waiting_slot < source_received < decision
+          assert decision < reject_wait and decision < approve_wait
+          assert '"processing_slot_locked": _PROCESSING_LOCK.locked()' in source
+          print("Human review processing-slot release contract: PASSED")
           PY
 
       - name: V8.8.1 first-pass state preparation smoke test

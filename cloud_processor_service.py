@@ -92,97 +92,119 @@ def _wait_for_decision(job_id: str) -> str:
 
 
 def _process_job(job_id: str) -> None:
+    job_dir = JOBS_ROOT / job_id
+    source_dir = job_dir / "source"
+    log_file = job_dir / "bridge_pipeline.log"
+
     try:
         with _STATE_LOCK:
             job = dict(_JOBS[job_id])
 
-        job_dir = JOBS_ROOT / job_id
-        source_dir = job_dir / "source"
-        log_file = job_dir / "bridge_pipeline.log"
         source_path = Path(str(job.get("source_path") or ""))
         if not source_path.is_file():
             raise RuntimeError(f"Container source is missing: {source_path}")
 
-        _set_state(job_id, status="processing", stage="source_received", progress=15, error=None)
         env = bridge.pipeline_env(source_dir, job)
 
-        _set_state(job_id, status="processing", stage="prepare_generation_state", progress=20)
-        init_rc = bridge.run_pipeline(["--limit", "1"], env, log_file)
-        active = bridge.active_state(source_dir)
-        status = str(active.get("status") or "")
-        if status != "AWAITING_EXPLICIT_DONOR_GENERATION":
-            raise RuntimeError(
-                "Pipeline preparation did not reach AWAITING_EXPLICIT_DONOR_GENERATION. "
-                f"exit={init_rc}; state={status or 'unknown'}"
-            )
-
-        _set_state(job_id, status="processing", stage="nano_banana_generation", progress=24)
-        generation_rc = bridge.run_pipeline(
-            ["--limit", "1", "--force-generation", "--donor-only", "--auto-generate-current"],
-            env,
-            log_file,
+        # Only compute-heavy pipeline phases are serialized. Human review must
+        # never hold the processing slot, otherwise one image waiting for an
+        # operator decision blocks every later image at runner_started.
+        _set_state(
+            job_id,
+            status="processing",
+            stage="waiting_for_processing_slot",
+            progress=13,
+            error=None,
         )
-        active = bridge.active_state(source_dir)
-        status = str(active.get("status") or "")
-        if generation_rc not in {0, 3, 4, 5, 7}:
-            tail = _safe_pipeline_tail(log_file)
-            _set_state(job_id, diagnostic_excerpt=tail)
-            raise RuntimeError(
-                "Nano Banana generation subprocess failed. "
-                f"exit={generation_rc}; state={status or 'unknown'}"
-                + (f" | pipeline_tail: {tail[-1800:]}" if tail else "")
-            )
+        with _PROCESSING_LOCK:
+            _set_state(job_id, status="processing", stage="source_received", progress=15, error=None)
 
-        if status == "AWAITING_RAW_REVIEW":
-            _set_state(job_id, status="processing", stage="arch_lock_validation", progress=55)
-            bridge.run_pipeline(["--limit", "1", "--force-processing"], env, log_file)
+            _set_state(job_id, status="processing", stage="prepare_generation_state", progress=20)
+            init_rc = bridge.run_pipeline(["--limit", "1"], env, log_file)
             active = bridge.active_state(source_dir)
             status = str(active.get("status") or "")
+            if status != "AWAITING_EXPLICIT_DONOR_GENERATION":
+                raise RuntimeError(
+                    "Pipeline preparation did not reach AWAITING_EXPLICIT_DONOR_GENERATION. "
+                    f"exit={init_rc}; state={status or 'unknown'}"
+                )
 
-        if status == "AWAITING_EXPLICIT_DONOR_GENERATION":
-            _set_state(job_id, status="processing", stage="replacement_generation", progress=34)
-            bridge.run_pipeline(
-                [
-                    "--limit", "1", "--force-generation", "--donor-only",
-                    "--auto-generate-current", "--authorize-replacement-donor",
-                ],
+            _set_state(job_id, status="processing", stage="nano_banana_generation", progress=24)
+            generation_rc = bridge.run_pipeline(
+                ["--limit", "1", "--force-generation", "--donor-only", "--auto-generate-current"],
                 env,
                 log_file,
             )
             active = bridge.active_state(source_dir)
             status = str(active.get("status") or "")
+            if generation_rc not in {0, 3, 4, 5, 7}:
+                tail = _safe_pipeline_tail(log_file)
+                _set_state(job_id, diagnostic_excerpt=tail)
+                raise RuntimeError(
+                    "Nano Banana generation subprocess failed. "
+                    f"exit={generation_rc}; state={status or 'unknown'}"
+                    + (f" | pipeline_tail: {tail[-1800:]}" if tail else "")
+                )
+
             if status == "AWAITING_RAW_REVIEW":
                 _set_state(job_id, status="processing", stage="arch_lock_validation", progress=55)
                 bridge.run_pipeline(["--limit", "1", "--force-processing"], env, log_file)
                 active = bridge.active_state(source_dir)
                 status = str(active.get("status") or "")
 
-        candidate = bridge.candidate_path(active)
-        if not candidate:
-            raise RuntimeError(
-                "Pipeline did not produce a reviewable candidate. "
-                f"Current state: {status or 'unknown'}. See {log_file}"
+            if status == "AWAITING_EXPLICIT_DONOR_GENERATION":
+                _set_state(job_id, status="processing", stage="replacement_generation", progress=34)
+                bridge.run_pipeline(
+                    [
+                        "--limit", "1", "--force-generation", "--donor-only",
+                        "--auto-generate-current", "--authorize-replacement-donor",
+                    ],
+                    env,
+                    log_file,
+                )
+                active = bridge.active_state(source_dir)
+                status = str(active.get("status") or "")
+                if status == "AWAITING_RAW_REVIEW":
+                    _set_state(job_id, status="processing", stage="arch_lock_validation", progress=55)
+                    bridge.run_pipeline(["--limit", "1", "--force-processing"], env, log_file)
+                    active = bridge.active_state(source_dir)
+                    status = str(active.get("status") or "")
+
+            candidate = bridge.candidate_path(active)
+            if not candidate:
+                raise RuntimeError(
+                    "Pipeline did not produce a reviewable candidate. "
+                    f"Current state: {status or 'unknown'}. See {log_file}"
+                )
+
+            validation = bridge.report_validation(active)
+            _set_state(
+                job_id,
+                status="review",
+                stage="awaiting_approval",
+                progress=90,
+                validation=validation,
+                result_path=str(candidate),
+                error=None,
             )
 
-        validation = bridge.report_validation(active)
-        _set_state(
-            job_id,
-            status="review",
-            stage="awaiting_approval",
-            progress=90,
-            validation=validation,
-            result_path=str(candidate),
-            error=None,
-        )
-
+        # IMPORTANT: no processing lock is held while a person reviews RESULT.
         decision = _wait_for_decision(job_id)
+
         if decision == "skip":
             _set_state(job_id, status="skipped", stage="skipped_by_user", progress=100)
             return
 
         if decision == "reject":
-            _set_state(job_id, status="processing", stage="operator_reject", progress=96)
-            bridge.run_pipeline(["--reject-final"], env, log_file)
+            _set_state(
+                job_id,
+                status="processing",
+                stage="operator_reject_waiting_slot",
+                progress=95,
+            )
+            with _PROCESSING_LOCK:
+                _set_state(job_id, status="processing", stage="operator_reject", progress=96)
+                bridge.run_pipeline(["--reject-final"], env, log_file)
             _set_state(
                 job_id,
                 status="failed",
@@ -192,14 +214,22 @@ def _process_job(job_id: str) -> None:
             )
             return
 
-        _set_state(job_id, status="processing", stage="operator_approve", progress=96)
-        approve_rc = bridge.run_pipeline(["--approve-final"], env, log_file)
-        active = bridge.active_state(source_dir)
-        final = bridge.candidate_path(active) or candidate
-        if approve_rc not in {0, 6} or not final.is_file():
-            raise RuntimeError(
-                f"FINAL approval failed. exit={approve_rc}; candidate={final}"
-            )
+        _set_state(
+            job_id,
+            status="processing",
+            stage="operator_approve_waiting_slot",
+            progress=95,
+        )
+        with _PROCESSING_LOCK:
+            _set_state(job_id, status="processing", stage="operator_approve", progress=96)
+            approve_rc = bridge.run_pipeline(["--approve-final"], env, log_file)
+            active = bridge.active_state(source_dir)
+            final = bridge.candidate_path(active) or candidate
+            if approve_rc not in {0, 6} or not final.is_file():
+                raise RuntimeError(
+                    f"FINAL approval failed. exit={approve_rc}; candidate={final}"
+                )
+
         _set_state(
             job_id,
             status="done",
@@ -223,6 +253,7 @@ def _process_job(job_id: str) -> None:
             "pipeline_log": str(log_file),
         }
         diag_path = job_dir / "failure.json"
+        diag_path.parent.mkdir(parents=True, exist_ok=True)
         diag_path.write_text(json.dumps(diagnostic, ensure_ascii=False, indent=2), encoding="utf-8")
         tail = _safe_pipeline_tail(log_file)
         _set_state(
@@ -237,8 +268,7 @@ def _process_job(job_id: str) -> None:
 def _runner_entry(job_id: str) -> None:
     try:
         _set_state(job_id, stage="runner_started", progress=12, runner_started_at=time.time())
-        with _PROCESSING_LOCK:
-            _process_job(job_id)
+        _process_job(job_id)
     except Exception as exc:
         detail = f"{type(exc).__name__}: {exc}"
         try:
@@ -305,6 +335,7 @@ class ProcessorHandler(BaseHTTPRequestHandler):
                 "persistent_user_database": False,
                 "transport": "worker-push-runner-watchdog",
                 "active_runners": sum(1 for thread in _RUNNERS.values() if thread.is_alive()),
+                "processing_slot_locked": _PROCESSING_LOCK.locked(),
             })
             return
 
