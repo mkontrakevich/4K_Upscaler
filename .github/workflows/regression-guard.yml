@@ -417,6 +417,30 @@ jobs:
           print("Human review processing-slot release contract: PASSED")
           PY
 
+      - name: 10-minute refresh history contract
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          worker = Path("src/worker.js").read_text(encoding="utf-8")
+          ui = Path("site/index.html").read_text(encoding="utf-8")
+
+          assert "const SESSION_TTL = 60 * 10;" in worker
+          assert 'const jobSourceMatch = path.match(/^\\/api\\/jobs\\/([0-9a-f-]+)\\/source$/i);' in worker
+          assert 'if (!await authorizeJob(request, url, job))' in worker
+          assert 'env.TEMP_BUFFER_R7.get(job.source_key)' in worker
+
+          assert 'const HISTORY_TTL_MS=10*60*1000;' in ui
+          assert 'sessionStorage.setItem(HISTORY_KEY' in ui
+          assert 'sessionStorage.getItem(HISTORY_KEY)' in ui
+          assert 'async function restoreSessionHistory()' in ui
+          assert 'new File([blob]' in ui
+          assert 'await selectSource(index);' in ui
+          assert 'window.addEventListener("pagehide",()=>persistSessionHistory())' in ui
+          assert 'История восстановлена после обновления страницы. Хранение — 10 минут.' in ui
+          assert 'window.addEventListener("pagehide",finishCloudSession)' not in ui
+          print("10-minute refresh history contract: PASSED")
+          PY
+
       - name: V8.8.1 first-pass state preparation smoke test
         run: |
           python - <<'PY'
