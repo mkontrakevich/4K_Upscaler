@@ -230,6 +230,40 @@ jobs:
           print("Cloud push processor + V8.8.1 sequencing contract: PASSED")
           PY
 
+      - name: Container job runner watchdog smoke test
+        run: |
+          python - <<'PY'
+          import os, tempfile, time
+          root = tempfile.mkdtemp(prefix="mg4k-runner-")
+          os.environ["MG4K_JOBS_ROOT"] = root
+          import cloud_processor_service as svc
+
+          observed = []
+          def fake_process(job_id):
+              observed.append(job_id)
+              svc._set_state(job_id, status="processing", stage="fake_processing", progress=20)
+
+          svc._process_job = fake_process
+          svc._JOBS["job-watchdog"] = {
+              "id": "job-watchdog",
+              "status": "queued",
+              "stage": "container_job_received",
+              "progress": 10,
+          }
+          assert svc._ensure_job_runner("job-watchdog") is True
+          deadline = time.time() + 5
+          while time.time() < deadline:
+              state = svc._public_state("job-watchdog")
+              if state and state["stage"] == "fake_processing":
+                  break
+              time.sleep(0.05)
+          state = svc._public_state("job-watchdog")
+          assert observed == ["job-watchdog"], observed
+          assert state["status"] == "processing", state
+          assert state["stage"] == "fake_processing", state
+          print("Container job runner watchdog: PASSED")
+          PY
+
       - name: V8.8.1 first-pass state preparation smoke test
         run: |
           python - <<'PY'
