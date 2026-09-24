@@ -89,13 +89,12 @@ def ensure_pairing() -> str:
 
     static_token = os.environ.get("MG4K_PROCESSOR_TOKEN", "").strip()
     if static_token:
-        if paired(static_token):
-            print("[CLOUD] Static processor token accepted. Processor is online.")
-            return static_token
-        raise RuntimeError(
-            "MG4K_PROCESSOR_TOKEN was provided but Cloudflare rejected it. "
-            "No interactive pairing was attempted."
-        )
+        # The token is injected by the same Worker that authorizes processor calls.
+        # Do not make a separate startup self-request here: on a cold container this
+        # extra round-trip can race Worker/container readiness. The first claim
+        # request remains the authoritative authentication check.
+        print("[CLOUD] Static processor token loaded. Authentication will be verified on claim.")
+        return static_token
 
     saved = load_json(BRIDGE_STATE, {}) or {}
     existing = str(saved.get("token", "")).strip()
@@ -296,8 +295,22 @@ def process_job(token: str, job: dict[str, Any]) -> None:
         print(f"[CLOUD] Job {job_id[:8]} source: {source}")
 
         env = pipeline_env(source_dir, job)
+
+        # The local V8.8.1 master intentionally requires a non-paid first pass
+        # before any automatic donor generation. That pass creates the current
+        # source state and moves it to AWAITING_EXPLICIT_DONOR_GENERATION.
+        progress(token, job_id, 20, "prepare_generation_state")
+        init_rc = run_pipeline(["--limit", "1"], env, log_file)
+        active = active_state(source_dir)
+        status = str(active.get("status") or "")
+        if status != "AWAITING_EXPLICIT_DONOR_GENERATION":
+            raise RuntimeError(
+                "Pipeline preparation did not reach AWAITING_EXPLICIT_DONOR_GENERATION. "
+                f"exit={init_rc}; state={status or 'unknown'}"
+            )
+
         progress(token, job_id, 24, "nano_banana_generation")
-        run_pipeline(
+        generation_rc = run_pipeline(
             ["--limit", "1", "--force-generation", "--donor-only", "--auto-generate-current"],
             env,
             log_file,
@@ -305,6 +318,11 @@ def process_job(token: str, job: dict[str, Any]) -> None:
 
         active = active_state(source_dir)
         status = str(active.get("status") or "")
+        if generation_rc not in {0, 3, 4, 5, 7}:
+            raise RuntimeError(
+                "Nano Banana generation subprocess failed. "
+                f"exit={generation_rc}; state={status or 'unknown'}"
+            )
 
         if status == "AWAITING_RAW_REVIEW":
             progress(token, job_id, 55, "arch_lock_validation")
@@ -403,6 +421,11 @@ def main() -> int:
         try:
             r = api("POST", "/api/processor/claim", token)
             if r.status_code in {401, 403, 428}:
+                if os.environ.get("MG4K_PROCESSOR_TOKEN", "").strip():
+                    raise RuntimeError(
+                        f"Static processor authorization failed with HTTP {r.status_code}. "
+                        "Verify PROCESSOR_SHARED_SECRET deployment."
+                    )
                 print("[CLOUD] Pairing is no longer valid; re-pairing.")
                 try:
                     BRIDGE_STATE.unlink(missing_ok=True)

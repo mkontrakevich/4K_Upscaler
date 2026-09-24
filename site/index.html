@@ -340,6 +340,7 @@ let locks=JSON.parse(localStorage.getItem("mg4k.lockProfile")||"null")||Object.f
 let currentFile=null,currentObjectUrl=null,currentJob=null,cloudSession=null,sessionStartPromise=null,heartbeatTimer=null,jobPollTimer=null;
 let resultObjectUrl=null,viewerBlinkTimer=null;
 let sourceItems=[],currentSourceIndex=-1;
+let latestJobState=null,lastStatusSignature="";
 
 function log(level,text){
   const now=new Date().toLocaleTimeString("ru-RU",{hour12:false});
@@ -362,9 +363,10 @@ function logExportText(){
     "Job: "+(currentJob?.id||"—"),
     "Source: "+(item?.file?.name||currentFile?.name||"—"),
     "Queue: "+(sourceItems.length?(currentSourceIndex+1)+"/"+sourceItems.length:"—"),
-    "Status: "+($("analysis-status")?.textContent||"—"),
-    "Progress: "+($("analysis-progress")?.textContent||$("progress-label")?.textContent||"—"),
-    "ARCH LOCK: "+($("analysis-validation")?.textContent||"—"),
+    "Status: "+(latestJobState?.status||$("analysis-status")?.textContent||"—"),
+    "Stage: "+(latestJobState?.stage||"—"),
+    "Progress: "+(latestJobState?.progress!=null?latestJobState.progress+"%":($("analysis-progress")?.textContent||$("progress-label")?.textContent||"—")),
+    "ARCH LOCK: "+(latestJobState?.validation?.decision||$("analysis-validation")?.textContent||"—"),
     "Locks: "+JSON.stringify(locks),
     "",
     "PROCESS LOG"
@@ -395,7 +397,14 @@ function saveProcessLog(){
 }
 function humanSize(bytes){if(!bytes)return"0 B";const u=["B","KB","MB","GB"];let i=Math.min(u.length-1,Math.floor(Math.log(bytes)/Math.log(1024)));return(bytes/Math.pow(1024,i)).toFixed(i?1:0)+" "+u[i]}
 function setProgress(n,label){n=Math.max(0,Math.min(100,Number(n||0)));$("progress-bar").style.width=n+"%";$("progress-label").textContent=label||n+"%"}
-function setStatus(text,level="info"){ $("status-text").textContent=text; log(level,text); }
+function setStatus(text,level="info",forceLog=false){
+  $("status-text").textContent=text;
+  const signature=level+"|"+text;
+  if(forceLog||signature!==lastStatusSignature){
+    log(level,text);
+    lastStatusSignature=signature;
+  }
+}
 
 function renderLocks(){
   $("lock-list").innerHTML=defaults.map(item=>'<div class="lock-row"><div class="lock-name"><strong>'+item.name+'</strong><small>'+item.hint+'</small></div><div class="segmented" data-lock="'+item.id+'">'+["hard","soft","free"].map(level=>'<button type="button" data-level="'+level+'" class="'+(locks[item.id]===level?"active":"")+'">'+level.toUpperCase()+'</button>').join("")+'</div></div>').join("");
@@ -529,6 +538,7 @@ function showResult(state,mode="review"){
 }
 function renderJobState(state){
   if(!state)return null;
+  latestJobState=state;
   rememberCurrentItem(state);
   const p=Number(state.progress||0),stage=state.stage||state.status||"queued";
   setProgress(p,p+"%");
@@ -642,7 +652,7 @@ async function prepareJob(forceNew=false){
   if(forceNew&&!(await releaseReviewForRegeneration()))return;
   if(!confirmPaidGeneration())return;
 
-  currentJob=null;resetResult();setReviewActions();
+  currentJob=null;latestJobState=null;resetResult();setReviewActions();
   $("action-process").disabled=true;$("mobile-process").disabled=true;$("action-process").textContent="Загрузка…";$("mobile-process").textContent="Загрузка…";
   setStatus("Передаю исходник и LOCK-профиль во временную очередь Cloudflare…");
 
