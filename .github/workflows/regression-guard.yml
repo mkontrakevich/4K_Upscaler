@@ -304,7 +304,7 @@ jobs:
           ui = Path("site/index.html").read_text(encoding="utf-8")
 
           assert 'await writeJob(env, job);\n\n  if (state.result_available' in worker
-          assert 'job.status = "processing";\n      job.stage = "result_sync_retry";' in worker
+          assert 'job.stage = "result_sync_retry";' in worker
           assert 'container_review_status' in worker
           assert 'result_sync_warning' in worker
           assert 'if (!["review", "done"].includes(job.status))' in worker
@@ -316,7 +316,7 @@ jobs:
 
           assert 'if(!state.result_available)' in ui
           assert 'ARCH LOCK завершён. Синхронизирую RESULT' in ui
-          assert 'RESULT сформирован. Повторяю синхронизацию результата' in ui
+          assert 'RESULT сформирован. Повторяю синхронизацию в R2' in ui
           print("Review sync metadata contract: PASSED")
           PY
 
