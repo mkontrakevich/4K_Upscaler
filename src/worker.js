@@ -261,6 +261,137 @@ async function ensureCloudProcessor(env, origin) {
   return container;
 }
 
+
+function applyContainerState(job, state) {
+  if (!state) return job;
+  if (state.status) job.status = String(state.status);
+  if (state.stage) job.stage = String(state.stage);
+  if (state.progress !== undefined) job.progress = Math.max(0, Math.min(100, Number(state.progress || 0)));
+  if (state.error !== undefined) job.error = state.error || null;
+  if (state.validation !== undefined) job.validation = state.validation || null;
+  if (state.decision !== undefined) job.decision = state.decision || null;
+  job.container_result_available = Boolean(state.result_available);
+  job.container_synced_at = now();
+  return job;
+}
+
+async function storeContainerResult(env, container, job) {
+  const response = await container.fetch(new Request(`http://container/jobs/${job.id}/result`));
+  if (!response.ok) {
+    throw new Error(`container_result_http_${response.status}`);
+  }
+  const resultName = cleanName(response.headers.get("x-mg4k-filename") || `4K_${job.filename}`);
+  const resultKey = `sessions/${job.session_id}/jobs/${job.id}/result/${resultName}`;
+  if (job.result_key && job.result_key !== resultKey) {
+    try { await env.TEMP_BUFFER_R7.delete(job.result_key); } catch {}
+  }
+  await env.TEMP_BUFFER_R7.put(resultKey, response.body, {
+    httpMetadata: { contentType: response.headers.get("content-type") || "image/jpeg" },
+    customMetadata: {
+      session_id: job.session_id,
+      job_id: job.id,
+      kind: "result",
+      original_name: resultName,
+    },
+  });
+  job.result_key = resultKey;
+  return job;
+}
+
+async function dispatchJobToContainer(env, job, origin) {
+  const container = await ensureCloudProcessor(env, origin);
+  const source = await env.TEMP_BUFFER_R7.get(job.source_key);
+  if (!source) {
+    throw new Error("source_missing_before_container_dispatch");
+  }
+  const bytes = await source.arrayBuffer();
+  const headers = new Headers({
+    "content-type": job.content_type || "application/octet-stream",
+    "x-mg4k-filename": encodeURIComponent(job.filename),
+    "x-mg4k-locks": JSON.stringify(job.locks || {}),
+    "x-mg4k-mode": job.mode || "generative",
+    "x-mg4k-source-size": String(bytes.byteLength),
+  });
+  const response = await container.fetch(new Request(
+    `http://container/jobs/${job.id}/start`,
+    { method: "POST", headers, body: bytes },
+  ));
+  const state = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(state.error || `container_dispatch_http_${response.status}`);
+  }
+  job.container_dispatched = true;
+  job.container_dispatched_at = now();
+  applyContainerState(job, state);
+  await writeJob(env, job);
+  return { job, container };
+}
+
+async function syncJobFromContainer(env, job, origin) {
+  let container = getContainer(env.MG4K_PROCESSOR, "primary");
+
+  const needsDispatch = !job.container_dispatched
+    || (job.status === "queued" && [
+      "uploaded",
+      "processor_starting",
+      "processor_ready_waiting_claim",
+      "container_dispatch_pending",
+    ].includes(String(job.stage || "")));
+
+  if (needsDispatch) {
+    return (await dispatchJobToContainer(env, job, origin)).job;
+  }
+
+  let response;
+  try {
+    response = await container.fetch(new Request(`http://container/jobs/${job.id}/status`));
+  } catch {
+    container = await ensureCloudProcessor(env, origin);
+    response = await container.fetch(new Request(`http://container/jobs/${job.id}/status`));
+  }
+
+  if (response.status === 404) {
+    job.container_dispatched = false;
+    job.stage = "container_dispatch_pending";
+    job.progress = Math.max(Number(job.progress || 0), 8);
+    await writeJob(env, job);
+    return (await dispatchJobToContainer(env, job, origin)).job;
+  }
+
+  const state = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(state.error || `container_status_http_${response.status}`);
+  }
+
+  const hadResult = Boolean(job.result_key);
+  const previousStatus = job.status;
+  applyContainerState(job, state);
+
+  if (state.result_available && (!hadResult || (state.status === "done" && previousStatus !== "done"))) {
+    await storeContainerResult(env, container, job);
+  }
+
+  await writeJob(env, job);
+  return job;
+}
+
+async function sendContainerDecision(env, job, action) {
+  const container = getContainer(env.MG4K_PROCESSOR, "primary");
+  const response = await container.fetch(new Request(
+    `http://container/jobs/${job.id}/decision`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ action }),
+    },
+  ));
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload.error || `container_decision_http_${response.status}`);
+  }
+  return payload;
+}
+
 MG4KProcessor.outboundByHost = {
   "mg4k.worker": async (request, env) => {
     const url = new URL(request.url);
@@ -406,22 +537,14 @@ async function handleApi(request, env, ctx, url) {
         starting.stage = "processor_starting";
         starting.progress = Math.max(Number(starting.progress || 0), 6);
         await writeJob(env, starting);
-      }
-
-      await ensureCloudProcessor(env, url.origin);
-
-      const ready = await readJob(env, id);
-      if (ready && ready.status === "queued") {
-        ready.stage = "processor_ready_waiting_claim";
-        ready.progress = Math.max(Number(ready.progress || 0), 8);
-        await writeJob(env, ready);
+        await dispatchJobToContainer(env, starting, url.origin);
       }
     } catch (error) {
-      console.error("MG4K_PROCESSOR_START_FAILED", error);
+      console.error("MG4K_CONTAINER_DISPATCH_FAILED", error);
       const current = await readJob(env, id);
-      if (current && current.status === "queued") {
+      if (current && ["queued", "processing"].includes(current.status)) {
         current.status = "failed";
-        current.stage = "processor_start_failed";
+        current.stage = "container_dispatch_failed";
         current.error = error?.message || String(error);
         await writeJob(env, current);
       }
@@ -439,9 +562,19 @@ async function handleApi(request, env, ctx, url) {
 
   const jobStatusMatch = path.match(/^\/api\/jobs\/([0-9a-f-]+)$/i);
   if (jobStatusMatch && method === "GET") {
-    const job = await readJob(env, jobStatusMatch[1]);
+    let job = await readJob(env, jobStatusMatch[1]);
     if (!job) return json({ error: "job_not_found" }, 404);
     if (!await authorizeJob(request, url, job)) return json({ error: "forbidden" }, 403);
+    if (!["done", "failed", "skipped"].includes(job.status)) {
+      try {
+        job = await syncJobFromContainer(env, job, url.origin);
+      } catch (error) {
+        console.error("MG4K_CONTAINER_SYNC_FAILED", job.id, error);
+        job.stage = "container_sync_retry";
+        job.error = error?.message || String(error);
+        await writeJob(env, job);
+      }
+    }
     return json(publicJob(job));
   }
 
@@ -455,6 +588,11 @@ async function handleApi(request, env, ctx, url) {
     try { body = await request.json(); } catch {}
     const action = String(body.action || "").toLowerCase();
     if (!["approve", "reject", "skip"].includes(action)) return json({ error: "invalid_decision" }, 400);
+    try {
+      await sendContainerDecision(env, job, action);
+    } catch (error) {
+      return json({ error: "container_decision_failed", message: error?.message || String(error) }, 502);
+    }
     job.decision = action;
     job.status = "decision_pending";
     job.stage = action === "approve" ? "approval_sent" : action === "reject" ? "rejection_sent" : "skip_sent";
@@ -465,9 +603,12 @@ async function handleApi(request, env, ctx, url) {
 
   const jobResultMatch = path.match(/^\/api\/jobs\/([0-9a-f-]+)\/result$/i);
   if (jobResultMatch && method === "GET") {
-    const job = await readJob(env, jobResultMatch[1]);
+    let job = await readJob(env, jobResultMatch[1]);
     if (!job) return json({ error: "job_not_found" }, 404);
     if (!await authorizeJob(request, url, job)) return json({ error: "forbidden" }, 403);
+    if (!job.result_key && !["failed", "skipped"].includes(job.status)) {
+      try { job = await syncJobFromContainer(env, job, url.origin); } catch {}
+    }
     if (!job.result_key) return json({ error: "result_not_ready", status: job.status }, 409);
 
     const object = await env.TEMP_BUFFER_R7.get(job.result_key);
