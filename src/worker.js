@@ -104,6 +104,9 @@ function publicJob(job) {
     error: job.error || null,
     diagnostic_excerpt: job.diagnostic_excerpt || null,
     result_sync_warning: job.result_sync_warning || null,
+    result_sync_attempts: Number(job.result_sync_attempts || 0),
+    result_bytes: Number(job.result_bytes || 0),
+    result_content_type: job.result_content_type || null,
     manual_retry_required: Boolean(job.manual_retry_required),
     validation: job.validation || null,
     decision: job.decision || null,
@@ -282,23 +285,48 @@ function applyContainerState(job, state) {
 async function storeContainerResult(env, container, job) {
   const response = await container.fetch(new Request(`http://container/jobs/${job.id}/result`));
   if (!response.ok) {
-    throw new Error(`container_result_http_${response.status}`);
+    let detail = "";
+    try { detail = (await response.text()).slice(0, 500); } catch {}
+    throw new Error(`container_result_http_${response.status}${detail ? ":" + detail : ""}`);
   }
+
   const resultName = cleanName(response.headers.get("x-mg4k-filename") || `4K_${job.filename}`);
+  const contentType = response.headers.get("content-type") || "image/jpeg";
+  const declaredBytes = Number(response.headers.get("content-length") || 0);
+
+  // Buffer the Container response before R2. This avoids keeping a cross-runtime
+  // response stream open while R2 consumes it and gives us deterministic size
+  // validation and diagnostics.
+  const bytes = await response.arrayBuffer();
+  const actualBytes = bytes.byteLength;
+  if (!actualBytes) {
+    throw new Error("container_result_empty");
+  }
+  if (declaredBytes > 0 && declaredBytes !== actualBytes) {
+    throw new Error(`container_result_size_mismatch:declared=${declaredBytes}:actual=${actualBytes}`);
+  }
+
   const resultKey = `sessions/${job.session_id}/jobs/${job.id}/result/${resultName}`;
   if (job.result_key && job.result_key !== resultKey) {
     try { await env.TEMP_BUFFER_R7.delete(job.result_key); } catch {}
   }
-  await env.TEMP_BUFFER_R7.put(resultKey, response.body, {
-    httpMetadata: { contentType: response.headers.get("content-type") || "image/jpeg" },
+
+  await env.TEMP_BUFFER_R7.put(resultKey, bytes, {
+    httpMetadata: { contentType },
     customMetadata: {
       session_id: job.session_id,
       job_id: job.id,
       kind: "result",
       original_name: resultName,
+      bytes: String(actualBytes),
     },
   });
+
   job.result_key = resultKey;
+  job.result_bytes = actualBytes;
+  job.result_content_type = contentType;
+  job.result_sync_attempts = 0;
+  job.result_sync_warning = null;
   return job;
 }
 
@@ -414,11 +442,21 @@ async function syncJobFromContainer(env, job, origin) {
       await writeJob(env, job);
     } catch (error) {
       job.container_review_status = String(state.status || job.status || "");
-      job.status = "processing";
-      job.stage = "result_sync_retry";
-      job.progress = Math.min(89, Math.max(1, Number(state.progress || job.progress || 0)));
+      job.result_sync_attempts = Number(job.result_sync_attempts || 0) + 1;
       job.result_sync_warning = error?.message || String(error);
       job.error = null;
+
+      if (job.result_sync_attempts >= 5) {
+        job.status = "failed";
+        job.stage = "result_sync_failed";
+        job.manual_retry_required = true;
+        job.progress = Math.min(89, Math.max(1, Number(state.progress || job.progress || 0)));
+        job.error = "RESULT was generated but could not be copied to R2 after 5 attempts. Paid regeneration was not started.";
+      } else {
+        job.status = "processing";
+        job.stage = "result_sync_retry";
+        job.progress = Math.min(89, Math.max(1, Number(state.progress || job.progress || 0)));
+      }
       await writeJob(env, job);
     }
   }
