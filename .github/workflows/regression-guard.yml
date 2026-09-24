@@ -2,7 +2,7 @@ name: 4K Upscaler Regression Guard
 
 on:
   push:
-    branches: [main, ui-r8-local-review, ui-r8-single-upload, ui-r8-next-source-plus, fix-container-app-name, ui-r8-log-export, ui-r8-fix-upload-plus-layout]
+    branches: [main, ui-r8-local-review, ui-r8-single-upload, ui-r8-next-source-plus, fix-container-app-name, ui-r8-log-export, ui-r8-fix-upload-plus-layout, fix-cloud-job-start-generation]
   workflow_dispatch:
 
 jobs:
@@ -176,6 +176,67 @@ jobs:
           assert '"skipped_by_user"' in bridge
           assert '"status": "skipped"' in bridge
           print("Cloud skip backend contract: PASSED")
+          PY
+
+      - name: Cloud processor startup and generation-state contract
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          worker = Path("src/worker.js").read_text(encoding="utf-8")
+          bridge = Path("cloudflare_bridge.py").read_text(encoding="utf-8")
+          ui = Path("site/index.html").read_text(encoding="utf-8")
+
+          assert 'await ensureCloudProcessor(env, url.origin);' in worker
+          start_pos = worker.index('await ensureCloudProcessor(env, url.origin);')
+          wait_until_pos = worker.find('ctx.waitUntil', max(0, start_pos - 2000), start_pos + 2000)
+          assert wait_until_pos == -1, "Processor startup must not be delegated to waitUntil"
+          assert '"processor_starting"' in worker
+          assert '"processor_ready_waiting_claim"' in worker
+
+          assert 'run_pipeline(["--limit", "1"], env, log_file)' in bridge
+          prep = bridge.index('run_pipeline(["--limit", "1"], env, log_file)')
+          paid = bridge.index('"--auto-generate-current"', prep)
+          assert prep < paid, "Non-paid state preparation must happen before paid generation"
+          assert 'AWAITING_EXPLICIT_DONOR_GENERATION' in bridge
+          assert 'Authentication will be verified on claim' in bridge
+
+          assert 'latestJobState=state;' in ui
+          assert 'signature!==lastStatusSignature' in ui
+          assert '"Stage: "+(latestJobState?.stage||"—")' in ui
+          print("Cloud processor startup/state sequencing + log dedupe contract: PASSED")
+          PY
+
+      - name: V8.8.1 first-pass state preparation smoke test
+        run: |
+          python - <<'PY'
+          import json, os, subprocess, sys, tempfile
+          from pathlib import Path
+          from PIL import Image
+
+          root = Path(tempfile.mkdtemp(prefix="mg4k-prep-"))
+          Image.new("RGB", (1280, 720), (96, 110, 125)).save(root / "source.jpg", quality=95)
+
+          env = os.environ.copy()
+          env["MG4K_SOURCE"] = str(root)
+          env.pop("OPENROUTER_API_KEY", None)
+
+          proc = subprocess.run(
+              [sys.executable, "v8_safe_appearance.py", "--limit", "1"],
+              env=env,
+              stdout=subprocess.PIPE,
+              stderr=subprocess.STDOUT,
+              text=True,
+              timeout=120,
+          )
+          assert proc.returncode == 5, f"Expected donor-wait exit 5, got {proc.returncode}\n{proc.stdout[-4000:]}"
+
+          # Import with the same source override only after the subprocess completed.
+          os.environ["MG4K_SOURCE"] = str(root)
+          import v8_safe_appearance as v
+          state = json.loads(v.sequential_state_path().read_text(encoding="utf-8"))
+          assert state["active"]["status"] == "AWAITING_EXPLICIT_DONOR_GENERATION", state["active"]
+          assert not list((root / v.CFG["output_folder"] / "02_NANO_BANANA_PRO_RAW").glob("*")), "No paid/raw generation is allowed in preparation"
+          print("V8.8.1 non-paid state preparation: PASSED")
           PY
 
       - name: No paid generation in regression
