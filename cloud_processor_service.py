@@ -11,7 +11,7 @@ import traceback
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote
-from typing import Any
+from typing import Any, Callable
 
 import cloudflare_bridge as bridge
 
@@ -91,7 +91,7 @@ def _wait_for_decision(job_id: str) -> str:
             return decision
 
 
-def _process_job(job_id: str) -> None:
+def _process_job(job_id: str, release_processing_slot: Callable[[], None] | None = None) -> None:
     try:
         with _STATE_LOCK:
             job = dict(_JOBS[job_id])
@@ -175,6 +175,12 @@ def _process_job(job_id: str) -> None:
             error=None,
         )
 
+        # The expensive generation/validation slot must not be held while a
+        # human reviews this candidate. Releasing it here allows the next
+        # source to start processing while this job waits for a decision.
+        if release_processing_slot is not None:
+            release_processing_slot()
+
         decision = _wait_for_decision(job_id)
         if decision == "skip":
             _set_state(job_id, status="skipped", stage="skipped_by_user", progress=100)
@@ -235,10 +241,19 @@ def _process_job(job_id: str) -> None:
 
 
 def _runner_entry(job_id: str) -> None:
+    slot_held = False
+
+    def release_processing_slot() -> None:
+        nonlocal slot_held
+        if slot_held:
+            _PROCESSING_LOCK.release()
+            slot_held = False
+
     try:
         _set_state(job_id, stage="runner_started", progress=12, runner_started_at=time.time())
-        with _PROCESSING_LOCK:
-            _process_job(job_id)
+        _PROCESSING_LOCK.acquire()
+        slot_held = True
+        _process_job(job_id, release_processing_slot=release_processing_slot)
     except Exception as exc:
         detail = f"{type(exc).__name__}: {exc}"
         try:
@@ -251,6 +266,7 @@ def _runner_entry(job_id: str) -> None:
         except Exception:
             pass
     finally:
+        release_processing_slot()
         with _STATE_LOCK:
             _RUNNERS.pop(job_id, None)
 
