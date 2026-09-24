@@ -2,7 +2,7 @@ name: 4K Upscaler Regression Guard
 
 on:
   push:
-    branches: [main, ui-r8-local-review, ui-r8-single-upload, ui-r8-next-source-plus, fix-container-app-name, ui-r8-log-export, ui-r8-fix-upload-plus-layout, fix-cloud-job-start-generation, fix-container-internal-worker-egress, fix-push-container-jobs, fix-container-job-runner-watchdog, diag-openrouter-generation-failure, fix-review-sync-metadata]
+    branches: [main, ui-r8-local-review, ui-r8-single-upload, ui-r8-next-source-plus, fix-container-app-name, ui-r8-log-export, ui-r8-fix-upload-plus-layout, fix-cloud-job-start-generation, fix-container-internal-worker-egress, fix-push-container-jobs, fix-container-job-runner-watchdog, diag-openrouter-generation-failure, fix-review-sync-metadata, fix-review-result-loss-guard]
   workflow_dispatch:
 
 jobs:
@@ -318,6 +318,27 @@ jobs:
           assert 'ARCH LOCK завершён. Синхронизирую RESULT' in ui
           assert 'RESULT сформирован. Повторяю синхронизацию результата' in ui
           print("Review sync metadata contract: PASSED")
+          PY
+
+      - name: Paid redispatch safety contract
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          worker = Path("src/worker.js").read_text(encoding="utf-8")
+          ui = Path("site/index.html").read_text(encoding="utf-8")
+
+          assert 'const preDispatchStages = new Set([' in worker
+          assert 'const needsDispatch = job.status === "queued"' in worker
+          assert '"result_lost_after_container_restart"' in worker
+          assert '"manual_retry_required"' in worker
+          assert 'Automatic regeneration was blocked to prevent a duplicate paid API call.' in worker
+          assert 'Automatic redispatch was blocked to prevent an unintended paid API call.' in worker
+          assert 'manual_retry_required: Boolean(job.manual_retry_required)' in worker
+
+          assert 'RESULT был сформирован, но временный Container перезапустился' in ui
+          assert 'Автоповтор заблокирован' in ui
+          assert 'Регенерировать вручную' in ui
+          print("Paid redispatch safety contract: PASSED")
           PY
 
       - name: V8.8.1 first-pass state preparation smoke test

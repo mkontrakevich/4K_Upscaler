@@ -104,6 +104,7 @@ function publicJob(job) {
     error: job.error || null,
     diagnostic_excerpt: job.diagnostic_excerpt || null,
     result_sync_warning: job.result_sync_warning || null,
+    manual_retry_required: Boolean(job.manual_retry_required),
     validation: job.validation || null,
     decision: job.decision || null,
   };
@@ -333,16 +334,27 @@ async function dispatchJobToContainer(env, job, origin) {
 async function syncJobFromContainer(env, job, origin) {
   let container = getContainer(env.MG4K_PROCESSOR, "primary");
 
-  const needsDispatch = !job.container_dispatched
-    || (job.status === "queued" && [
-      "uploaded",
-      "processor_starting",
-      "processor_ready_waiting_claim",
-      "container_dispatch_pending",
-    ].includes(String(job.stage || "")));
+  const preDispatchStages = new Set([
+    "uploaded",
+    "processor_starting",
+    "processor_ready_waiting_claim",
+    "container_dispatch_pending",
+  ]);
+  const needsDispatch = job.status === "queued"
+    && preDispatchStages.has(String(job.stage || ""))
+    && !job.result_key;
 
   if (needsDispatch) {
     return (await dispatchJobToContainer(env, job, origin)).job;
+  }
+
+  if (!job.container_dispatched && !needsDispatch) {
+    job.status = "failed";
+    job.stage = "manual_retry_required";
+    job.error = "Container state is unavailable. Automatic redispatch is blocked to prevent an unintended paid regeneration.";
+    job.manual_retry_required = true;
+    await writeJob(env, job);
+    return job;
   }
 
   let response;
@@ -355,10 +367,29 @@ async function syncJobFromContainer(env, job, origin) {
 
   if (response.status === 404) {
     job.container_dispatched = false;
-    job.stage = "container_dispatch_pending";
-    job.progress = Math.max(Number(job.progress || 0), 8);
+    const safeToRedispatch = job.status === "queued"
+      && preDispatchStages.has(String(job.stage || ""))
+      && !job.result_key;
+
+    if (safeToRedispatch) {
+      job.stage = "container_dispatch_pending";
+      job.progress = Math.max(Number(job.progress || 0), 8);
+      await writeJob(env, job);
+      return (await dispatchJobToContainer(env, job, origin)).job;
+    }
+
+    const hadReachedReview = job.status === "review"
+      || job.container_review_status === "review"
+      || Number(job.progress || 0) >= 90;
+    job.status = "failed";
+    job.stage = hadReachedReview ? "result_lost_after_container_restart" : "manual_retry_required";
+    job.error = hadReachedReview
+      ? "The generated RESULT is no longer available after the temporary Container restarted. Automatic regeneration was blocked to prevent a duplicate paid API call."
+      : "Container state was lost during processing. Automatic redispatch was blocked to prevent an unintended paid API call.";
+    job.manual_retry_required = true;
+    job.result_key = null;
     await writeJob(env, job);
-    return (await dispatchJobToContainer(env, job, origin)).job;
+    return job;
   }
 
   const state = await response.json().catch(() => ({}));
