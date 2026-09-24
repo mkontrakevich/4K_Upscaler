@@ -2,7 +2,7 @@ name: 4K Upscaler Regression Guard
 
 on:
   push:
-    branches: [main, ui-r8-local-review, ui-r8-single-upload, ui-r8-next-source-plus, fix-container-app-name, ui-r8-log-export]
+    branches: [main, ui-r8-local-review, ui-r8-single-upload, ui-r8-next-source-plus, fix-container-app-name, ui-r8-log-export, ui-r8-fix-upload-plus-layout]
   workflow_dispatch:
 
 jobs:
@@ -156,7 +156,12 @@ jobs:
           for log_control in ['id="log-copy"', 'id="log-save"', "function logExportText()", "function copyProcessLog()", "function saveProcessLog()"]:
               assert log_control in html, f"Missing process log export control: {log_control}"
           assert 'MG4K_LOG_' in html, "Saved log filename contract missing"
-          print("Cloud two-pane Visual Review + queue/skip + log export contract: PASSED")
+          assert '.upload-plus{position:static' in html, "Initial upload plus must stay in document flow"
+          plus_pos = html.index('id="upload-plus"')
+          overlay_pos = html.rfind('id="upload-overlay"', 0, plus_pos)
+          overlay_close = html.index('</div>\n        </div>', plus_pos)
+          assert overlay_pos != -1 and overlay_close != -1, "Upload plus must stay inside upload overlay content"
+          print("Cloud two-pane Visual Review + queue/skip + log export + upload layout contract: PASSED")
           PY
 
       - name: Cloud skip backend contract
