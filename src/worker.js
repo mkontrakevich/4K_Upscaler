@@ -102,6 +102,7 @@ function publicJob(job) {
     stage: job.stage || "queued",
     result_available: Boolean(job.result_key),
     error: job.error || null,
+    diagnostic_excerpt: job.diagnostic_excerpt || null,
     validation: job.validation || null,
     decision: job.decision || null,
   };
@@ -268,6 +269,7 @@ function applyContainerState(job, state) {
   if (state.stage) job.stage = String(state.stage);
   if (state.progress !== undefined) job.progress = Math.max(0, Math.min(100, Number(state.progress || 0)));
   if (state.error !== undefined) job.error = state.error || null;
+  if (state.diagnostic_excerpt !== undefined) job.diagnostic_excerpt = state.diagnostic_excerpt || null;
   if (state.validation !== undefined) job.validation = state.validation || null;
   if (state.decision !== undefined) job.decision = state.decision || null;
   job.container_result_available = Boolean(state.result_available);
