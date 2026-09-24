@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import mimetypes
 import os
-import queue
 import shutil
 import threading
 import time
@@ -23,8 +22,8 @@ JOBS_ROOT.mkdir(parents=True, exist_ok=True)
 _STATE_LOCK = threading.RLock()
 _JOBS: dict[str, dict[str, Any]] = {}
 _DECISION_EVENTS: dict[str, threading.Event] = {}
-_QUEUE: "queue.Queue[str]" = queue.Queue()
-_WORKER_STARTED = False
+_RUNNERS: dict[str, threading.Thread] = {}
+_PROCESSING_LOCK = threading.Lock()
 
 
 def _state_file(job_id: str) -> Path:
@@ -79,15 +78,17 @@ def _wait_for_decision(job_id: str) -> str:
 
 
 def _process_job(job_id: str) -> None:
-    with _STATE_LOCK:
-        job = dict(_JOBS[job_id])
-
-    job_dir = JOBS_ROOT / job_id
-    source_dir = job_dir / "source"
-    log_file = job_dir / "bridge_pipeline.log"
-    source_path = Path(str(job["source_path"]))
-
     try:
+        with _STATE_LOCK:
+            job = dict(_JOBS[job_id])
+
+        job_dir = JOBS_ROOT / job_id
+        source_dir = job_dir / "source"
+        log_file = job_dir / "bridge_pipeline.log"
+        source_path = Path(str(job.get("source_path") or ""))
+        if not source_path.is_file():
+            raise RuntimeError(f"Container source is missing: {source_path}")
+
         _set_state(job_id, status="processing", stage="source_received", progress=15, error=None)
         env = bridge.pipeline_env(source_dir, job)
 
@@ -214,27 +215,50 @@ def _process_job(job_id: str) -> None:
         )
 
 
-def _worker_loop() -> None:
-    while True:
-        job_id = _QUEUE.get()
-        try:
+def _runner_entry(job_id: str) -> None:
+    try:
+        _set_state(job_id, stage="runner_started", progress=12, runner_started_at=time.time())
+        with _PROCESSING_LOCK:
             _process_job(job_id)
-        finally:
-            _QUEUE.task_done()
+    except Exception as exc:
+        detail = f"{type(exc).__name__}: {exc}"
+        try:
+            _set_state(
+                job_id,
+                status="failed",
+                stage="runner_failed",
+                error=detail[:1800],
+            )
+        except Exception:
+            pass
+    finally:
+        with _STATE_LOCK:
+            _RUNNERS.pop(job_id, None)
 
 
-def _ensure_worker() -> None:
-    global _WORKER_STARTED
+def _ensure_job_runner(job_id: str) -> bool:
     with _STATE_LOCK:
-        if _WORKER_STARTED:
-            return
-        thread = threading.Thread(target=_worker_loop, name="mg4k-job-worker", daemon=True)
+        state = _JOBS.get(job_id)
+        if not state:
+            return False
+        if state.get("status") in {"review", "done", "failed", "skipped", "decision_pending"}:
+            return False
+        current = _RUNNERS.get(job_id)
+        if current and current.is_alive():
+            return False
+        thread = threading.Thread(
+            target=_runner_entry,
+            args=(job_id,),
+            name=f"mg4k-job-{job_id[:8]}",
+            daemon=False,
+        )
+        _RUNNERS[job_id] = thread
         thread.start()
-        _WORKER_STARTED = True
+        return True
 
 
 class ProcessorHandler(BaseHTTPRequestHandler):
-    server_version = "MG4KCloudProcessor/8.8.1-push"
+    server_version = "MG4KCloudProcessor/8.8.1-push-watchdog"
 
     def _json(self, status: int, payload: dict[str, Any]) -> None:
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
@@ -256,11 +280,12 @@ class ProcessorHandler(BaseHTTPRequestHandler):
             self._json(200, {
                 "status": "ok",
                 "service": "mg4k-cloud-processor",
-                "version": "8.8.1-push",
+                "version": "8.8.1-push-watchdog",
                 "uptime_seconds": int(time.time() - STARTED_AT),
                 "ephemeral_jobs": True,
                 "persistent_user_database": False,
-                "transport": "worker-push-no-processor-claim",
+                "transport": "worker-push-runner-watchdog",
+                "active_runners": sum(1 for thread in _RUNNERS.values() if thread.is_alive()),
             })
             return
 
@@ -270,6 +295,9 @@ class ProcessorHandler(BaseHTTPRequestHandler):
             if not state:
                 self._json(404, {"error": "job_not_found"})
                 return
+            if state.get("status") == "queued":
+                _ensure_job_runner(job_id)
+                state = _public_state(job_id) or state
             self._json(200, state)
             return
 
@@ -351,7 +379,7 @@ class ProcessorHandler(BaseHTTPRequestHandler):
                 }
                 _DECISION_EVENTS[job_id] = threading.Event()
             _save_state(job_id)
-            _QUEUE.put(job_id)
+            _ensure_job_runner(job_id)
             self._json(202, _public_state(job_id) or {"id": job_id})
             return
 
@@ -387,7 +415,6 @@ class ProcessorHandler(BaseHTTPRequestHandler):
 
 
 def main() -> int:
-    _ensure_worker()
     port = int(os.environ.get("MG4K_HEALTH_PORT", "8080"))
     server = ThreadingHTTPServer(("0.0.0.0", port), ProcessorHandler)
     print(f"MG4K push processor listening on :{port}")
