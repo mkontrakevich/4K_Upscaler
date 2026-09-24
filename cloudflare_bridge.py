@@ -212,10 +212,31 @@ def active_state(source_dir: Path) -> dict[str, Any]:
 
 def report_validation(active: dict[str, Any]) -> dict[str, Any] | None:
     report = active.get("report")
-    if not report:
-        return None
-    payload = load_json(Path(str(report)), {}) or {}
-    return payload.get("validation")
+    if report:
+        payload = load_json(Path(str(report)), {}) or {}
+        validation = payload.get("validation")
+        if validation:
+            return validation
+
+    failed_checks = list(active.get("failed_checks") or [])
+    mandatory_failures = list(active.get("mandatory_failures") or [])
+    technical_decision = str(active.get("technical_decision") or "").strip()
+    source_state = str(active.get("status") or "").strip()
+
+    if failed_checks or mandatory_failures or technical_decision or source_state:
+        decision = technical_decision or (
+            "FAILED" if (failed_checks or mandatory_failures) else "REVIEW"
+        )
+        return {
+            "passed": False if (failed_checks or mandatory_failures) else None,
+            "decision": decision,
+            "failed_checks": failed_checks,
+            "mandatory_failures": mandatory_failures,
+            "source_state": source_state,
+            "report_available": bool(report),
+            "fallback_from_pipeline_state": True,
+        }
+    return None
 
 
 def candidate_path(active: dict[str, Any]) -> Path | None:
