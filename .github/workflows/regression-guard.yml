@@ -2,7 +2,7 @@ name: 4K Upscaler Regression Guard
 
 on:
   push:
-    branches: [main, ui-r8-local-review, ui-r8-single-upload, ui-r8-next-source-plus, fix-container-app-name, ui-r8-log-export, ui-r8-fix-upload-plus-layout, fix-cloud-job-start-generation, fix-container-internal-worker-egress, fix-push-container-jobs, fix-container-job-runner-watchdog, diag-openrouter-generation-failure]
+    branches: [main, ui-r8-local-review, ui-r8-single-upload, ui-r8-next-source-plus, fix-container-app-name, ui-r8-log-export, ui-r8-fix-upload-plus-layout, fix-cloud-job-start-generation, fix-container-internal-worker-egress, fix-push-container-jobs, fix-container-job-runner-watchdog, diag-openrouter-generation-failure, fix-review-sync-metadata]
   workflow_dispatch:
 
 jobs:
