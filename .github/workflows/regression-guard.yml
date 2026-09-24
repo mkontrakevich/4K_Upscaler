@@ -2,7 +2,7 @@ name: 4K Upscaler Regression Guard
 
 on:
   push:
-    branches: [main, ui-r8-local-review, ui-r8-single-upload, ui-r8-next-source-plus, fix-container-app-name, ui-r8-log-export, ui-r8-fix-upload-plus-layout, fix-cloud-job-start-generation, fix-container-internal-worker-egress, fix-push-container-jobs, fix-container-job-runner-watchdog, diag-openrouter-generation-failure, fix-review-sync-metadata, fix-review-result-loss-guard, fix-r2-result-sync-buffered]
+    branches: [main, ui-r8-local-review, ui-r8-single-upload, ui-r8-next-source-plus, fix-container-app-name, ui-r8-log-export, ui-r8-fix-upload-plus-layout, fix-cloud-job-start-generation, fix-container-internal-worker-egress, fix-push-container-jobs, fix-container-job-runner-watchdog, diag-openrouter-generation-failure, fix-review-sync-metadata, fix-review-result-loss-guard, fix-r2-result-sync-buffered, fix-release-processing-lock-at-review]
   workflow_dispatch:
 
 jobs:
@@ -239,9 +239,11 @@ jobs:
           import cloud_processor_service as svc
 
           observed = []
-          def fake_process(job_id):
+          def fake_process(job_id, release_processing_slot=None):
               observed.append(job_id)
               svc._set_state(job_id, status="processing", stage="fake_processing", progress=20)
+              if release_processing_slot:
+                  release_processing_slot()
 
           svc._process_job = fake_process
           svc._JOBS["job-watchdog"] = {
@@ -262,6 +264,48 @@ jobs:
           assert state["status"] == "processing", state
           assert state["stage"] == "fake_processing", state
           print("Container job runner watchdog: PASSED")
+          PY
+
+      - name: Review releases processing slot contract
+        run: |
+          python - <<'PY'
+          import os, tempfile, threading, time
+          os.environ["MG4K_JOBS_ROOT"] = tempfile.mkdtemp(prefix="mg4k-review-slot-")
+          import cloud_processor_service as svc
+
+          started = []
+          release_gate = threading.Event()
+
+          def fake_process(job_id, release_processing_slot=None):
+              started.append(job_id)
+              svc._set_state(job_id, status="review", stage="awaiting_approval", progress=90)
+              if release_processing_slot:
+                  release_processing_slot()
+              if job_id == "job-1":
+                  release_gate.wait(timeout=5)
+
+          svc._process_job = fake_process
+          for job_id in ("job-1", "job-2"):
+              svc._JOBS[job_id] = {
+                  "id": job_id,
+                  "status": "queued",
+                  "stage": "container_job_received",
+                  "progress": 10,
+              }
+
+          assert svc._ensure_job_runner("job-1") is True
+          deadline = time.time() + 2
+          while time.time() < deadline and "job-1" not in started:
+              time.sleep(0.02)
+
+          assert svc._ensure_job_runner("job-2") is True
+          deadline = time.time() + 2
+          while time.time() < deadline and "job-2" not in started:
+              time.sleep(0.02)
+
+          release_gate.set()
+          assert started[:2] == ["job-1", "job-2"], started
+          print("Review releases processing slot: PASSED")
           PY
 
       - name: Sanitized cloud diagnostics contract
