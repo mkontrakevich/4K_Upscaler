@@ -23,6 +23,12 @@ export class MG4KProcessor extends Container {
 const SESSION_TTL = 60 * 10;
 const PAIR_TTL = 60 * 10;
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
+const CONTAINER_BUILD_ID = "result-persist-r10";
+const CONTAINER_INSTANCE_NAME = `primary-${CONTAINER_BUILD_ID}`;
+
+function processorContainer(env) {
+  return getContainer(env.MG4K_PROCESSOR, CONTAINER_INSTANCE_NAME);
+}
 
 function json(data, status = 200, headers = {}) {
   return new Response(JSON.stringify(data), {
@@ -110,6 +116,7 @@ function publicJob(job) {
     result_checksum_sha256: job.result_checksum_sha256 || null,
     result_persist_source: job.result_persist_source || null,
     result_persisted_at: job.result_persisted_at || null,
+    container_build_id: job.container_build_id || null,
     manual_retry_required: Boolean(job.manual_retry_required),
     validation: job.validation || null,
     decision: job.decision || null,
@@ -246,7 +253,7 @@ async function ensureCloudProcessor(env, origin) {
     throw new Error("OPENROUTER_API_KEY is not configured.");
   }
 
-  const container = getContainer(env.MG4K_PROCESSOR, "primary");
+  const container = processorContainer(env);
   await container.startAndWaitForPorts({
     ports: [8080],
     startOptions: {
@@ -260,6 +267,7 @@ async function ensureCloudProcessor(env, origin) {
         MG4K_JOBS_ROOT: "/tmp/mg4k-jobs",
         MG4K_HEALTH_PORT: "8080",
         MG4K_EXIT_WHEN_IDLE_SECONDS: "45",
+        MG4K_CONTAINER_BUILD_ID: CONTAINER_BUILD_ID,
       },
       enableInternet: true,
     },
@@ -267,6 +275,14 @@ async function ensureCloudProcessor(env, origin) {
       portReadyTimeoutMS: 60_000,
     },
   });
+
+  const healthResponse = await container.fetch(new Request("http://container/healthz"));
+  const health = await healthResponse.json().catch(() => ({}));
+  if (!healthResponse.ok || String(health.build_id || "") !== CONTAINER_BUILD_ID) {
+    throw new Error(
+      `container_build_mismatch:expected=${CONTAINER_BUILD_ID}:actual=${String(health.build_id || "unknown")}`
+    );
+  }
   return container;
 }
 
@@ -281,6 +297,7 @@ function applyContainerState(job, state) {
   if (state.validation !== undefined) job.validation = state.validation || null;
   if (state.decision !== undefined) job.decision = state.decision || null;
   job.container_result_available = Boolean(state.result_available);
+  if (state.build_id) job.container_build_id = String(state.build_id);
   job.container_synced_at = now();
   return job;
 }
@@ -363,7 +380,7 @@ async function dispatchJobToContainer(env, job, origin) {
 }
 
 async function syncJobFromContainer(env, job, origin) {
-  let container = getContainer(env.MG4K_PROCESSOR, "primary");
+  let container = processorContainer(env);
 
   const preDispatchStages = new Set([
     "uploaded",
@@ -468,7 +485,7 @@ async function syncJobFromContainer(env, job, origin) {
 }
 
 async function sendContainerDecision(env, job, action) {
-  const container = getContainer(env.MG4K_PROCESSOR, "primary");
+  const container = processorContainer(env);
   const response = await container.fetch(new Request(
     `http://container/jobs/${job.id}/decision`,
     {
