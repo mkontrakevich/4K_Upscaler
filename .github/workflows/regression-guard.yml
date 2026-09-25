@@ -389,7 +389,7 @@ jobs:
           worker = Path("src/worker.js").read_text(encoding="utf-8")
           service = Path("cloud_processor_service.py").read_text(encoding="utf-8")
 
-          assert 'const CONTAINER_BUILD_ID = "result-persist-r10";' in worker
+          assert 'const CONTAINER_BUILD_ID = "result-persist-r10a";' in worker
           assert 'const CONTAINER_INSTANCE_NAME = `primary-${CONTAINER_BUILD_ID}`;' in worker
           assert 'return getContainer(env.MG4K_PROCESSOR, CONTAINER_INSTANCE_NAME);' in worker
           assert 'MG4K_CONTAINER_BUILD_ID: CONTAINER_BUILD_ID' in worker
@@ -397,7 +397,7 @@ jobs:
           assert 'String(health.build_id || "") !== CONTAINER_BUILD_ID' in worker
           assert 'CONTAINER_BUILD_ID = os.environ.get("MG4K_CONTAINER_BUILD_ID"' in service
           assert '"build_id": CONTAINER_BUILD_ID' in service
-          assert '8.8.1-result-persist-r10' in service
+          assert '8.8.1-result-persist-r10a' in service
           print("Versioned Container rollout guard: PASSED")
           PY
 
@@ -423,6 +423,23 @@ jobs:
           assert 'job.result_persist_source = "container_push";' in worker
           assert 'job.result_persisted_at = now();' in worker
           assert 'job.result_sync_attempts = 0;' in worker
+
+          # Runtime smoke: execute the persistence helper without network/API calls.
+          import os, tempfile
+          from pathlib import Path as RuntimePath
+          os.environ["MG4K_JOBS_ROOT"] = tempfile.mkdtemp(prefix="mg4k-persist-")
+          os.environ["MG4K_PROCESSOR_TOKEN"] = "ci-no-network-token"
+          import cloud_processor_service as svc
+          assert svc.RESULT_PERSIST_ATTEMPTS == 5
+          assert svc.RESULT_PERSIST_RETRY_SECONDS >= 0.25
+          svc.bridge.upload_candidate = lambda *args, **kwargs: None
+          smoke_file = RuntimePath(os.environ["MG4K_JOBS_ROOT"]) / "candidate.png"
+          smoke_file.write_bytes(b"not-an-image-runtime-smoke")
+          svc._JOBS["persist-smoke"] = {"id": "persist-smoke", "status": "processing"}
+          svc._persist_candidate_to_worker("persist-smoke", smoke_file, None, "review", 88)
+          state = svc._public_state("persist-smoke")
+          assert state["result_persisted"] is True, state
+          assert state["result_persist_attempts"] == 1, state
           print("Direct Container -> Worker/R2 RESULT persistence: PASSED")
           PY
 
