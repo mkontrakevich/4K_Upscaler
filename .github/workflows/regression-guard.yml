@@ -170,6 +170,7 @@ jobs:
           for log_control in ['id="log-copy"', 'id="log-save"', "function logExportText()", "function copyProcessLog()", "function saveProcessLog()"]:
               assert log_control in html, f"Missing process log export control: {log_control}"
           assert 'MG4K_LOG_' in html, "Saved log filename contract missing"
+          assert '"Processor build: "+(latestJobState?.container_build_id||"—")' in html, "Processor build must be exported in logs"
           assert '.upload-plus{position:static' in html, "Initial upload plus must stay in document flow"
           plus_pos = html.index('id="upload-plus"')
           overlay_pos = html.rfind('id="upload-overlay"', 0, plus_pos)
