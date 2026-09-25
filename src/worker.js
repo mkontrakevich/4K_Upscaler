@@ -43,6 +43,14 @@ function processorContainer(env) {
   return getContainer(env.MG4K_PROCESSOR, CONTAINER_INSTANCE_NAME);
 }
 
+function processorContainerForJob(env, job) {
+  const instanceName = String(job?.container_instance_name || CONTAINER_INSTANCE_NAME);
+  return {
+    instanceName,
+    container: getContainer(env.MG4K_PROCESSOR, instanceName),
+  };
+}
+
 async function hasInFlightProcessorJob(env, instanceNames) {
   const targets = new Set(Array.from(instanceNames || []).map(String));
   if (!targets.size) return null;
@@ -461,7 +469,8 @@ async function dispatchJobToContainer(env, job, origin) {
 }
 
 async function syncJobFromContainer(env, job, origin) {
-  let container = processorContainer(env);
+  const owner = processorContainerForJob(env, job);
+  let container = owner.container;
 
   const preDispatchStages = new Set([
     "uploaded",
@@ -489,7 +498,10 @@ async function syncJobFromContainer(env, job, origin) {
   let response;
   try {
     response = await container.fetch(new Request(`http://container/jobs/${job.id}/status`));
-  } catch {
+  } catch (error) {
+    if (owner.instanceName !== CONTAINER_INSTANCE_NAME) {
+      throw new Error(`container_owner_unavailable:${owner.instanceName}:${error?.message || String(error)}`);
+    }
     container = await ensureCloudProcessor(env, origin);
     response = await container.fetch(new Request(`http://container/jobs/${job.id}/status`));
   }
@@ -566,7 +578,7 @@ async function syncJobFromContainer(env, job, origin) {
 }
 
 async function sendContainerDecision(env, job, action) {
-  const container = processorContainer(env);
+  const { container, instanceName } = processorContainerForJob(env, job);
   const response = await container.fetch(new Request(
     `http://container/jobs/${job.id}/decision`,
     {
@@ -577,7 +589,7 @@ async function sendContainerDecision(env, job, action) {
   ));
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(payload.error || `container_decision_http_${response.status}`);
+    throw new Error(payload.error || `container_decision_http_${response.status}:${instanceName}`);
   }
   return payload;
 }
@@ -791,6 +803,46 @@ async function handleApi(request, env, ctx, url) {
     job.progress = 95;
     await writeJob(env, job);
     return json({ ok: true, job: publicJob(job) });
+  }
+
+  const jobResetMatch = path.match(/^\/api\/jobs\/([0-9a-f-]+)\/reset$/i);
+  if (jobResetMatch && method === "POST") {
+    const job = await readJob(env, jobResetMatch[1]);
+    if (!job) return json({ error: "job_not_found" }, 404);
+    if (!await authorizeJob(request, url, job)) return json({ error: "forbidden" }, 403);
+
+    const status = String(job.status || "");
+    if (["queued", "processing", "decision_pending"].includes(status)) {
+      return json({
+        error: "job_busy_cannot_reset",
+        status,
+        stage: job.stage || null,
+      }, 409);
+    }
+
+    let resetWarning = null;
+    if (status === "review" && job.container_dispatched) {
+      try {
+        await sendContainerDecision(env, job, "skip");
+      } catch (error) {
+        // A reset explicitly abandons this review job. If its old Container is
+        // already unavailable, the Worker state still has to be released so a
+        // future processor rollout can retire that stale instance.
+        resetWarning = error?.message || String(error);
+      }
+    }
+
+    job.decision = "reset";
+    job.status = "skipped";
+    job.stage = "operator_reset";
+    job.progress = 100;
+    job.error = null;
+    job.manual_retry_required = false;
+    job.container_dispatched = false;
+    job.reset_at = now();
+    job.reset_warning = resetWarning;
+    await writeJob(env, job);
+    return json({ ok: true, job: publicJob(job), reset_warning: resetWarning });
   }
 
   const jobSourceMatch = path.match(/^\/api\/jobs\/([0-9a-f-]+)\/source$/i);

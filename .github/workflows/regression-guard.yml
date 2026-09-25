@@ -121,7 +121,7 @@ jobs:
           from pathlib import Path
           html = Path("site/index.html").read_text(encoding="utf-8")
           required = [
-              "CORE 8.8.1 R4 · CLOUD UI R9.1",
+              "CORE 8.8.1 R4 · CLOUD UI R9.2",
               'class="comparison"',
               'id="source-image"',
               'id="result-image"',
@@ -179,6 +179,42 @@ jobs:
           print("Cloud two-pane Visual Review + queue/skip + log export + upload layout contract: PASSED")
           PY
 
+      - name: Operator recovery controls contract
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          html = Path("site/index.html").read_text(encoding="utf-8")
+          worker = Path("src/worker.js").read_text(encoding="utf-8")
+
+          for token in [
+              'id="action-refresh"',
+              'id="action-reset-job"',
+              'id="action-reload-source"',
+              "async function refreshCurrentJob()",
+              "async function resetCurrentJob",
+              "async function reloadCurrentSource()",
+              'fetch("/api/jobs/"+job.id+"/reset"',
+              "платный API не запускался",
+          ]:
+              assert token in html, token
+
+          assert "function processorContainerForJob(env, job)" in worker
+          assert "container_owner_unavailable:" in worker
+          assert "jobResetMatch" in worker
+          assert "job_busy_cannot_reset" in worker
+          assert 'job.stage = "operator_reset";' in worker
+          assert "job.container_dispatched = false;" in worker
+
+          reset_block = worker[worker.index("const jobResetMatch"):worker.index("const jobSourceMatch")]
+          assert '["queued", "processing", "decision_pending"].includes(status)' in reset_block
+          assert 'status === "review"' in reset_block
+          assert 'await sendContainerDecision(env, job, "skip")' in reset_block
+
+          decision = worker[worker.index("async function sendContainerDecision"):worker.index("MG4KProcessor.outboundByHost")]
+          assert "processorContainerForJob(env, job)" in decision
+          print("Operator reset / refresh / source reload controls: PASSED")
+          PY
+
       - name: Cloud viewer non-blank render contract
         run: |
           python - <<'PY'
@@ -186,7 +222,7 @@ jobs:
           html = Path("site/index.html").read_text(encoding="utf-8")
 
           required = [
-              "CORE 8.8.1 R4 · CLOUD UI R9.1",
+              "CORE 8.8.1 R4 · CLOUD UI R9.2",
               'id="viewer-loading"',
               'viewer-stage.viewer-fallback .viewer-buffer',
               'stage.classList.toggle("viewer-fallback",!layoutReady||!imagesReady)',
