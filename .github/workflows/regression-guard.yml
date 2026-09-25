@@ -119,7 +119,7 @@ jobs:
           from pathlib import Path
           html = Path("site/index.html").read_text(encoding="utf-8")
           required = [
-              "CORE 8.8.1 R4 · CLOUD UI R8",
+              "CORE 8.8.1 R4 · CLOUD UI R9",
               'class="comparison"',
               'id="source-image"',
               'id="result-image"',
@@ -135,6 +135,17 @@ jobs:
               'data-view="split"',
               'data-view="diff"',
               'data-view="blink"',
+              'data-zoom="0.5">50%',
+              'data-zoom="1">100%',
+              'data-zoom="2">200%',
+              'id="viewer-divider"',
+              'id="viewer-sync"',
+              'id="viewer-defects"',
+              'data-diff="absolute"',
+              'data-diff="edge"',
+              'data-diff="heatmap"',
+              "viewerPointerMove",
+              "viewerWheel",
               "renderValidation",
               "sendDecision",
               "confirmPaidGeneration",
