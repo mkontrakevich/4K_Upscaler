@@ -204,7 +204,7 @@ body{overflow-x:hidden}
       <button type="button" id="mode-safe" disabled><strong>SAFE</strong><span>локальный upscale</span></button>
       <button type="button" id="mode-generative" class="active"><strong>GENERATIVE</strong><span>Nano Banana Pro</span></button>
     </div>
-    <div class="version">CORE 8.8.1 R4 · CLOUD UI R9.1</div>
+    <div class="version">CORE 8.8.1 R4 · CLOUD UI R9.2</div>
   </header>
 
   <section class="status-strip">
@@ -271,6 +271,9 @@ body{overflow-x:hidden}
       <button class="btn queue-nav" id="action-prev" type="button" disabled>← Предыдущий файл</button>
       <button class="btn queue-nav" id="action-add" type="button">＋ Добавить файл</button>
       <button class="btn queue-nav" id="action-next" type="button" disabled>Следующий файл →</button>
+      <button class="btn ghost" id="action-refresh" type="button" disabled>↻ Обновить</button>
+      <button class="btn ghost" id="action-reset-job" type="button" disabled>Сброс</button>
+      <button class="btn ghost" id="action-reload-source" type="button" disabled>Перезагрузить исходник</button>
       <button class="btn primary" id="action-process" type="button" disabled>▶ Запустить / продолжить</button>
       <button class="btn ghost" id="action-inspect" type="button" disabled>Инспекция</button>
       <button class="btn approve" id="action-approve" type="button" disabled>✓ Утвердить</button>
@@ -414,7 +417,7 @@ function logExportText(){
   const item=currentSourceItem();
   const header=[
     "MG 4K / ARCH LOCK — PROCESS LOG",
-    "UI: CORE 8.8.1 R4 · CLOUD UI R9.1",
+    "UI: CORE 8.8.1 R4 · CLOUD UI R9.2",
     "Processor build: "+(latestJobState?.container_build_id||"—"),
     "Exported: "+new Date().toISOString(),
     "Job: "+(currentJob?.id||"—"),
@@ -485,6 +488,15 @@ function resetResult(){
   $("action-approve").disabled=true;$("action-reject").disabled=true;$("action-regenerate").disabled=true;$("action-inspect").disabled=true;$("mobile-inspect").disabled=true;
 }
 function currentSourceItem(){return sourceItems[currentSourceIndex]||null}
+function updateRecoveryActions(state=latestJobState){
+  const hasFile=Boolean(currentFile);
+  const hasJob=Boolean(currentJob);
+  const status=String(state?.status||"");
+  const busy=["queued","processing","decision_pending"].includes(status);
+  $("action-refresh").disabled=!hasJob;
+  $("action-reset-job").disabled=!hasJob||busy;
+  $("action-reload-source").disabled=!hasFile||busy;
+}
 function updateQueueNavigation(){
   const has=currentSourceIndex>=0&&currentSourceIndex<sourceItems.length;
   $("actions-panel").hidden=!has;
@@ -492,6 +504,7 @@ function updateQueueNavigation(){
   $("action-next").disabled=!has||currentSourceIndex>=sourceItems.length-1;
   $("action-add").disabled=!has;
   if(has)$("current-file").textContent=(currentSourceIndex+1)+"/"+sourceItems.length+" · "+sourceItems[currentSourceIndex].file.name;
+  updateRecoveryActions();
 }
 function persistSessionHistory(){
   if(!cloudSession)return;
@@ -505,7 +518,7 @@ function persistSessionHistory(){
     size:Number(item.file?.size||item.lastState?.bytes||0),
     type:item.file?.type||item.lastState?.content_type||"application/octet-stream"
   }));
-  if(!items.length)return;
+  if(!items.length){clearSessionHistory();return}
   const snapshot={
     version:1,
     savedAt:Date.now(),
@@ -544,6 +557,7 @@ async function selectSource(index){
     if(state&&!["review","done","failed","skipped"].includes(state.status)){jobPollTimer=setInterval(pollCurrentJob,1800)}
   }else{
     setProgress(0,"готов к запуску");setStatus("Исходник "+(index+1)+" из "+sourceItems.length+". Настройте LOCK и запустите обработку.","ok");
+    updateRecoveryActions(null);
   }
 }
 function addSourceFile(file,source="Системный файловый менеджер"){
@@ -686,6 +700,7 @@ function renderJobState(state){
   if(!state)return null;
   latestJobState=state;
   rememberCurrentItem(state);
+  updateRecoveryActions(state);
   const p=Number(state.progress||0),stage=state.stage||state.status||"queued";
   setProgress(p,p+"%");
   if(state.validation)renderValidation(state);
@@ -816,6 +831,75 @@ async function releaseReviewForRegeneration(){
   }catch{return true}
 }
 function confirmPaidGeneration(){return window.confirm("Запустить Nano Banana Pro? Будет выполнен платный API-запрос. LOCK-профиль будет применён к DONOR prompt.")}
+
+async function refreshCurrentJob(){
+  if(!currentJob){toast("Нет активного задания для обновления.");return}
+  const btn=$("action-refresh"),job=currentJob;
+  const prev=btn.textContent;btn.disabled=true;btn.textContent="Обновление…";
+  try{
+    const state=await jobStatus(job);
+    if(currentJob!==job)return;
+    renderJobState(state);
+    setStatus("Статус задания обновлён вручную.","ok",true);
+  }catch(e){
+    setStatus("Не удалось обновить статус: "+e.message,"err",true);
+  }finally{
+    btn.textContent=prev;
+    updateRecoveryActions(latestJobState);
+  }
+}
+
+async function resetCurrentJob({confirmReset=true}={}){
+  if(!currentJob)return true;
+  let state=null;
+  try{state=await jobStatus(currentJob)}catch{state=latestJobState}
+  const status=String(state?.status||"");
+  if(["queued","processing","decision_pending"].includes(status)){
+    toast("Активную обработку нельзя сбросить: дождитесь завершения текущего шага.");
+    return false;
+  }
+  if(confirmReset&&!window.confirm("Сбросить текущее задание? Платный API-запрос не запускается. Исходник и LOCK-профиль останутся."))return false;
+
+  const job=currentJob;
+  try{
+    const r=await fetch("/api/jobs/"+job.id+"/reset",{method:"POST",headers:{"Content-Type":"application/json","X-Job-Token":job.token},body:"{}"});
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(d.error||"job_reset_failed");
+    clearInterval(jobPollTimer);jobPollTimer=null;
+    const item=currentSourceItem();
+    if(item){item.job=null;item.lastState=null}
+    currentJob=null;latestJobState=null;
+    resetResult();setProgress(0,"0%");
+    $("action-process").disabled=false;$("mobile-process").disabled=false;
+    $("action-process").textContent="▶ Запустить / продолжить";$("mobile-process").textContent="Обработка";
+    persistSessionHistory();updateQueueNavigation();
+    setStatus(d.reset_warning?"Задание сброшено. Старый Container не ответил на завершение review, но блокировка Worker снята.":"Задание сброшено. Исходник готов к новому запуску.","ok",true);
+    return true;
+  }catch(e){
+    setStatus("Не удалось сбросить задание: "+e.message,"err",true);
+    return false;
+  }
+}
+
+async function reloadCurrentSource(){
+  if(!currentFile){toast("Сначала добавьте исходник.");return}
+  if(currentJob&&!(await resetCurrentJob({confirmReset:false})))return;
+  const item=currentSourceItem();if(!item)return;
+  try{URL.revokeObjectURL(item.objectUrl)}catch{}
+  item.objectUrl=URL.createObjectURL(item.file);
+  item.job=null;item.lastState=null;item.resolution=null;
+  currentObjectUrl=item.objectUrl;currentJob=null;latestJobState=null;
+  resetResult();
+  const img=$("source-image");
+  img.onload=()=>{const dim=img.naturalWidth+"×"+img.naturalHeight;item.resolution=dim;$("source-dimensions").textContent=dim;$("source-size").textContent=dim;$("meta-resolution").textContent=dim};
+  img.src=currentObjectUrl;img.hidden=false;
+  setProgress(0,"0%");
+  $("action-process").disabled=false;$("mobile-process").disabled=false;
+  $("action-process").textContent="▶ Запустить / продолжить";$("mobile-process").textContent="Обработка";
+  persistSessionHistory();updateQueueNavigation();
+  setStatus("Исходник перезагружен локально. Новый job ещё не создан; платный API не запускался.","ok",true);
+}
+
 async function prepareJob(forceNew=false){
   if(!currentFile){toast("Сначала добавьте исходник.");return}
   if(currentJob&&!forceNew){
@@ -849,6 +933,9 @@ async function prepareJob(forceNew=false){
     setStatus("Не удалось создать облачную задачу: "+e.message,"err");
   }
 }
+$("action-refresh").addEventListener("click",refreshCurrentJob);
+$("action-reset-job").addEventListener("click",()=>resetCurrentJob({confirmReset:true}));
+$("action-reload-source").addEventListener("click",reloadCurrentSource);
 $("action-process").addEventListener("click",()=>prepareJob(false));$("mobile-process").addEventListener("click",()=>prepareJob(false));
 $("action-approve").addEventListener("click",()=>sendDecision("approve"));
 $("action-reject").addEventListener("click",()=>sendDecision("reject"));
