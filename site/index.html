@@ -407,6 +407,7 @@ function logExportText(){
   const header=[
     "MG 4K / ARCH LOCK — PROCESS LOG",
     "UI: CORE 8.8.1 R4 · CLOUD UI R9",
+    "Processor build: "+(latestJobState?.container_build_id||"—"),
     "Exported: "+new Date().toISOString(),
     "Job: "+(currentJob?.id||"—"),
     "Source: "+(item?.file?.name||currentFile?.name||"—"),
