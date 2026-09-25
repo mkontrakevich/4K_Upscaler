@@ -20,6 +20,10 @@ STARTED_AT = time.time()
 CONTAINER_BUILD_ID = os.environ.get("MG4K_CONTAINER_BUILD_ID", "unknown").strip() or "unknown"
 RESULT_PERSIST_ATTEMPTS = max(1, int(os.environ.get("MG4K_RESULT_PERSIST_ATTEMPTS", "5")))
 RESULT_PERSIST_RETRY_SECONDS = max(0.25, float(os.environ.get("MG4K_RESULT_PERSIST_RETRY_SECONDS", "3")))
+PAID_START_STABILIZATION_SECONDS = max(
+    0.0,
+    float(os.environ.get("MG4K_PAID_START_STABILIZATION_SECONDS", "90")),
+)
 JOBS_ROOT = Path(os.environ.get("MG4K_JOBS_ROOT", "/tmp/mg4k-jobs")).resolve()
 JOBS_ROOT.mkdir(parents=True, exist_ok=True)
 
@@ -96,6 +100,40 @@ def _wait_for_decision(job_id: str) -> str:
             decision = str((_JOBS.get(job_id) or {}).get("decision") or "")
         if decision in {"approve", "reject", "skip"}:
             return decision
+
+
+def _wait_for_paid_generation_stability(job_id: str) -> None:
+    """Do not enter the paid generation path during a fresh Container rollout.
+
+    Cloudflare can terminate a newly started Container while overlapping
+    deployments settle. Waiting until the Container has remained alive for a
+    minimum uptime makes that termination happen before the paid API path.
+    """
+    required = max(0.0, PAID_START_STABILIZATION_SECONDS)
+    if required <= 0:
+        return
+
+    deadline = STARTED_AT + required
+    while True:
+        remaining = deadline - time.time()
+        if remaining <= 0:
+            _set_state(
+                job_id,
+                status="processing",
+                stage="paid_generation_stability_verified",
+                progress=23,
+                rollout_stabilization_remaining_seconds=0,
+            )
+            return
+
+        _set_state(
+            job_id,
+            status="processing",
+            stage="processor_stabilizing_before_paid_generation",
+            progress=22,
+            rollout_stabilization_remaining_seconds=max(1, int(remaining + 0.999)),
+        )
+        time.sleep(min(2.0, remaining))
 
 
 
@@ -191,6 +229,8 @@ def _process_job(job_id: str) -> None:
                     "Pipeline preparation did not reach AWAITING_EXPLICIT_DONOR_GENERATION. "
                     f"exit={init_rc}; state={status or 'unknown'}"
                 )
+
+            _wait_for_paid_generation_stability(job_id)
 
             _set_state(job_id, status="processing", stage="nano_banana_generation", progress=24)
             generation_rc = bridge.run_pipeline(
@@ -380,7 +420,7 @@ def _ensure_job_runner(job_id: str) -> bool:
 
 
 class ProcessorHandler(BaseHTTPRequestHandler):
-    server_version = "MG4KCloudProcessor/8.8.1-result-persist-r10a"
+    server_version = "MG4KCloudProcessor/8.8.1-result-persist-r10b"
 
     def _json(self, status: int, payload: dict[str, Any]) -> None:
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")

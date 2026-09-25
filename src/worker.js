@@ -31,11 +31,12 @@ export class MG4KProcessor extends Container {
 const SESSION_TTL = 60 * 10;
 const PAIR_TTL = 60 * 10;
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
-const CONTAINER_BUILD_ID = "result-persist-r10a";
+const CONTAINER_BUILD_ID = "result-persist-r10b";
 const CONTAINER_INSTANCE_NAME = `primary-${CONTAINER_BUILD_ID}`;
 const LEGACY_CONTAINER_INSTANCE_NAMES = [
   "primary",
   "primary-result-persist-r10",
+  "primary-result-persist-r10a",
 ];
 
 function processorContainer(env) {
@@ -343,6 +344,7 @@ async function ensureCloudProcessor(env, origin) {
         MG4K_JOBS_ROOT: "/tmp/mg4k-jobs",
         MG4K_HEALTH_PORT: "8080",
         MG4K_EXIT_WHEN_IDLE_SECONDS: "45",
+        MG4K_PAID_START_STABILIZATION_SECONDS: "90",
         MG4K_CONTAINER_BUILD_ID: CONTAINER_BUILD_ID,
       },
       enableInternet: true,

@@ -467,6 +467,31 @@ jobs:
           print("Single-instance processor lifecycle handoff: PASSED")
           PY
 
+      - name: Paid generation rollout stabilization contract
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          service = Path("cloud_processor_service.py").read_text(encoding="utf-8")
+          worker = Path("src/worker.js").read_text(encoding="utf-8")
+
+          assert "PAID_START_STABILIZATION_SECONDS" in service
+          assert "def _wait_for_paid_generation_stability(job_id: str)" in service
+          assert 'stage="processor_stabilizing_before_paid_generation"' in service
+          assert 'stage="paid_generation_stability_verified"' in service
+          assert 'MG4K_PAID_START_STABILIZATION_SECONDS: "90"' in worker
+          assert '"primary-result-persist-r10a"' in worker
+
+          prep = service.index('status != "AWAITING_EXPLICIT_DONOR_GENERATION"')
+          stabilize = service.index("_wait_for_paid_generation_stability(job_id)", prep)
+          paid = service.index('["--limit", "1", "--force-generation", "--donor-only", "--auto-generate-current"]', stabilize)
+          assert prep < stabilize < paid, "Stabilization gate must execute after non-paid prep and before paid generation"
+
+          helper = service[service.index("def _wait_for_paid_generation_stability"):service.index("def _persist_candidate_to_worker")]
+          assert "time.sleep" in helper
+          assert "STARTED_AT + required" in helper
+          print("Paid generation rollout stabilization: PASSED")
+          PY
+
       - name: Versioned Container rollout contract
         run: |
           python - <<'PY'
@@ -474,7 +499,7 @@ jobs:
           worker = Path("src/worker.js").read_text(encoding="utf-8")
           service = Path("cloud_processor_service.py").read_text(encoding="utf-8")
 
-          assert 'const CONTAINER_BUILD_ID = "result-persist-r10a";' in worker
+          assert 'const CONTAINER_BUILD_ID = "result-persist-r10b";' in worker
           assert 'const CONTAINER_INSTANCE_NAME = `primary-${CONTAINER_BUILD_ID}`;' in worker
           assert 'return getContainer(env.MG4K_PROCESSOR, CONTAINER_INSTANCE_NAME);' in worker
           assert 'MG4K_CONTAINER_BUILD_ID: CONTAINER_BUILD_ID' in worker
@@ -482,7 +507,7 @@ jobs:
           assert 'String(health.build_id || "") !== CONTAINER_BUILD_ID' in worker
           assert 'CONTAINER_BUILD_ID = os.environ.get("MG4K_CONTAINER_BUILD_ID"' in service
           assert '"build_id": CONTAINER_BUILD_ID' in service
-          assert '8.8.1-result-persist-r10a' in service
+          assert '8.8.1-result-persist-r10b' in service
           print("Versioned Container rollout guard: PASSED")
           PY
 
