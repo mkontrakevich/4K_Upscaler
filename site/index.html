@@ -116,24 +116,35 @@ body{overflow-x:hidden}
 .log-lines{padding:8px 12px;min-height:90px;max-height:220px;overflow:auto;font:10px/1.55 Consolas,monospace;color:#9fb4c5}
 .log-line{display:grid;grid-template-columns:74px 80px 1fr;gap:8px}
 .log-line .ok{color:#42d680}.log-line .err{color:#ff6576}.log-line .info{color:#21c9f6}.log-line .warn{color:#ffb42c}
-.viewer{width:min(97vw,1500px);height:min(94vh,960px);padding:0;border:1px solid #38536a;border-radius:10px;background:#06111b;color:#eef5ff}
-.viewer::backdrop{background:rgba(0,0,0,.82)}
-.viewer-shell{height:100%;display:grid;grid-template-rows:auto 1fr}
-.viewer-toolbar{display:flex;align-items:center;gap:8px;justify-content:space-between;padding:9px 10px;border-bottom:1px solid #294054;background:#0b1c2c}
-.viewer-title{display:flex;flex-direction:column;min-width:170px}
+.viewer{width:min(98vw,1580px);height:min(96vh,1000px);padding:0;border:1px solid #38536a;border-radius:10px;background:#06111b;color:#eef5ff}
+.viewer::backdrop{background:rgba(0,0,0,.84)}
+.viewer-shell{height:100%;display:grid;grid-template-rows:auto auto 1fr auto;min-height:0}
+.viewer-toolbar{display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid #294054;background:#0b1c2c;flex-wrap:wrap}
+.viewer-title{display:flex;flex-direction:column;min-width:170px;margin-right:auto}
 .viewer-title strong{font-size:12px}.viewer-title span{font-size:9px;color:#8aa1b4;margin-top:2px}
-.viewer-tools{display:flex;gap:6px;flex-wrap:wrap}
-.viewer-tools button{height:34px;border:1px solid #38546a;border-radius:6px;background:#0b1c2b;color:#a6bac9;font-size:10px;font-weight:800;cursor:pointer}
-.viewer-tools button.active{border-color:#1ccaf3;color:#5cdcff;background:#0b2a3b}
-.viewer-stage{position:relative;overflow:hidden;background:#02070b}
-.viewer-side{position:absolute;inset:0;display:grid;grid-template-columns:1fr 1fr}
-.viewer-side img{width:100%;height:100%;object-fit:contain;border-right:1px solid #294054}
-.viewer-side img:last-child{border-right:0}
-.viewer-overlay{position:absolute;inset:0;display:none}
-.viewer-overlay img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
-.viewer-overlay .clip{clip-path:inset(0 50% 0 0)}
-.viewer-canvas{position:absolute;inset:0;width:100%;height:100%;display:none;object-fit:contain}
-.viewer-close{width:38px;height:34px;border:1px solid #38546a;border-radius:6px;background:#0a1826;font-size:18px;cursor:pointer}
+.viewer-tools{display:flex;gap:5px;flex-wrap:wrap;align-items:center}
+.viewer-tools button{height:32px;padding:0 9px;border:1px solid #38546a;border-radius:6px;background:#0b1c2b;color:#a6bac9;font-size:9px;font-weight:800;cursor:pointer}
+.viewer-tools button.active{border-color:#1ccaf3;color:#5cdcff;background:#0b2a3b;box-shadow:inset 0 0 0 1px rgba(28,202,243,.18)}
+.viewer-tools button:disabled{opacity:.3;cursor:not-allowed}
+.viewer-tools>span{padding:0 7px;font:10px Consolas,monospace;color:#b6c9da}
+.viewer-diff-controls{min-height:44px;display:flex;align-items:center;gap:14px;padding:6px 10px;border-bottom:1px solid #253c50;background:#08121d;flex-wrap:wrap}
+.viewer-diff-controls[hidden]{display:none!important}
+.viewer-diff-controls label{display:flex;align-items:center;gap:7px;color:#aabdd0;font-size:10px}
+.viewer-diff-controls input{accent-color:#16c5f4;width:145px}
+.viewer-diff-controls label span{width:40px;font:10px Consolas,monospace;color:#dce8f3}
+.viewer-diff-note{margin-left:auto;color:#667f95;font-size:9px}
+.viewer-stage{position:relative;min-height:0;overflow:hidden;background:#010508;touch-action:none}
+.viewer-canvas{position:absolute;inset:0;width:100%;height:100%;display:block;cursor:grab;touch-action:none}
+.viewer-canvas:active{cursor:grabbing}
+.viewer-divider{position:absolute;top:0;bottom:0;width:26px;margin-left:-13px;z-index:8;cursor:ew-resize;touch-action:none}
+.viewer-divider::before{content:"";position:absolute;left:12px;top:0;bottom:0;width:2px;background:#4de0ff;box-shadow:0 0 0 1px rgba(0,0,0,.45),0 0 14px rgba(77,224,255,.35)}
+.viewer-divider::after{content:"↔";position:absolute;left:1px;top:50%;transform:translateY(-50%);width:24px;height:32px;display:grid;place-items:center;border:1px solid #4de0ff;border-radius:7px;background:#092435;color:#8feaff;font:700 13px/1 Arial}
+.viewer-labels{position:absolute;left:0;right:0;top:12px;display:flex;justify-content:space-between;padding:0 16px;pointer-events:none;z-index:7}
+.viewer-labels span{padding:5px 8px;border-radius:4px;background:rgba(2,9,15,.74);color:#d3e3f1;font:9px Consolas,monospace;letter-spacing:.08em}
+.viewer-buffer{display:none!important}
+.viewer-footer{min-height:34px;display:flex;align-items:center;justify-content:space-between;gap:14px;padding:5px 10px;border-top:1px solid #294054;background:#06111c;color:#6f879d;font-size:9px}
+.viewer-footer span:last-child{text-align:right}
+.viewer-close{width:38px;height:32px;border:1px solid #38546a;border-radius:6px;background:#0a1826;color:#fff;font-size:18px;cursor:pointer}
 .mobile-bar{display:none}
 .toast{position:fixed;left:50%;bottom:22px;transform:translate(-50%,90px);opacity:0;transition:.22s;padding:10px 14px;background:#0d2131;border:1px solid #49657b;border-radius:7px;z-index:80;box-shadow:0 18px 50px rgba(0,0,0,.35);font-size:12px;max-width:min(520px,calc(100vw - 28px));text-align:center}
 .toast.show{transform:translate(-50%,0);opacity:1}
@@ -186,7 +197,7 @@ body{overflow-x:hidden}
       <button type="button" id="mode-safe" disabled><strong>SAFE</strong><span>локальный upscale</span></button>
       <button type="button" id="mode-generative" class="active"><strong>GENERATIVE</strong><span>Nano Banana Pro</span></button>
     </div>
-    <div class="version">CORE 8.8.1 R4 · CLOUD UI R8</div>
+    <div class="version">CORE 8.8.1 R4 · CLOUD UI R9</div>
   </header>
 
   <section class="status-strip">
@@ -305,19 +316,47 @@ body{overflow-x:hidden}
   <div class="viewer-shell">
     <header class="viewer-toolbar">
       <div class="viewer-title"><strong>ИНСПЕКЦИЯ SOURCE / RESULT</strong><span>SIDE · SPLIT · DIFF · BLINK</span></div>
-      <div class="viewer-tools">
+      <div class="viewer-tools" aria-label="Режим сравнения">
         <button type="button" data-view="side" class="active">SIDE</button>
         <button type="button" data-view="split">SPLIT</button>
         <button type="button" data-view="diff">DIFF</button>
         <button type="button" data-view="blink">BLINK</button>
       </div>
-      <button class="viewer-close" id="viewer-close" type="button">×</button>
+      <div class="viewer-tools" aria-label="Масштаб">
+        <button type="button" data-zoom="fit" class="active">FIT</button>
+        <button type="button" data-zoom="0.5">50%</button>
+        <button type="button" data-zoom="1">100%</button>
+        <button type="button" data-zoom="2">200%</button>
+        <span id="viewer-zoom-value">FIT</span>
+      </div>
+      <div class="viewer-tools">
+        <button id="viewer-sync" type="button" class="active">SYNC</button>
+        <button id="viewer-defects" type="button">ДЕФЕКТ</button>
+        <button id="viewer-reset" type="button">RESET</button>
+      </div>
+      <button class="viewer-close" id="viewer-close" type="button" aria-label="Закрыть">×</button>
     </header>
-    <div class="viewer-stage" id="viewer-stage">
-      <div class="viewer-side" id="viewer-side"><img id="viewer-source" alt="SOURCE"><img id="viewer-result" alt="RESULT"></div>
-      <div class="viewer-overlay" id="viewer-overlay"><img id="overlay-source" alt="SOURCE"><img id="overlay-result" class="clip" alt="RESULT"></div>
-      <canvas class="viewer-canvas" id="viewer-canvas"></canvas>
+    <div class="viewer-diff-controls" id="viewer-diff-controls" hidden>
+      <div class="viewer-tools">
+        <button type="button" data-diff="absolute" class="active">ABS</button>
+        <button type="button" data-diff="edge">EDGE</button>
+        <button type="button" data-diff="heatmap">HEATMAP</button>
+      </div>
+      <label>Threshold <input id="viewer-diff-threshold" type="range" min="0" max="96" value="24"><span id="viewer-diff-threshold-value">24</span></label>
+      <label>Opacity <input id="viewer-diff-opacity" type="range" min="10" max="100" value="72"><span id="viewer-diff-opacity-value">72%</span></label>
+      <span class="viewer-diff-note">DIFF preview ≤ 2048 px</span>
     </div>
+    <div class="viewer-stage" id="viewer-stage">
+      <canvas class="viewer-canvas" id="viewer-canvas"></canvas>
+      <div class="viewer-divider" id="viewer-divider" hidden></div>
+      <div class="viewer-labels" id="viewer-labels"><span>SOURCE</span><span>RESULT</span></div>
+      <img id="viewer-source" class="viewer-buffer" alt="SOURCE">
+      <img id="viewer-result" class="viewer-buffer" alt="RESULT">
+    </div>
+    <footer class="viewer-footer">
+      <span>Колесо — масштаб · drag — панорама · double click — FIT / 100% · Split — перетащите вертикальный разделитель</span>
+      <span>1 SIDE · 2 SPLIT · 3 DIFF · 4 BLINK · F FIT · Z 100% · X 200% · D DEFECT · R RESET</span>
+    </footer>
   </div>
 </dialog>
 
@@ -339,6 +378,13 @@ const $=id=>document.getElementById(id);
 let locks=JSON.parse(localStorage.getItem("mg4k.lockProfile")||"null")||Object.fromEntries(defaults.map(x=>[x.id,x.level]));
 let currentFile=null,currentObjectUrl=null,currentJob=null,cloudSession=null,sessionStartPromise=null,heartbeatTimer=null,jobPollTimer=null;
 let resultObjectUrl=null,viewerBlinkTimer=null;
+const viewerState={
+  mode:"side",zoomPreset:"fit",scale:1,split:.5,sync:true,showDefects:false,
+  centers:{source:{x:.5,y:.5},result:{x:.5,y:.5}},
+  panning:false,draggingSplit:false,activePane:"source",lastX:0,lastY:0,
+  blinkShowResult:true,diffMode:"absolute",diffThreshold:24,diffOpacity:.72,
+  diffCanvas:null,diffKey:""
+};
 let sourceItems=[],currentSourceIndex=-1;
 let latestJobState=null,lastStatusSignature="";
 const HISTORY_KEY="mg4k.sessionHistory.v1";
@@ -360,7 +406,7 @@ function logExportText(){
   const item=currentSourceItem();
   const header=[
     "MG 4K / ARCH LOCK — PROCESS LOG",
-    "UI: CORE 8.8.1 R4 · CLOUD UI R8",
+    "UI: CORE 8.8.1 R4 · CLOUD UI R9",
     "Exported: "+new Date().toISOString(),
     "Job: "+(currentJob?.id||"—"),
     "Source: "+(item?.file?.name||currentFile?.name||"—"),
@@ -802,25 +848,196 @@ $("action-regenerate").addEventListener("click",()=>prepareJob(true));
 $("log-copy").addEventListener("click",copyProcessLog);
 $("log-save").addEventListener("click",saveProcessLog);
 
-function openViewer(){
-  if(!currentObjectUrl||!currentJob){toast("Для инспекции нужны SOURCE и RESULT.");return}
-  const u=resultUrl(currentJob,false);["viewer-source","overlay-source"].forEach(id=>$(id).src=currentObjectUrl);["viewer-result","overlay-result"].forEach(id=>$(id).src=u);setViewerMode("side");$("viewer").showModal();
+function ensureViewerImage(img){
+  if(img.complete&&img.naturalWidth)return Promise.resolve();
+  return new Promise((resolve,reject)=>{img.onload=resolve;img.onerror=()=>reject(new Error("viewer_image_load_failed"))});
 }
-function stopBlink(){if(viewerBlinkTimer){clearInterval(viewerBlinkTimer);viewerBlinkTimer=null}$("overlay-source").style.opacity="1";$("overlay-result").style.opacity="1"}
+function viewerClamp(v,min,max){return Math.max(min,Math.min(max,v))}
+function viewerRefSize(){
+  const r=$("viewer-result"),s=$("viewer-source");
+  const img=(r&&r.naturalWidth)?r:s;
+  return {w:Math.max(1,img?.naturalWidth||1),h:Math.max(1,img?.naturalHeight||1)};
+}
+function resetViewerState(){
+  viewerState.zoomPreset="fit";viewerState.scale=1;viewerState.split=.5;viewerState.sync=true;
+  viewerState.centers.source={x:.5,y:.5};viewerState.centers.result={x:.5,y:.5};
+  viewerState.showDefects=false;viewerState.blinkShowResult=true;viewerState.diffCanvas=null;viewerState.diffKey="";
+  stopBlink();updateViewerUi();drawViewer();
+}
+function stopBlink(){if(viewerBlinkTimer){clearInterval(viewerBlinkTimer);viewerBlinkTimer=null}}
+function startBlink(){
+  stopBlink();if(viewerState.mode!=="blink")return;
+  viewerBlinkTimer=setInterval(()=>{viewerState.blinkShowResult=!viewerState.blinkShowResult;drawViewer()},600);
+}
 function setViewerMode(mode){
-  stopBlink();document.querySelectorAll("[data-view]").forEach(b=>b.classList.toggle("active",b.dataset.view===mode));$("viewer-side").style.display=mode==="side"?"grid":"none";$("viewer-overlay").style.display=["split","blink"].includes(mode)?"block":"none";$("viewer-canvas").style.display=mode==="diff"?"block":"none";
-  if(mode==="split"){$("overlay-result").classList.add("clip")}
-  if(mode==="blink"){$("overlay-result").classList.remove("clip");let show=true;viewerBlinkTimer=setInterval(()=>{show=!show;$("overlay-result").style.opacity=show?"1":"0"},650)}
-  if(mode==="diff")drawDiff();
+  if(!["side","split","diff","blink"].includes(mode))return;
+  viewerState.mode=mode;
+  if(mode==="blink")startBlink();else stopBlink();
+  if(mode==="diff")buildViewerDiff(true).then(drawViewer).catch(()=>{});
+  updateViewerUi();drawViewer();
 }
-async function drawDiff(){
-  const s=$("viewer-source"),r=$("viewer-result");await Promise.all([ensureImage(s),ensureImage(r)]);
-  const max=1400,ratio=Math.min(max/s.naturalWidth,max/r.naturalWidth,1),w=Math.max(1,Math.floor(Math.min(s.naturalWidth,r.naturalWidth)*ratio)),h=Math.max(1,Math.floor(Math.min(s.naturalHeight,r.naturalHeight)*ratio));
-  const c=$("viewer-canvas");c.width=w;c.height=h;const ctx=c.getContext("2d",{willReadFrequently:true});ctx.drawImage(s,0,0,w,h);const a=ctx.getImageData(0,0,w,h);ctx.clearRect(0,0,w,h);ctx.drawImage(r,0,0,w,h);const b=ctx.getImageData(0,0,w,h),o=ctx.createImageData(w,h);
-  for(let i=0;i<a.data.length;i+=4){o.data[i]=Math.min(255,Math.abs(a.data[i]-b.data[i])*3);o.data[i+1]=Math.min(255,Math.abs(a.data[i+1]-b.data[i+1])*3);o.data[i+2]=Math.min(255,Math.abs(a.data[i+2]-b.data[i+2])*3);o.data[i+3]=255}ctx.putImageData(o,0,0);
+function setViewerZoom(value){
+  viewerState.zoomPreset=value==="fit"?"fit":"numeric";
+  if(value!=="fit")viewerState.scale=viewerClamp(Number(value)||1,.05,8);
+  updateViewerUi();drawViewer();
 }
-function ensureImage(img){if(img.complete&&img.naturalWidth)return Promise.resolve();return new Promise((res,rej)=>{img.onload=res;img.onerror=rej})}
-$("action-inspect").addEventListener("click",openViewer);$("mobile-inspect").addEventListener("click",openViewer);$("viewer-close").addEventListener("click",()=>{$("viewer").close();stopBlink()});document.querySelectorAll("[data-view]").forEach(b=>b.addEventListener("click",()=>setViewerMode(b.dataset.view)));
+function viewerPaneRects(w,h){
+  if(viewerState.mode==="side"){
+    const gap=10,half=Math.max(1,(w-gap)/2);
+    return {source:{x:0,y:0,w:half,h},result:{x:half+gap,y:0,w:half,h}};
+  }
+  const full={x:0,y:0,w,h};return {source:full,result:full};
+}
+function viewerFitScale(rect,ref){return Math.max(.0001,Math.min(rect.w/ref.w,rect.h/ref.h)*.965)}
+function viewerScaleFor(rect,ref){return viewerState.zoomPreset==="fit"?viewerFitScale(rect,ref):viewerState.scale}
+function drawViewerLayer(ctx,img,rect,center,scale,ref,alpha){
+  if(!img||!img.naturalWidth)return;
+  const dw=ref.w*scale,dh=ref.h*scale;
+  const x=rect.x+rect.w/2-center.x*dw,y=rect.y+rect.h/2-center.y*dh;
+  ctx.save();ctx.beginPath();ctx.rect(rect.x,rect.y,rect.w,rect.h);ctx.clip();ctx.globalAlpha=alpha==null?1:alpha;
+  ctx.drawImage(img,x,y,dw,dh);ctx.restore();
+}
+function viewerFailures(){
+  const v=latestJobState?.validation||{};
+  return Array.from(new Set([...(v.failed_checks||[]),...(v.mandatory_failures||[])].map(String)));
+}
+function drawViewerDefects(ctx,w,h){
+  if(!viewerState.showDefects)return;
+  const failed=viewerFailures(),critical=failed.some(x=>/canvas_integrity|perimeter|border|seam/i.test(x));
+  const color=critical?"#ff6576":"#ffb42c";
+  ctx.save();ctx.strokeStyle=color;ctx.lineWidth=3;ctx.setLineDash([10,7]);ctx.strokeRect(8,8,Math.max(1,w-16),Math.max(1,h-16));ctx.setLineDash([]);
+  const label=failed.length?("CHECK AREA · "+failed.slice(0,2).join(" · ")):"CHECK AREA · локальные причины не переданы";
+  ctx.font="11px Consolas,monospace";const tw=Math.min(w-24,ctx.measureText(label).width+18);
+  ctx.fillStyle="rgba(3,11,18,.86)";ctx.fillRect(12,h-38,tw,25);ctx.fillStyle=color;ctx.fillText(label,20,h-21);ctx.restore();
+}
+async function buildViewerDiff(force){
+  const s=$("viewer-source"),r=$("viewer-result");if(!s.naturalWidth||!r.naturalWidth)return;
+  const key=[s.src,r.src,viewerState.diffMode,viewerState.diffThreshold].join("|");
+  if(!force&&viewerState.diffCanvas&&viewerState.diffKey===key)return;
+  const maxDim=2048,aspect=r.naturalWidth/Math.max(1,r.naturalHeight);
+  let w,h;if(aspect>=1){w=Math.min(maxDim,r.naturalWidth);h=Math.max(1,Math.round(w/aspect))}else{h=Math.min(maxDim,r.naturalHeight);w=Math.max(1,Math.round(h*aspect))}
+  const a=document.createElement("canvas"),b=document.createElement("canvas"),o=document.createElement("canvas");
+  a.width=b.width=o.width=w;a.height=b.height=o.height=h;
+  const ac=a.getContext("2d",{willReadFrequently:true}),bc=b.getContext("2d",{willReadFrequently:true}),oc=o.getContext("2d",{willReadFrequently:true});
+  ac.drawImage(s,0,0,w,h);bc.drawImage(r,0,0,w,h);
+  const A=ac.getImageData(0,0,w,h),B=bc.getImageData(0,0,w,h),O=oc.createImageData(w,h),t=viewerState.diffThreshold;
+  const grayA=viewerState.diffMode==="edge"?new Float32Array(w*h):null,grayB=grayA?new Float32Array(w*h):null;
+  if(grayA){for(let i=0,p=0;i<A.data.length;i+=4,p++){grayA[p]=A.data[i]*.299+A.data[i+1]*.587+A.data[i+2]*.114;grayB[p]=B.data[i]*.299+B.data[i+1]*.587+B.data[i+2]*.114}}
+  for(let p=0,i=0;p<w*h;p++,i+=4){
+    let v=0,rr=0,gg=0,bb=0;
+    if(viewerState.diffMode==="edge"){
+      const x=p%w,y=(p/w)|0,l=x?p-1:p,u=y?p-w:p;
+      const ea=Math.abs(grayA[p]-grayA[l])+Math.abs(grayA[p]-grayA[u]);
+      const eb=Math.abs(grayB[p]-grayB[l])+Math.abs(grayB[p]-grayB[u]);
+      v=Math.max(0,Math.abs(ea-eb)-t)*5;rr=gg=bb=Math.min(255,v);
+    }else{
+      const dr=Math.abs(A.data[i]-B.data[i]),dg=Math.abs(A.data[i+1]-B.data[i+1]),db=Math.abs(A.data[i+2]-B.data[i+2]);
+      const d=(dr+dg+db)/3;v=Math.max(0,d-t);
+      if(viewerState.diffMode==="heatmap"){
+        const q=Math.min(255,v*7);rr=q;gg=Math.max(0,255-Math.abs(q-128)*2);bb=255-q;
+      }else{rr=Math.min(255,dr*3);gg=Math.min(255,dg*3);bb=Math.min(255,db*3)}
+    }
+    O.data[i]=rr;O.data[i+1]=gg;O.data[i+2]=bb;O.data[i+3]=255;
+  }
+  oc.putImageData(O,0,0);viewerState.diffCanvas=o;viewerState.diffKey=key;
+}
+function updateViewerUi(){
+  document.querySelectorAll("[data-view]").forEach(b=>b.classList.toggle("active",b.dataset.view===viewerState.mode));
+  document.querySelectorAll("[data-zoom]").forEach(b=>b.classList.toggle("active",viewerState.zoomPreset==="fit"?b.dataset.zoom==="fit":Math.abs(Number(b.dataset.zoom)-viewerState.scale)<.001));
+  document.querySelectorAll("[data-diff]").forEach(b=>b.classList.toggle("active",b.dataset.diff===viewerState.diffMode));
+  $("viewer-zoom-value").textContent=viewerState.zoomPreset==="fit"?"FIT":Math.round(viewerState.scale*100)+"%";
+  $("viewer-sync").classList.toggle("active",viewerState.sync);$("viewer-defects").classList.toggle("active",viewerState.showDefects);
+  $("viewer-diff-controls").hidden=viewerState.mode!=="diff";$("viewer-divider").hidden=viewerState.mode!=="split";
+  $("viewer-divider").style.left=(viewerState.split*100)+"%";
+  $("viewer-labels").style.display=viewerState.mode==="diff"?"none":"flex";
+  $("viewer-diff-threshold-value").textContent=String(viewerState.diffThreshold);
+  $("viewer-diff-opacity-value").textContent=Math.round(viewerState.diffOpacity*100)+"%";
+}
+function drawViewer(){
+  const stage=$("viewer-stage"),canvas=$("viewer-canvas");if(!stage||!canvas)return;
+  const w=Math.max(1,stage.clientWidth),h=Math.max(1,stage.clientHeight),dpr=Math.min(2,window.devicePixelRatio||1);
+  if(canvas.width!==Math.round(w*dpr)||canvas.height!==Math.round(h*dpr)){canvas.width=Math.round(w*dpr);canvas.height=Math.round(h*dpr)}
+  const ctx=canvas.getContext("2d",{alpha:false});ctx.setTransform(dpr,0,0,dpr,0,0);ctx.fillStyle="#010508";ctx.fillRect(0,0,w,h);
+  const s=$("viewer-source"),r=$("viewer-result");if(!s?.naturalWidth||!r?.naturalWidth)return;
+  const ref=viewerRefSize(),rects=viewerPaneRects(w,h);
+  if(viewerState.mode==="side"){
+    drawViewerLayer(ctx,s,rects.source,viewerState.centers.source,viewerScaleFor(rects.source,ref),ref,1);
+    drawViewerLayer(ctx,r,rects.result,viewerState.centers.result,viewerScaleFor(rects.result,ref),ref,1);
+    ctx.strokeStyle="#294054";ctx.beginPath();ctx.moveTo(rects.source.w+5,0);ctx.lineTo(rects.source.w+5,h);ctx.stroke();
+  }else if(viewerState.mode==="split"){
+    const rect=rects.source,scale=viewerScaleFor(rect,ref);
+    drawViewerLayer(ctx,s,rect,viewerState.centers.source,scale,ref,1);
+    ctx.save();ctx.beginPath();ctx.rect(w*viewerState.split,0,w*(1-viewerState.split),h);ctx.clip();
+    drawViewerLayer(ctx,r,rect,viewerState.centers.result,scale,ref,1);ctx.restore();
+  }else if(viewerState.mode==="blink"){
+    const rect=rects.source,scale=viewerScaleFor(rect,ref),img=viewerState.blinkShowResult?r:s,center=viewerState.blinkShowResult?viewerState.centers.result:viewerState.centers.source;
+    drawViewerLayer(ctx,img,rect,center,scale,ref,1);
+  }else if(viewerState.mode==="diff"){
+    if(!viewerState.diffCanvas){buildViewerDiff(false).then(drawViewer).catch(()=>{});ctx.fillStyle="#8aa1b4";ctx.font="12px Consolas,monospace";ctx.fillText("DIFF: подготовка…",18,28)}
+    else{const rect=rects.source,scale=viewerScaleFor(rect,ref);drawViewerLayer(ctx,viewerState.diffCanvas,rect,viewerState.centers.source,scale,ref,viewerState.diffOpacity)}
+  }
+  drawViewerDefects(ctx,w,h);updateViewerUi();
+}
+async function openViewer(){
+  if(!currentObjectUrl||!currentJob){toast("Для инспекции нужны SOURCE и RESULT.");return}
+  const s=$("viewer-source"),r=$("viewer-result");s.src=currentObjectUrl;r.src=resultUrl(currentJob,false);
+  $("viewer").showModal();
+  try{await Promise.all([ensureViewerImage(s),ensureViewerImage(r)])}catch{toast("Не удалось загрузить SOURCE / RESULT для инспекции.");$("viewer").close();return}
+  viewerState.mode="side";resetViewerState();requestAnimationFrame(drawViewer);
+}
+function viewerPointerDown(e){
+  if(!$("viewer").open)return;
+  const stage=$("viewer-stage"),rect=stage.getBoundingClientRect(),x=e.clientX-rect.left;
+  if(viewerState.mode==="split"&&Math.abs(x-rect.width*viewerState.split)<=22){
+    viewerState.draggingSplit=true;viewerState.panning=false;
+  }else{
+    viewerState.panning=true;viewerState.draggingSplit=false;
+    viewerState.activePane=viewerState.mode==="side"&&x>rect.width/2?"result":"source";
+  }
+  viewerState.lastX=e.clientX;viewerState.lastY=e.clientY;stage.setPointerCapture?.(e.pointerId);e.preventDefault();
+}
+function viewerPointerMove(e){
+  if(!viewerState.panning&&!viewerState.draggingSplit)return;
+  const stage=$("viewer-stage"),rect=stage.getBoundingClientRect();
+  if(viewerState.draggingSplit){
+    viewerState.split=viewerClamp((e.clientX-rect.left)/Math.max(1,rect.width),.04,.96);drawViewer();return;
+  }
+  const dx=e.clientX-viewerState.lastX,dy=e.clientY-viewerState.lastY;viewerState.lastX=e.clientX;viewerState.lastY=e.clientY;
+  const ref=viewerRefSize(),rects=viewerPaneRects(rect.width,rect.height),pane=rects[viewerState.activePane]||rects.source,scale=viewerScaleFor(pane,ref);
+  const apply=name=>{const c=viewerState.centers[name];c.x=viewerClamp(c.x-dx/Math.max(1,ref.w*scale),0,1);c.y=viewerClamp(c.y-dy/Math.max(1,ref.h*scale),0,1)};
+  apply(viewerState.activePane);if(viewerState.sync)apply(viewerState.activePane==="source"?"result":"source");drawViewer();
+}
+function viewerPointerUp(){viewerState.panning=false;viewerState.draggingSplit=false}
+function viewerWheel(e){
+  if(!$("viewer").open)return;e.preventDefault();
+  if(viewerState.zoomPreset==="fit"){
+    const rect=$("viewer-stage").getBoundingClientRect(),ref=viewerRefSize(),pane=viewerPaneRects(rect.width,rect.height).source;
+    viewerState.scale=viewerFitScale(pane,ref);
+  }
+  viewerState.zoomPreset="numeric";viewerState.scale=viewerClamp(viewerState.scale*Math.exp(-e.deltaY*.0012),.05,8);updateViewerUi();drawViewer();
+}
+$("action-inspect").addEventListener("click",openViewer);$("mobile-inspect").addEventListener("click",openViewer);
+$("viewer-close").addEventListener("click",()=>{$("viewer").close();stopBlink()});
+$("viewer").addEventListener("close",()=>{stopBlink();viewerPointerUp()});
+document.querySelectorAll("[data-view]").forEach(b=>b.addEventListener("click",()=>setViewerMode(b.dataset.view)));
+document.querySelectorAll("[data-zoom]").forEach(b=>b.addEventListener("click",()=>setViewerZoom(b.dataset.zoom)));
+document.querySelectorAll("[data-diff]").forEach(b=>b.addEventListener("click",()=>{viewerState.diffMode=b.dataset.diff;viewerState.diffCanvas=null;viewerState.diffKey="";updateViewerUi();buildViewerDiff(true).then(drawViewer).catch(()=>{})}));
+$("viewer-sync").addEventListener("click",()=>{viewerState.sync=!viewerState.sync;if(viewerState.sync)viewerState.centers.result={...viewerState.centers.source};updateViewerUi();drawViewer()});
+$("viewer-defects").addEventListener("click",()=>{viewerState.showDefects=!viewerState.showDefects;updateViewerUi();drawViewer()});
+$("viewer-reset").addEventListener("click",resetViewerState);
+$("viewer-diff-threshold").addEventListener("input",e=>{viewerState.diffThreshold=Number(e.target.value);viewerState.diffCanvas=null;viewerState.diffKey="";updateViewerUi();buildViewerDiff(false).then(drawViewer).catch(()=>{})});
+$("viewer-diff-opacity").addEventListener("input",e=>{viewerState.diffOpacity=Number(e.target.value)/100;updateViewerUi();drawViewer()});
+$("viewer-stage").addEventListener("pointerdown",viewerPointerDown);$("viewer-stage").addEventListener("pointermove",viewerPointerMove);$("viewer-stage").addEventListener("pointerup",viewerPointerUp);$("viewer-stage").addEventListener("pointercancel",viewerPointerUp);
+$("viewer-stage").addEventListener("wheel",viewerWheel,{passive:false});
+$("viewer-stage").addEventListener("dblclick",()=>setViewerZoom(viewerState.zoomPreset==="fit"?"1":"fit"));
+window.addEventListener("resize",()=>{if($("viewer").open)drawViewer()});
+document.addEventListener("keydown",e=>{
+  if(!$("viewer").open)return;
+  const k=e.key.toLowerCase();
+  if(k==="1")setViewerMode("side");else if(k==="2")setViewerMode("split");else if(k==="3")setViewerMode("diff");else if(k==="4")setViewerMode("blink");
+  else if(k==="f")setViewerZoom("fit");else if(k==="z")setViewerZoom("1");else if(k==="x")setViewerZoom("2");
+  else if(k==="d"){$("viewer-defects").click()}else if(k==="r")resetViewerState();
+});
 
 async function initCloudUi(){
   renderLocks();resetResult();

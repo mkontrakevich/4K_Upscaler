@@ -2,7 +2,9 @@ name: 4K Upscaler Regression Guard
 
 on:
   push:
-    branches: [main, ui-r8-local-review, ui-r8-single-upload, ui-r8-next-source-plus, fix-container-app-name, ui-r8-log-export, ui-r8-fix-upload-plus-layout, fix-cloud-job-start-generation, fix-container-internal-worker-egress, fix-push-container-jobs, fix-container-job-runner-watchdog, diag-openrouter-generation-failure, fix-review-sync-metadata, fix-review-result-loss-guard, fix-r2-result-sync-buffered, fix-release-processing-slot-on-review, session-history-10min]
+    branches: [main, ui-r8-local-review, ui-r8-single-upload, ui-r8-next-source-plus, fix-container-app-name, ui-r8-log-export, ui-r8-fix-upload-plus-layout, fix-cloud-job-start-generation, fix-container-internal-worker-egress, fix-push-container-jobs, fix-container-job-runner-watchdog, diag-openrouter-generation-failure, fix-review-sync-metadata, fix-review-result-loss-guard, fix-r2-result-sync-buffered, fix-release-processing-slot-on-review, session-history-10min, "restore-*"]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 jobs:
@@ -119,7 +121,7 @@ jobs:
           from pathlib import Path
           html = Path("site/index.html").read_text(encoding="utf-8")
           required = [
-              "CORE 8.8.1 R4 · CLOUD UI R8",
+              "CORE 8.8.1 R4 · CLOUD UI R9",
               'class="comparison"',
               'id="source-image"',
               'id="result-image"',
@@ -135,6 +137,17 @@ jobs:
               'data-view="split"',
               'data-view="diff"',
               'data-view="blink"',
+              'data-zoom="0.5">50%',
+              'data-zoom="1">100%',
+              'data-zoom="2">200%',
+              'id="viewer-divider"',
+              'id="viewer-sync"',
+              'id="viewer-defects"',
+              'data-diff="absolute"',
+              'data-diff="edge"',
+              'data-diff="heatmap"',
+              "viewerPointerMove",
+              "viewerWheel",
               "renderValidation",
               "sendDecision",
               "confirmPaidGeneration",
