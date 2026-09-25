@@ -194,7 +194,7 @@ jobs:
               "async function resetCurrentJob",
               "async function reloadCurrentSource()",
               'fetch("/api/jobs/"+job.id+"/reset"',
-              "Платный API не запускался",
+              "платный API не запускался",
           ]:
               assert token in html, token
 
