@@ -382,6 +382,31 @@ jobs:
           print("Buffered RESULT sync + rejected review contract: PASSED")
           PY
 
+      - name: Processor lifecycle handoff contract
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          worker = Path("src/worker.js").read_text(encoding="utf-8")
+          cfg = json.loads(Path("wrangler.jsonc").read_text(encoding="utf-8"))
+
+          assert cfg["containers"][0]["max_instances"] == 1, "Do not raise paid processor concurrency"
+          assert "async shutdownContainer(reason" in worker
+          assert "this.ctx.container.destroy" in worker
+          assert "async function hasInFlightProcessorJob(env)" in worker
+          assert "async function retirePreviousProcessorInstances(env)" in worker
+          assert 'SESSION_STATE_R7.get("processor:active_instance")' in worker
+          assert '"primary-result-persist-r10"' in worker
+          assert "processor_rollout_waiting_for_inflight_job" in worker
+          assert 'SESSION_STATE_R7.put("processor:active_instance", CONTAINER_INSTANCE_NAME)' in worker
+          assert "job.container_instance_name = CONTAINER_INSTANCE_NAME" in worker
+
+          retire = worker.index("await retirePreviousProcessorInstances(env)")
+          start = worker.index("await container.startAndWaitForPorts({")
+          assert retire < start, "Stale processor must be retired before starting the replacement"
+          print("Single-instance processor lifecycle handoff: PASSED")
+          PY
+
       - name: Versioned Container rollout contract
         run: |
           python - <<'PY'
