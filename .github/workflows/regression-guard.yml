@@ -381,6 +381,31 @@ jobs:
           print("Buffered RESULT sync + rejected review contract: PASSED")
           PY
 
+      - name: Direct RESULT persistence contract
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          service = Path("cloud_processor_service.py").read_text(encoding="utf-8")
+          worker = Path("src/worker.js").read_text(encoding="utf-8")
+
+          assert "def _persist_candidate_to_worker(" in service
+          assert 'bridge.upload_candidate(token, job_id, path, validation, status)' in service
+          review_persist = service.index('_persist_candidate_to_worker(job_id, candidate, validation, "review", 88)')
+          review_wait = service.index('decision = _wait_for_decision(job_id)')
+          assert review_persist < review_wait, "RESULT must reach Worker/R2 before human review"
+          assert '_persist_candidate_to_worker(job_id, final, validation, "done", 99)' in service
+          assert 'result_persist_retry' in service
+          assert 'RESULT was generated but Worker/R2 persistence failed' in service
+
+          assert 'const bytes = await file.arrayBuffer();' in worker
+          assert 'const actualBytes = bytes.byteLength;' in worker
+          assert 'crypto.subtle.digest("SHA-256", bytes)' in worker
+          assert 'job.result_persist_source = "container_push";' in worker
+          assert 'job.result_persisted_at = now();' in worker
+          assert 'job.result_sync_attempts = 0;' in worker
+          print("Direct Container -> Worker/R2 RESULT persistence: PASSED")
+          PY
+
       - name: Human review releases processing slot
         run: |
           python - <<'PY'
