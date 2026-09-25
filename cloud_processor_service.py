@@ -18,6 +18,8 @@ import cloudflare_bridge as bridge
 
 STARTED_AT = time.time()
 CONTAINER_BUILD_ID = os.environ.get("MG4K_CONTAINER_BUILD_ID", "unknown").strip() or "unknown"
+RESULT_PERSIST_ATTEMPTS = max(1, int(os.environ.get("MG4K_RESULT_PERSIST_ATTEMPTS", "5")))
+RESULT_PERSIST_RETRY_SECONDS = max(0.25, float(os.environ.get("MG4K_RESULT_PERSIST_RETRY_SECONDS", "3")))
 JOBS_ROOT = Path(os.environ.get("MG4K_JOBS_ROOT", "/tmp/mg4k-jobs")).resolve()
 JOBS_ROOT.mkdir(parents=True, exist_ok=True)
 
@@ -378,7 +380,7 @@ def _ensure_job_runner(job_id: str) -> bool:
 
 
 class ProcessorHandler(BaseHTTPRequestHandler):
-    server_version = "MG4KCloudProcessor/8.8.1-result-persist-r10"
+    server_version = "MG4KCloudProcessor/8.8.1-result-persist-r10a"
 
     def _json(self, status: int, payload: dict[str, Any]) -> None:
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
@@ -400,7 +402,7 @@ class ProcessorHandler(BaseHTTPRequestHandler):
             self._json(200, {
                 "status": "ok",
                 "service": "mg4k-cloud-processor",
-                "version": "8.8.1-result-persist-r10",
+                "version": "8.8.1-result-persist-r10a",
                 "build_id": CONTAINER_BUILD_ID,
                 "uptime_seconds": int(time.time() - STARTED_AT),
                 "ephemeral_jobs": True,
