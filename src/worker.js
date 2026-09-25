@@ -107,6 +107,9 @@ function publicJob(job) {
     result_sync_attempts: Number(job.result_sync_attempts || 0),
     result_bytes: Number(job.result_bytes || 0),
     result_content_type: job.result_content_type || null,
+    result_checksum_sha256: job.result_checksum_sha256 || null,
+    result_persist_source: job.result_persist_source || null,
+    result_persisted_at: job.result_persisted_at || null,
     manual_retry_required: Boolean(job.manual_retry_required),
     validation: job.validation || null,
     decision: job.decision || null,
@@ -869,20 +872,37 @@ async function handleApi(request, env, ctx, url) {
 
     const resultName = cleanName(file.name || `4K_${job.filename}`);
     const resultKey = `sessions/${job.session_id}/jobs/${job.id}/result/${resultName}`;
+    const resultContentType = String(file.type || "image/jpeg");
+    const bytes = await file.arrayBuffer();
+    const actualBytes = bytes.byteLength;
+    if (!actualBytes) return json({ error: "result_file_empty" }, 400);
+    const digest = await crypto.subtle.digest("SHA-256", bytes);
+    const checksum = Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, "0")).join("");
+
     if (job.result_key && job.result_key !== resultKey) {
       try { await env.TEMP_BUFFER_R7.delete(job.result_key); } catch {}
     }
-    await env.TEMP_BUFFER_R7.put(resultKey, file.stream(), {
-      httpMetadata: { contentType: String(file.type || "image/jpeg") },
+    await env.TEMP_BUFFER_R7.put(resultKey, bytes, {
+      httpMetadata: { contentType: resultContentType },
       customMetadata: {
         session_id: job.session_id,
         job_id: job.id,
         kind: "result",
         original_name: resultName,
+        bytes: String(actualBytes),
+        sha256: checksum,
+        persist_source: "container_push",
       },
     });
 
     job.result_key = resultKey;
+    job.result_bytes = actualBytes;
+    job.result_content_type = resultContentType;
+    job.result_checksum_sha256 = checksum;
+    job.result_persist_source = "container_push";
+    job.result_persisted_at = now();
+    job.result_sync_attempts = 0;
+    job.result_sync_warning = null;
     job.status = requestedStatus === "review" ? "review" : "done";
     job.stage = requestedStatus === "review" ? "awaiting_approval" : "final";
     job.progress = requestedStatus === "review" ? 90 : 100;
