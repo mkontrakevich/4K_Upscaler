@@ -18,6 +18,14 @@ export class MG4KProcessor extends Container {
   onError(error) {
     console.error("MG4K_PROCESSOR_ERROR", error);
   }
+
+  async shutdownContainer(reason = "retired") {
+    const wasRunning = Boolean(this.ctx?.container?.running);
+    if (wasRunning) {
+      await this.ctx.container.destroy(String(reason || "retired").slice(0, 120));
+    }
+    return { ok: true, was_running: wasRunning };
+  }
 }
 
 const SESSION_TTL = 60 * 10;
@@ -25,9 +33,54 @@ const PAIR_TTL = 60 * 10;
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 const CONTAINER_BUILD_ID = "result-persist-r10a";
 const CONTAINER_INSTANCE_NAME = `primary-${CONTAINER_BUILD_ID}`;
+const LEGACY_CONTAINER_INSTANCE_NAMES = [
+  "primary",
+  "primary-result-persist-r10",
+];
 
 function processorContainer(env) {
   return getContainer(env.MG4K_PROCESSOR, CONTAINER_INSTANCE_NAME);
+}
+
+async function hasInFlightProcessorJob(env) {
+  const listed = await env.SESSION_STATE_R7.list({ prefix: "job:", limit: 1000 });
+  for (const key of listed.keys) {
+    const raw = await env.SESSION_STATE_R7.get(key.name);
+    if (!raw) continue;
+    const job = JSON.parse(raw);
+    if (!job.container_dispatched) continue;
+    if (["processing", "review", "decision_pending"].includes(String(job.status || ""))) {
+      return true;
+    }
+  }
+  return false;
+}
+
+async function retirePreviousProcessorInstances(env) {
+  const remembered = await env.SESSION_STATE_R7.get("processor:active_instance");
+  const candidates = new Set([
+    ...(remembered ? [remembered] : []),
+    ...LEGACY_CONTAINER_INSTANCE_NAMES,
+  ]);
+  candidates.delete(CONTAINER_INSTANCE_NAME);
+
+  if (!candidates.size) return { retired: [], blocked: false };
+  if (await hasInFlightProcessorJob(env)) {
+    console.log("MG4K_PROCESSOR_RETIRE_BLOCKED_ACTIVE_JOB", { candidates: [...candidates] });
+    return { retired: [], blocked: true };
+  }
+
+  const retired = [];
+  for (const name of candidates) {
+    try {
+      const stub = getContainer(env.MG4K_PROCESSOR, name);
+      const result = await stub.shutdownContainer(`retired_for_${CONTAINER_BUILD_ID}`);
+      retired.push({ name, was_running: Boolean(result?.was_running) });
+    } catch (error) {
+      console.warn("MG4K_PROCESSOR_RETIRE_WARNING", name, error?.message || String(error));
+    }
+  }
+  return { retired, blocked: false };
 }
 
 function json(data, status = 200, headers = {}) {
@@ -117,6 +170,7 @@ function publicJob(job) {
     result_persist_source: job.result_persist_source || null,
     result_persisted_at: job.result_persisted_at || null,
     container_build_id: job.container_build_id || null,
+    container_instance_name: job.container_instance_name || null,
     manual_retry_required: Boolean(job.manual_retry_required),
     validation: job.validation || null,
     decision: job.decision || null,
@@ -253,6 +307,11 @@ async function ensureCloudProcessor(env, origin) {
     throw new Error("OPENROUTER_API_KEY is not configured.");
   }
 
+  const retirement = await retirePreviousProcessorInstances(env);
+  if (retirement.blocked) {
+    throw new Error("processor_rollout_waiting_for_inflight_job");
+  }
+
   const container = processorContainer(env);
   await container.startAndWaitForPorts({
     ports: [8080],
@@ -283,6 +342,8 @@ async function ensureCloudProcessor(env, origin) {
       `container_build_mismatch:expected=${CONTAINER_BUILD_ID}:actual=${String(health.build_id || "unknown")}`
     );
   }
+  await env.SESSION_STATE_R7.put("processor:active_instance", CONTAINER_INSTANCE_NAME);
+  await env.SESSION_STATE_R7.put("processor:active_build_id", CONTAINER_BUILD_ID);
   return container;
 }
 
@@ -374,6 +435,7 @@ async function dispatchJobToContainer(env, job, origin) {
   }
   job.container_dispatched = true;
   job.container_dispatched_at = now();
+  job.container_instance_name = CONTAINER_INSTANCE_NAME;
   applyContainerState(job, state);
   await writeJob(env, job);
   return { job, container };
