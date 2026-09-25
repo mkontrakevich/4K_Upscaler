@@ -23,7 +23,7 @@ export class MG4KProcessor extends Container {
 const SESSION_TTL = 60 * 10;
 const PAIR_TTL = 60 * 10;
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
-const CONTAINER_BUILD_ID = "result-persist-r10";
+const CONTAINER_BUILD_ID = "result-persist-r10a";
 const CONTAINER_INSTANCE_NAME = `primary-${CONTAINER_BUILD_ID}`;
 
 function processorContainer(env) {
