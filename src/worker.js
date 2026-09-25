@@ -42,18 +42,34 @@ function processorContainer(env) {
   return getContainer(env.MG4K_PROCESSOR, CONTAINER_INSTANCE_NAME);
 }
 
-async function hasInFlightProcessorJob(env) {
+async function hasInFlightProcessorJob(env, instanceNames) {
+  const targets = new Set(Array.from(instanceNames || []).map(String));
+  if (!targets.size) return null;
+
   const listed = await env.SESSION_STATE_R7.list({ prefix: "job:", limit: 1000 });
   for (const key of listed.keys) {
     const raw = await env.SESSION_STATE_R7.get(key.name);
     if (!raw) continue;
     const job = JSON.parse(raw);
     if (!job.container_dispatched) continue;
-    if (["processing", "review", "decision_pending"].includes(String(job.status || ""))) {
-      return true;
-    }
+
+    const status = String(job.status || "");
+    if (!["processing", "review", "decision_pending"].includes(status)) continue;
+
+    // Versioned jobs must only protect the exact Container instance that owns
+    // them. Legacy jobs without an instance name are conservatively mapped to
+    // the original "primary" instance only.
+    const instanceName = String(job.container_instance_name || "primary");
+    if (!targets.has(instanceName)) continue;
+
+    return {
+      id: job.id,
+      status,
+      stage: String(job.stage || ""),
+      instance_name: instanceName,
+    };
   }
-  return false;
+  return null;
 }
 
 async function retirePreviousProcessorInstances(env) {
@@ -65,9 +81,10 @@ async function retirePreviousProcessorInstances(env) {
   candidates.delete(CONTAINER_INSTANCE_NAME);
 
   if (!candidates.size) return { retired: [], blocked: false };
-  if (await hasInFlightProcessorJob(env)) {
-    console.log("MG4K_PROCESSOR_RETIRE_BLOCKED_ACTIVE_JOB", { candidates: [...candidates] });
-    return { retired: [], blocked: true };
+  const blocker = await hasInFlightProcessorJob(env, candidates);
+  if (blocker) {
+    console.log("MG4K_PROCESSOR_RETIRE_BLOCKED_ACTIVE_JOB", { candidates: [...candidates], blocker });
+    return { retired: [], blocked: true, blocker };
   }
 
   const retired = [];
@@ -309,7 +326,7 @@ async function ensureCloudProcessor(env, origin) {
 
   const retirement = await retirePreviousProcessorInstances(env);
   if (retirement.blocked) {
-    throw new Error("processor_rollout_waiting_for_inflight_job");
+    const b=retirement.blocker;throw new Error(`processor_rollout_waiting_for_inflight_job:${b?.id||"unknown"}:${b?.instance_name||"unknown"}:${b?.status||"unknown"}`);
   }
 
   const container = processorContainer(env);
