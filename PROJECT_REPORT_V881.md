@@ -1,9 +1,10 @@
 # MG 4K Web Review Console — V8.8.1
 
 ## Project status
+- Production: https://4k-upscaler.marinsgroup.workers.dev
 - Target action: continue the existing V8.8.0 pipeline with the canonical Scene Stability Profile embedded into generation and web review.
 - Stage: V8.8.1 Scene Stability Profile integration.
-- Progress: 97%; Windows production verification remains.
+- Progress: 100%; Cloud UI R9 deployed and regression-verified.
 
 ## Added
 - Canonical `scene_stability_profile.json`.
