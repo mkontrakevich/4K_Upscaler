@@ -420,6 +420,28 @@ jobs:
           print("Buffered RESULT sync + rejected review contract: PASSED")
           PY
 
+      - name: Processor rollout blocker scoping contract
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          worker = Path("src/worker.js").read_text(encoding="utf-8")
+
+          assert "async function hasInFlightProcessorJob(env, instanceNames)" in worker
+          assert "const targets = new Set(Array.from(instanceNames || []).map(String));" in worker
+          assert 'const instanceName = String(job.container_instance_name || "primary");' in worker
+          assert "if (!targets.has(instanceName)) continue;" in worker
+          assert "const blocker = await hasInFlightProcessorJob(env, candidates);" in worker
+          assert "return { retired: [], blocked: true, blocker };" in worker
+          assert "processor_rollout_waiting_for_inflight_job:${b?.id" in worker
+
+          # Global processing/review jobs must no longer block retirement of an
+          # unrelated stale instance.
+          fn = worker[worker.index("async function hasInFlightProcessorJob"):worker.index("async function retirePreviousProcessorInstances")]
+          assert 'container_instance_name || "primary"' in fn
+          assert "targets.has(instanceName)" in fn
+          print("Processor rollout blocker scoping: PASSED")
+          PY
+
       - name: Processor lifecycle handoff contract
         run: |
           python - <<'PY'
@@ -431,11 +453,11 @@ jobs:
           assert cfg["containers"][0]["max_instances"] == 1, "Do not raise paid processor concurrency"
           assert "async shutdownContainer(reason" in worker
           assert "this.ctx.container.destroy" in worker
-          assert "async function hasInFlightProcessorJob(env)" in worker
+          assert "async function hasInFlightProcessorJob(env, instanceNames)" in worker
           assert "async function retirePreviousProcessorInstances(env)" in worker
           assert 'SESSION_STATE_R7.get("processor:active_instance")' in worker
           assert '"primary-result-persist-r10"' in worker
-          assert "processor_rollout_waiting_for_inflight_job" in worker
+          assert "processor_rollout_waiting_for_inflight_job:" in worker
           assert 'SESSION_STATE_R7.put("processor:active_instance", CONTAINER_INSTANCE_NAME)' in worker
           assert "job.container_instance_name = CONTAINER_INSTANCE_NAME" in worker
 
