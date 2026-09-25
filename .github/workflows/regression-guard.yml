@@ -170,6 +170,7 @@ jobs:
           for log_control in ['id="log-copy"', 'id="log-save"', "function logExportText()", "function copyProcessLog()", "function saveProcessLog()"]:
               assert log_control in html, f"Missing process log export control: {log_control}"
           assert 'MG4K_LOG_' in html, "Saved log filename contract missing"
+          assert '"Processor build: "+(latestJobState?.container_build_id||"—")' in html, "Processor build must be exported in logs"
           assert '.upload-plus{position:static' in html, "Initial upload plus must stay in document flow"
           plus_pos = html.index('id="upload-plus"')
           overlay_pos = html.rfind('id="upload-overlay"', 0, plus_pos)
@@ -379,6 +380,25 @@ jobs:
           assert 'утверждение заблокировано' in ui
           assert 'result_sync_failed' in ui
           print("Buffered RESULT sync + rejected review contract: PASSED")
+          PY
+
+      - name: Versioned Container rollout contract
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          worker = Path("src/worker.js").read_text(encoding="utf-8")
+          service = Path("cloud_processor_service.py").read_text(encoding="utf-8")
+
+          assert 'const CONTAINER_BUILD_ID = "result-persist-r10";' in worker
+          assert 'const CONTAINER_INSTANCE_NAME = `primary-${CONTAINER_BUILD_ID}`;' in worker
+          assert 'return getContainer(env.MG4K_PROCESSOR, CONTAINER_INSTANCE_NAME);' in worker
+          assert 'MG4K_CONTAINER_BUILD_ID: CONTAINER_BUILD_ID' in worker
+          assert 'container_build_mismatch' in worker
+          assert 'String(health.build_id || "") !== CONTAINER_BUILD_ID' in worker
+          assert 'CONTAINER_BUILD_ID = os.environ.get("MG4K_CONTAINER_BUILD_ID"' in service
+          assert '"build_id": CONTAINER_BUILD_ID' in service
+          assert '8.8.1-result-persist-r10' in service
+          print("Versioned Container rollout guard: PASSED")
           PY
 
       - name: Direct RESULT persistence contract

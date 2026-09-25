@@ -17,6 +17,7 @@ import cloudflare_bridge as bridge
 
 
 STARTED_AT = time.time()
+CONTAINER_BUILD_ID = os.environ.get("MG4K_CONTAINER_BUILD_ID", "unknown").strip() or "unknown"
 JOBS_ROOT = Path(os.environ.get("MG4K_JOBS_ROOT", "/tmp/mg4k-jobs")).resolve()
 JOBS_ROOT.mkdir(parents=True, exist_ok=True)
 
@@ -58,6 +59,7 @@ def _public_state(job_id: str) -> dict[str, Any] | None:
             return None
         return {
             "id": job_id,
+            "build_id": CONTAINER_BUILD_ID,
             "status": state.get("status", "queued"),
             "stage": state.get("stage", "queued"),
             "progress": int(state.get("progress", 0) or 0),
@@ -376,7 +378,7 @@ def _ensure_job_runner(job_id: str) -> bool:
 
 
 class ProcessorHandler(BaseHTTPRequestHandler):
-    server_version = "MG4KCloudProcessor/8.8.1-push-watchdog"
+    server_version = "MG4KCloudProcessor/8.8.1-result-persist-r10"
 
     def _json(self, status: int, payload: dict[str, Any]) -> None:
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
@@ -398,7 +400,8 @@ class ProcessorHandler(BaseHTTPRequestHandler):
             self._json(200, {
                 "status": "ok",
                 "service": "mg4k-cloud-processor",
-                "version": "8.8.1-push-watchdog",
+                "version": "8.8.1-result-persist-r10",
+                "build_id": CONTAINER_BUILD_ID,
                 "uptime_seconds": int(time.time() - STARTED_AT),
                 "ephemeral_jobs": True,
                 "persistent_user_database": False,
