@@ -121,7 +121,7 @@ jobs:
           from pathlib import Path
           html = Path("site/index.html").read_text(encoding="utf-8")
           required = [
-              "CORE 8.8.1 R4 · CLOUD UI R9",
+              "CORE 8.8.1 R4 · CLOUD UI R9.1",
               'class="comparison"',
               'id="source-image"',
               'id="result-image"',
@@ -177,6 +177,44 @@ jobs:
           overlay_close = html.index('</div>\n        </div>', plus_pos)
           assert overlay_pos != -1 and overlay_close != -1, "Upload plus must stay inside upload overlay content"
           print("Cloud two-pane Visual Review + queue/skip + log export + upload layout contract: PASSED")
+          PY
+
+      - name: Cloud viewer non-blank render contract
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          html = Path("site/index.html").read_text(encoding="utf-8")
+
+          required = [
+              "CORE 8.8.1 R4 · CLOUD UI R9.1",
+              'id="viewer-loading"',
+              'viewer-stage.viewer-fallback .viewer-buffer',
+              'stage.classList.toggle("viewer-fallback",!layoutReady||!imagesReady)',
+              'const box=stage.getBoundingClientRect(),w=Math.floor(box.width),h=Math.floor(box.height);',
+              'layoutReady=w>=32&&h>=32',
+              'requestAnimationFrame(()=>requestAnimationFrame(drawViewer))',
+              'new ResizeObserver(scheduleViewerRedraw)',
+              'window.addEventListener("resize",scheduleViewerRedraw)',
+              'timer=setTimeout(failed,20000)',
+              'img.addEventListener("load",loaded,{once:true})',
+              'img.addEventListener("error",failed,{once:true})',
+          ]
+          missing = [item for item in required if item not in html]
+          assert not missing, f"Blank viewer regression contract missing: {missing}"
+
+          open_pos = html.index("async function openViewer()")
+          show_pos = html.index("viewer.showModal();", open_pos)
+          redraw_pos = html.index("requestAnimationFrame(()=>requestAnimationFrame(drawViewer))", show_pos)
+          assert show_pos < redraw_pos, "Viewer must redraw after modal layout starts"
+
+          draw_pos = html.index("function drawViewer()")
+          readiness_pos = html.index("if(!layoutReady||!imagesReady)return;", draw_pos)
+          canvas_resize_pos = html.index("canvas.width!==Math.round(w*dpr)", draw_pos)
+          assert readiness_pos < canvas_resize_pos, "Canvas must wait for real layout/image dimensions"
+
+          fallback_pos = html.index('stage.classList.toggle("viewer-fallback",!layoutReady||!imagesReady)', draw_pos)
+          assert fallback_pos < readiness_pos, "Native image fallback must activate before early return"
+          print("Cloud Visual Review non-blank render contract: PASSED")
           PY
 
       - name: Cloud skip backend contract
