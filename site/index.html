@@ -142,6 +142,13 @@ body{overflow-x:hidden}
 .viewer-labels{position:absolute;left:0;right:0;top:12px;display:flex;justify-content:space-between;padding:0 16px;pointer-events:none;z-index:7}
 .viewer-labels span{padding:5px 8px;border-radius:4px;background:rgba(2,9,15,.74);color:#d3e3f1;font:9px Consolas,monospace;letter-spacing:.08em}
 .viewer-buffer{display:none!important}
+.viewer-stage.viewer-fallback .viewer-canvas{visibility:hidden}
+.viewer-stage.viewer-fallback .viewer-buffer{display:block!important;position:absolute;top:0;height:100%;width:calc(50% - 5px);object-fit:contain;background:#010508;z-index:2}
+.viewer-stage.viewer-fallback #viewer-source{left:0}
+.viewer-stage.viewer-fallback #viewer-result{right:0}
+.viewer-stage.viewer-fallback::after{content:"";position:absolute;top:0;bottom:0;left:50%;width:1px;background:#294054;z-index:3}
+.viewer-loading{position:absolute;inset:0;display:grid;place-items:center;z-index:9;pointer-events:none;background:rgba(1,5,8,.28);color:#8aa1b4;font:11px/1.4 Consolas,monospace;letter-spacing:.03em}
+.viewer-loading[hidden]{display:none!important}
 .viewer-footer{min-height:34px;display:flex;align-items:center;justify-content:space-between;gap:14px;padding:5px 10px;border-top:1px solid #294054;background:#06111c;color:#6f879d;font-size:9px}
 .viewer-footer span:last-child{text-align:right}
 .viewer-close{width:38px;height:32px;border:1px solid #38546a;border-radius:6px;background:#0a1826;color:#fff;font-size:18px;cursor:pointer}
@@ -197,7 +204,7 @@ body{overflow-x:hidden}
       <button type="button" id="mode-safe" disabled><strong>SAFE</strong><span>локальный upscale</span></button>
       <button type="button" id="mode-generative" class="active"><strong>GENERATIVE</strong><span>Nano Banana Pro</span></button>
     </div>
-    <div class="version">CORE 8.8.1 R4 · CLOUD UI R9</div>
+    <div class="version">CORE 8.8.1 R4 · CLOUD UI R9.1</div>
   </header>
 
   <section class="status-strip">
@@ -348,6 +355,7 @@ body{overflow-x:hidden}
     </div>
     <div class="viewer-stage" id="viewer-stage">
       <canvas class="viewer-canvas" id="viewer-canvas"></canvas>
+      <div class="viewer-loading" id="viewer-loading">Загрузка SOURCE / RESULT…</div>
       <div class="viewer-divider" id="viewer-divider" hidden></div>
       <div class="viewer-labels" id="viewer-labels"><span>SOURCE</span><span>RESULT</span></div>
       <img id="viewer-source" class="viewer-buffer" alt="SOURCE">
@@ -406,7 +414,7 @@ function logExportText(){
   const item=currentSourceItem();
   const header=[
     "MG 4K / ARCH LOCK — PROCESS LOG",
-    "UI: CORE 8.8.1 R4 · CLOUD UI R9",
+    "UI: CORE 8.8.1 R4 · CLOUD UI R9.1",
     "Processor build: "+(latestJobState?.container_build_id||"—"),
     "Exported: "+new Date().toISOString(),
     "Job: "+(currentJob?.id||"—"),
@@ -849,9 +857,21 @@ $("action-regenerate").addEventListener("click",()=>prepareJob(true));
 $("log-copy").addEventListener("click",copyProcessLog);
 $("log-save").addEventListener("click",saveProcessLog);
 
-function ensureViewerImage(img){
-  if(img.complete&&img.naturalWidth)return Promise.resolve();
-  return new Promise((resolve,reject)=>{img.onload=resolve;img.onerror=()=>reject(new Error("viewer_image_load_failed"))});
+function ensureViewerImage(img,onReady){
+  if(img.complete&&img.naturalWidth){onReady?.(img);return Promise.resolve(img)}
+  return new Promise((resolve,reject)=>{
+    let timer=null;
+    const cleanup=()=>{
+      if(timer)clearTimeout(timer);
+      img.removeEventListener("load",loaded);
+      img.removeEventListener("error",failed);
+    };
+    const loaded=()=>{cleanup();onReady?.(img);resolve(img)};
+    const failed=()=>{cleanup();reject(new Error("viewer_image_load_failed"))};
+    img.addEventListener("load",loaded,{once:true});
+    img.addEventListener("error",failed,{once:true});
+    timer=setTimeout(failed,20000);
+  });
 }
 function viewerClamp(v,min,max){return Math.max(min,Math.min(max,v))}
 function viewerRefSize(){
@@ -956,10 +976,16 @@ function updateViewerUi(){
 }
 function drawViewer(){
   const stage=$("viewer-stage"),canvas=$("viewer-canvas");if(!stage||!canvas)return;
-  const w=Math.max(1,stage.clientWidth),h=Math.max(1,stage.clientHeight),dpr=Math.min(2,window.devicePixelRatio||1);
+  const box=stage.getBoundingClientRect(),w=Math.floor(box.width),h=Math.floor(box.height);
+  const source=$("viewer-source"),result=$("viewer-result");
+  const layoutReady=w>=32&&h>=32,imagesReady=Boolean(source?.naturalWidth&&result?.naturalWidth);
+  stage.classList.toggle("viewer-fallback",!layoutReady||!imagesReady);
+  if(!layoutReady||!imagesReady)return;
+  const dpr=Math.min(2,window.devicePixelRatio||1);
   if(canvas.width!==Math.round(w*dpr)||canvas.height!==Math.round(h*dpr)){canvas.width=Math.round(w*dpr);canvas.height=Math.round(h*dpr)}
-  const ctx=canvas.getContext("2d",{alpha:false});ctx.setTransform(dpr,0,0,dpr,0,0);ctx.fillStyle="#010508";ctx.fillRect(0,0,w,h);
-  const s=$("viewer-source"),r=$("viewer-result");if(!s?.naturalWidth||!r?.naturalWidth)return;
+  const ctx=canvas.getContext("2d",{alpha:false});if(!ctx){stage.classList.add("viewer-fallback");return}
+  ctx.setTransform(dpr,0,0,dpr,0,0);ctx.fillStyle="#010508";ctx.fillRect(0,0,w,h);
+  const s=source,r=result;
   const ref=viewerRefSize(),rects=viewerPaneRects(w,h);
   if(viewerState.mode==="side"){
     drawViewerLayer(ctx,s,rects.source,viewerState.centers.source,viewerScaleFor(rects.source,ref),ref,1);
@@ -981,10 +1007,23 @@ function drawViewer(){
 }
 async function openViewer(){
   if(!currentObjectUrl||!currentJob){toast("Для инспекции нужны SOURCE и RESULT.");return}
-  const s=$("viewer-source"),r=$("viewer-result");s.src=currentObjectUrl;r.src=resultUrl(currentJob,false);
-  $("viewer").showModal();
-  try{await Promise.all([ensureViewerImage(s),ensureViewerImage(r)])}catch{toast("Не удалось загрузить SOURCE / RESULT для инспекции.");$("viewer").close();return}
-  viewerState.mode="side";resetViewerState();requestAnimationFrame(drawViewer);
+  const viewer=$("viewer"),stage=$("viewer-stage"),loading=$("viewer-loading"),s=$("viewer-source"),r=$("viewer-result");
+  stage.classList.add("viewer-fallback");loading.hidden=false;
+  s.src=currentObjectUrl;r.src=resultUrl(currentJob,false);
+  viewer.showModal();
+  requestAnimationFrame(()=>requestAnimationFrame(drawViewer));
+  const progressive=()=>{requestAnimationFrame(drawViewer)};
+  try{
+    await Promise.all([ensureViewerImage(s,progressive),ensureViewerImage(r,progressive)]);
+  }catch{
+    loading.textContent="Не удалось загрузить SOURCE / RESULT";
+    toast("Не удалось загрузить SOURCE / RESULT для инспекции.");
+    setTimeout(()=>{if(viewer.open)viewer.close()},900);
+    return
+  }
+  loading.hidden=true;loading.textContent="Загрузка SOURCE / RESULT…";
+  viewerState.mode="side";resetViewerState();
+  requestAnimationFrame(()=>requestAnimationFrame(drawViewer));
 }
 function viewerPointerDown(e){
   if(!$("viewer").open)return;
@@ -1028,7 +1067,19 @@ $("viewer-defects").addEventListener("click",()=>{viewerState.showDefects=!viewe
 $("viewer-reset").addEventListener("click",resetViewerState);
 $("viewer-diff-threshold").addEventListener("input",e=>{viewerState.diffThreshold=Number(e.target.value);viewerState.diffCanvas=null;viewerState.diffKey="";updateViewerUi();buildViewerDiff(false).then(drawViewer).catch(()=>{})});
 $("viewer-diff-opacity").addEventListener("input",e=>{viewerState.diffOpacity=Number(e.target.value)/100;updateViewerUi();drawViewer()});
-$("viewer-stage").addEventListener("pointerdown",viewerPointerDown);$("viewer-stage").addEventListener("pointermove",viewerPointerMove);$("viewer-stage").addEventListener("pointerup",viewerPointerUp);$("viewer-stage").addEventListener("pointercancel",viewerPointerUp);
+$("viewer-stage").addEventListener("pointerdown",viewerPointerDown);$("viewer-stage").addEventListener("pointermove",viewerPointerMove);$("viewer-stage").addEventListener("pointerup",viewerPointerUp);
+let viewerResizeFrame=0;
+const scheduleViewerRedraw=()=>{
+  if(!$("viewer").open)return;
+  if(viewerResizeFrame)cancelAnimationFrame(viewerResizeFrame);
+  viewerResizeFrame=requestAnimationFrame(()=>{viewerResizeFrame=0;drawViewer()});
+};
+if("ResizeObserver" in window){
+  const viewerResizeObserver=new ResizeObserver(scheduleViewerRedraw);
+  viewerResizeObserver.observe($("viewer-stage"));
+}
+window.addEventListener("resize",scheduleViewerRedraw);
+$("viewer-stage").addEventListener("pointercancel",viewerPointerUp);
 $("viewer-stage").addEventListener("wheel",viewerWheel,{passive:false});
 $("viewer-stage").addEventListener("dblclick",()=>setViewerZoom(viewerState.zoomPreset==="fit"?"1":"fit"));
 window.addEventListener("resize",()=>{if($("viewer").open)drawViewer()});
