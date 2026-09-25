@@ -112,7 +112,7 @@ jobs:
           worker = Path("src/worker.js").read_text(encoding="utf-8")
           assert 'import { Container, getContainer } from "@cloudflare/containers";' in worker
           assert "ensureCloudProcessor" in worker
-          assert 'const CONTAINER_BUILD_ID = "result-persist-r10";' in worker
+          assert 'const CONTAINER_BUILD_ID = "result-persist-r10a";' in worker
           assert 'const CONTAINER_INSTANCE_NAME = `primary-${CONTAINER_BUILD_ID}`;' in worker
           assert 'return getContainer(env.MG4K_PROCESSOR, CONTAINER_INSTANCE_NAME);' in worker
           assert 'container_build_mismatch' in worker
