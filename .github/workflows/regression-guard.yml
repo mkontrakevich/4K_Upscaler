@@ -121,7 +121,7 @@ jobs:
           from pathlib import Path
           html = Path("site/index.html").read_text(encoding="utf-8")
           required = [
-              "CORE 8.8.1 R4 · CLOUD UI R9.2",
+              "CORE 8.8.1 R4 · CLOUD UI R9.3",
               'class="comparison"',
               'id="source-image"',
               'id="result-image"',
@@ -190,10 +190,14 @@ jobs:
               'id="action-refresh"',
               'id="action-reset-job"',
               'id="action-reload-source"',
+              'id="action-replace-source"',
               "async function refreshCurrentJob()",
               "async function resetCurrentJob",
               "async function reloadCurrentSource()",
+              "async function replaceSourceFile(file)",
+              'if(mode==="replace")await replaceSourceFile(file);',
               'fetch("/api/jobs/"+job.id+"/reset"',
+              "LOCK-профиль сохранён",
               "платный API не запускался",
           ]:
               assert token in html, token
@@ -212,7 +216,11 @@ jobs:
 
           decision = worker[worker.index("async function sendContainerDecision"):worker.index("MG4KProcessor.outboundByHost")]
           assert "processorContainerForJob(env, job)" in decision
-          print("Operator reset / refresh / source reload controls: PASSED")
+          assert 'item.locks={...locks};' in html
+          assert '$("action-replace-source").disabled=!hasFile||busy;' in html
+          assert '$("action-replace-source").addEventListener("click",()=>openPicker("replace"));' in html
+          assert 'currentJob=null;' in html
+          print("Operator reset / refresh / reload / replace controls: PASSED")
           PY
 
       - name: Cloud viewer non-blank render contract
@@ -222,7 +230,7 @@ jobs:
           html = Path("site/index.html").read_text(encoding="utf-8")
 
           required = [
-              "CORE 8.8.1 R4 · CLOUD UI R9.2",
+              "CORE 8.8.1 R4 · CLOUD UI R9.3",
               'id="viewer-loading"',
               'viewer-stage.viewer-fallback .viewer-buffer',
               'stage.classList.toggle("viewer-fallback",!layoutReady||!imagesReady)',
