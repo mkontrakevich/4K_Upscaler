@@ -204,7 +204,7 @@ body{overflow-x:hidden}
       <button type="button" id="mode-safe" disabled><strong>SAFE</strong><span>локальный upscale</span></button>
       <button type="button" id="mode-generative" class="active"><strong>GENERATIVE</strong><span>Nano Banana Pro</span></button>
     </div>
-    <div class="version">CORE 8.8.1 R4 · CLOUD UI R9.2</div>
+    <div class="version">CORE 8.8.1 R4 · CLOUD UI R9.3</div>
   </header>
 
   <section class="status-strip">
@@ -274,6 +274,7 @@ body{overflow-x:hidden}
       <button class="btn ghost" id="action-refresh" type="button" disabled>↻ Обновить</button>
       <button class="btn ghost" id="action-reset-job" type="button" disabled>Сброс</button>
       <button class="btn ghost" id="action-reload-source" type="button" disabled>Перезагрузить исходник</button>
+      <button class="btn ghost" id="action-replace-source" type="button" disabled>Заменить исходник</button>
       <button class="btn primary" id="action-process" type="button" disabled>▶ Запустить / продолжить</button>
       <button class="btn ghost" id="action-inspect" type="button" disabled>Инспекция</button>
       <button class="btn approve" id="action-approve" type="button" disabled>✓ Утвердить</button>
@@ -417,7 +418,7 @@ function logExportText(){
   const item=currentSourceItem();
   const header=[
     "MG 4K / ARCH LOCK — PROCESS LOG",
-    "UI: CORE 8.8.1 R4 · CLOUD UI R9.2",
+    "UI: CORE 8.8.1 R4 · CLOUD UI R9.3",
     "Processor build: "+(latestJobState?.container_build_id||"—"),
     "Exported: "+new Date().toISOString(),
     "Job: "+(currentJob?.id||"—"),
@@ -496,6 +497,7 @@ function updateRecoveryActions(state=latestJobState){
   $("action-refresh").disabled=!hasJob;
   $("action-reset-job").disabled=!hasJob||busy;
   $("action-reload-source").disabled=!hasFile||busy;
+  $("action-replace-source").disabled=!hasFile||busy;
 }
 function updateQueueNavigation(){
   const has=currentSourceIndex>=0&&currentSourceIndex<sourceItems.length;
@@ -567,10 +569,22 @@ function addSourceFile(file,source="Системный файловый мене
   $("upload-plus").classList.add("hidden");
   selectSource(sourceItems.length-1);
 }
-function openPicker(){$("file-input").value="";$("file-input").click()}
-$("upload-plus").addEventListener("click",openPicker);
-$("action-add").addEventListener("click",openPicker);
-$("file-input").addEventListener("change",e=>addSourceFile(e.target.files?.[0]));
+let filePickerMode="add";
+function openPicker(mode="add"){
+  filePickerMode=mode;
+  $("file-input").value="";
+  $("file-input").click();
+}
+$("upload-plus").addEventListener("click",()=>openPicker("add"));
+$("action-add").addEventListener("click",()=>openPicker("add"));
+$("file-input").addEventListener("change",async e=>{
+  const file=e.target.files?.[0];
+  const mode=filePickerMode;
+  filePickerMode="add";
+  if(!file)return;
+  if(mode==="replace")await replaceSourceFile(file);
+  else addSourceFile(file);
+});
 const stage=$("source-stage");
 ["dragenter","dragover"].forEach(t=>stage.addEventListener(t,e=>{e.preventDefault();stage.style.outline="1px solid #16c5f4"}));
 ["dragleave","drop"].forEach(t=>stage.addEventListener(t,e=>{e.preventDefault();stage.style.outline=""}));
@@ -900,6 +914,60 @@ async function reloadCurrentSource(){
   setStatus("Исходник перезагружен локально. Новый job ещё не создан; платный API не запускался.","ok",true);
 }
 
+async function replaceSourceFile(file){
+  if(!file||(!String(file.type||"").startsWith("image/")&&!/\.(heic|heif)$/i.test(file.name))){toast("Выберите файл изображения.");return}
+  const item=currentSourceItem();
+  if(!item){addSourceFile(file);return}
+
+  if(currentJob&&!(await resetCurrentJob({confirmReset:false})))return;
+
+  try{URL.revokeObjectURL(item.objectUrl)}catch{}
+  item.file=file;
+  item.source="Системный файловый менеджер · замена";
+  item.objectUrl=URL.createObjectURL(file);
+  item.job=null;
+  item.lastState=null;
+  item.resolution=null;
+  item.locks={...locks};
+
+  currentFile=file;
+  currentObjectUrl=item.objectUrl;
+  currentJob=null;
+  latestJobState=null;
+  resetResult();
+
+  $("source-name").textContent=file.name;
+  $("meta-name").textContent=file.name;
+  $("meta-size").textContent=formatBytes(file.size);
+  $("meta-source").textContent=item.source;
+  $("source-dimensions").textContent="—";
+  $("source-size").textContent="—";
+  $("meta-resolution").textContent="—";
+
+  const img=$("source-image");
+  img.onload=()=>{
+    const dim=img.naturalWidth+"×"+img.naturalHeight;
+    item.resolution=dim;
+    $("source-dimensions").textContent=dim;
+    $("source-size").textContent=dim;
+    $("meta-resolution").textContent=dim;
+    persistSessionHistory();
+  };
+  img.src=currentObjectUrl;
+  img.hidden=false;
+  $("source-badges").hidden=false;
+  $("upload-overlay").hidden=true;
+
+  setProgress(0,"готов к запуску");
+  $("action-process").disabled=false;
+  $("mobile-process").disabled=false;
+  $("action-process").textContent="▶ Запустить / продолжить";
+  $("mobile-process").textContent="Обработка";
+  persistSessionHistory();
+  updateQueueNavigation();
+  setStatus("Исходник заменён. LOCK-профиль сохранён. Новый job ещё не создан; платный API не запускался.","ok",true);
+}
+
 async function prepareJob(forceNew=false){
   if(!currentFile){toast("Сначала добавьте исходник.");return}
   if(currentJob&&!forceNew){
@@ -936,6 +1004,7 @@ async function prepareJob(forceNew=false){
 $("action-refresh").addEventListener("click",refreshCurrentJob);
 $("action-reset-job").addEventListener("click",()=>resetCurrentJob({confirmReset:true}));
 $("action-reload-source").addEventListener("click",reloadCurrentSource);
+$("action-replace-source").addEventListener("click",()=>openPicker("replace"));
 $("action-process").addEventListener("click",()=>prepareJob(false));$("mobile-process").addEventListener("click",()=>prepareJob(false));
 $("action-approve").addEventListener("click",()=>sendDecision("approve"));
 $("action-reject").addEventListener("click",()=>sendDecision("reject"));
