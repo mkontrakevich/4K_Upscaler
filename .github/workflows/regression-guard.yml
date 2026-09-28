@@ -121,7 +121,7 @@ jobs:
           from pathlib import Path
           html = Path("site/index.html").read_text(encoding="utf-8")
           required = [
-              "CORE 8.8.1 R4 · CLOUD UI R9.2",
+              "CORE 8.8.1 R4 · CLOUD UI R9.3",
               'class="comparison"',
               'id="source-image"',
               'id="result-image"',
@@ -159,11 +159,12 @@ jobs:
           assert html.count('id="upload-plus"') == 1, "Exactly one upload control is required"
           for obsolete in ['id="pick-file"', 'id="pick-cloud"', 'id="replace-file"', 'id="mobile-file"']:
               assert obsolete not in html, f"Duplicate upload control remains: {obsolete}"
-          assert '$("upload-plus").addEventListener("click",openPicker);' in html, "Initial upload plus must open the picker"
+          assert '$("upload-plus").addEventListener("click",()=>openPicker("add"));' in html, "Initial upload plus must open the add picker"
           assert '$("upload-plus").classList.add("hidden")' in html, "Initial plus must disappear after a source is loaded"
-          for required_nav in ['id="action-prev"', 'id="action-add"', 'id="action-next"', 'id="action-skip"']:
+          for required_nav in ['id="action-prev"', 'id="action-add"', 'id="action-next"', 'id="action-skip"', 'id="action-replace-source"']:
               assert required_nav in html, f"Missing source navigation control: {required_nav}"
-          assert '$("action-add").addEventListener("click",openPicker);' in html, "Add-file navigation must open the picker"
+          assert '$("action-add").addEventListener("click",()=>openPicker("add"));' in html, "Add-file navigation must open the add picker"
+          assert '$("action-replace-source").addEventListener("click",()=>openPicker("replace"));' in html, "Replace-source action must open the replacement picker"
           assert 'status==="skipped"' in html, "Skipped source state must remain reviewable"
           assert 'sendDecision("skip")' in html, "Skip action must be wired"
           assert 'Добавить следующий исходник' not in html, "Source addition must live in the navigation, not on the preview"
@@ -190,13 +191,25 @@ jobs:
               'id="action-refresh"',
               'id="action-reset-job"',
               'id="action-reload-source"',
+              'id="action-replace-source"',
               "async function refreshCurrentJob()",
               "async function resetCurrentJob",
               "async function reloadCurrentSource()",
+              "async function replaceCurrentSource(file",
               'fetch("/api/jobs/"+job.id+"/reset"',
               "платный API не запускался",
           ]:
               assert token in html, token
+
+          replace_block = html[html.index("async function replaceCurrentSource(file"):html.index("async function prepareJob", html.index("async function replaceCurrentSource(file"))]
+          assert "const item=currentSourceItem()" in replace_block
+          assert "sourceItems.push(" not in replace_block, "Replacement must mutate the current queue slot, not append a new source"
+          assert "item.file=file" in replace_block
+          assert "item.job=null" in replace_block and "currentJob=null" in replace_block
+          assert "item.locks=preservedLocks" in replace_block and "locks={...preservedLocks}" in replace_block
+          assert 'fetch("/api/jobs"' not in replace_block, "Replacement must not create a paid-generation job"
+          assert "prepareJob(" not in replace_block, "Replacement must wait for an explicit operator launch"
+          assert "платный API не запускался" in replace_block
 
           assert "function processorContainerForJob(env, job)" in worker
           assert "container_owner_unavailable:" in worker
@@ -222,7 +235,7 @@ jobs:
           html = Path("site/index.html").read_text(encoding="utf-8")
 
           required = [
-              "CORE 8.8.1 R4 · CLOUD UI R9.2",
+              "CORE 8.8.1 R4 · CLOUD UI R9.3",
               'id="viewer-loading"',
               'viewer-stage.viewer-fallback .viewer-buffer',
               'stage.classList.toggle("viewer-fallback",!layoutReady||!imagesReady)',
