@@ -528,7 +528,7 @@ jobs:
           assert "job.container_instance_name = CONTAINER_INSTANCE_NAME" in worker
 
           retire = worker.index("await retirePreviousProcessorInstances(env)")
-          start = worker.index("await container.startAndWaitForPorts({")
+          start = worker.index("await container.startAndWaitForPorts(startConfig);")
           assert retire < start, "Stale processor must be retired before starting the replacement"
           print("R11 single-instance in-place processor lifecycle handoff: PASSED")
           PY
