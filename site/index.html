@@ -146,6 +146,7 @@ body{overflow-x:hidden}
 .viewer-stage.viewer-fallback .viewer-buffer{display:block!important;position:absolute;top:0;height:100%;width:calc(50% - 5px);object-fit:contain;background:#010508;z-index:2}
 .viewer-stage.viewer-fallback #viewer-source{left:0}
 .viewer-stage.viewer-fallback #viewer-result{right:0}
+.viewer-stage.viewer-fallback .viewer-labels{display:flex!important}
 .viewer-stage.viewer-fallback::after{content:"";position:absolute;top:0;bottom:0;left:50%;width:1px;background:#294054;z-index:3}
 .viewer-loading{position:absolute;inset:0;display:grid;place-items:center;z-index:9;pointer-events:none;background:rgba(1,5,8,.28);color:#8aa1b4;font:11px/1.4 Consolas,monospace;letter-spacing:.03em}
 .viewer-loading[hidden]{display:none!important}
@@ -204,7 +205,7 @@ body{overflow-x:hidden}
       <button type="button" id="mode-safe" disabled><strong>SAFE</strong><span>локальный upscale</span></button>
       <button type="button" id="mode-generative" class="active"><strong>GENERATIVE</strong><span>Nano Banana Pro</span></button>
     </div>
-    <div class="version">CORE 8.8.1 R4 · CLOUD UI R9.3</div>
+    <div class="version">CORE 8.8.1 R4 · CLOUD UI R9.4</div>
   </header>
 
   <section class="status-strip">
@@ -418,7 +419,7 @@ function logExportText(){
   const item=currentSourceItem();
   const header=[
     "MG 4K / ARCH LOCK — PROCESS LOG",
-    "UI: CORE 8.8.1 R4 · CLOUD UI R9.3",
+    "UI: CORE 8.8.1 R4 · CLOUD UI R9.4",
     "Processor build: "+(latestJobState?.container_build_id||"—"),
     "Exported: "+new Date().toISOString(),
     "Job: "+(currentJob?.id||"—"),
@@ -1097,54 +1098,78 @@ function updateViewerUi(){
   $("viewer-diff-opacity-value").textContent=Math.round(viewerState.diffOpacity*100)+"%";
 }
 function drawViewer(){
-  const stage=$("viewer-stage"),canvas=$("viewer-canvas");if(!stage||!canvas)return;
+  const stage=$("viewer-stage"),canvas=$("viewer-canvas");if(!stage||!canvas)return false;
   const box=stage.getBoundingClientRect(),w=Math.floor(box.width),h=Math.floor(box.height);
   const source=$("viewer-source"),result=$("viewer-result");
   const layoutReady=w>=32&&h>=32,imagesReady=Boolean(source?.naturalWidth&&result?.naturalWidth);
-  stage.classList.toggle("viewer-fallback",!layoutReady||!imagesReady);
-  if(!layoutReady||!imagesReady)return;
-  const dpr=Math.min(2,window.devicePixelRatio||1);
-  if(canvas.width!==Math.round(w*dpr)||canvas.height!==Math.round(h*dpr)){canvas.width=Math.round(w*dpr);canvas.height=Math.round(h*dpr)}
-  const ctx=canvas.getContext("2d",{alpha:false});if(!ctx){stage.classList.add("viewer-fallback");return}
-  ctx.setTransform(dpr,0,0,dpr,0,0);ctx.fillStyle="#010508";ctx.fillRect(0,0,w,h);
-  const s=source,r=result;
-  const ref=viewerRefSize(),rects=viewerPaneRects(w,h);
-  if(viewerState.mode==="side"){
-    drawViewerLayer(ctx,s,rects.source,viewerState.centers.source,viewerScaleFor(rects.source,ref),ref,1);
-    drawViewerLayer(ctx,r,rects.result,viewerState.centers.result,viewerScaleFor(rects.result,ref),ref,1);
-    ctx.strokeStyle="#294054";ctx.beginPath();ctx.moveTo(rects.source.w+5,0);ctx.lineTo(rects.source.w+5,h);ctx.stroke();
-  }else if(viewerState.mode==="split"){
-    const rect=rects.source,scale=viewerScaleFor(rect,ref);
-    drawViewerLayer(ctx,s,rect,viewerState.centers.source,scale,ref,1);
-    ctx.save();ctx.beginPath();ctx.rect(w*viewerState.split,0,w*(1-viewerState.split),h);ctx.clip();
-    drawViewerLayer(ctx,r,rect,viewerState.centers.result,scale,ref,1);ctx.restore();
-  }else if(viewerState.mode==="blink"){
-    const rect=rects.source,scale=viewerScaleFor(rect,ref),img=viewerState.blinkShowResult?r:s,center=viewerState.blinkShowResult?viewerState.centers.result:viewerState.centers.source;
-    drawViewerLayer(ctx,img,rect,center,scale,ref,1);
-  }else if(viewerState.mode==="diff"){
-    if(!viewerState.diffCanvas){buildViewerDiff(false).then(drawViewer).catch(()=>{});ctx.fillStyle="#8aa1b4";ctx.font="12px Consolas,monospace";ctx.fillText("DIFF: подготовка…",18,28)}
-    else{const rect=rects.source,scale=viewerScaleFor(rect,ref);drawViewerLayer(ctx,viewerState.diffCanvas,rect,viewerState.centers.source,scale,ref,viewerState.diffOpacity)}
+  stage.classList.add("viewer-fallback");
+  if(!layoutReady||!imagesReady)return false;
+  try{
+    const dpr=Math.min(2,window.devicePixelRatio||1);
+    if(canvas.width!==Math.round(w*dpr)||canvas.height!==Math.round(h*dpr)){canvas.width=Math.round(w*dpr);canvas.height=Math.round(h*dpr)}
+    const ctx=canvas.getContext("2d",{alpha:false});if(!ctx)return false;
+    ctx.setTransform(dpr,0,0,dpr,0,0);ctx.fillStyle="#010508";ctx.fillRect(0,0,w,h);
+    const s=source,r=result;
+    const ref=viewerRefSize(),rects=viewerPaneRects(w,h);
+    if(viewerState.mode==="side"){
+      drawViewerLayer(ctx,s,rects.source,viewerState.centers.source,viewerScaleFor(rects.source,ref),ref,1);
+      drawViewerLayer(ctx,r,rects.result,viewerState.centers.result,viewerScaleFor(rects.result,ref),ref,1);
+      ctx.strokeStyle="#294054";ctx.beginPath();ctx.moveTo(rects.source.w+5,0);ctx.lineTo(rects.source.w+5,h);ctx.stroke();
+    }else if(viewerState.mode==="split"){
+      const rect=rects.source,scale=viewerScaleFor(rect,ref);
+      drawViewerLayer(ctx,s,rect,viewerState.centers.source,scale,ref,1);
+      ctx.save();ctx.beginPath();ctx.rect(w*viewerState.split,0,w*(1-viewerState.split),h);ctx.clip();
+      drawViewerLayer(ctx,r,rect,viewerState.centers.result,scale,ref,1);ctx.restore();
+    }else if(viewerState.mode==="blink"){
+      const rect=rects.source,scale=viewerScaleFor(rect,ref),img=viewerState.blinkShowResult?r:s,center=viewerState.blinkShowResult?viewerState.centers.result:viewerState.centers.source;
+      drawViewerLayer(ctx,img,rect,center,scale,ref,1);
+    }else if(viewerState.mode==="diff"){
+      if(!viewerState.diffCanvas){buildViewerDiff(false).then(drawViewer).catch(()=>{});ctx.fillStyle="#8aa1b4";ctx.font="12px Consolas,monospace";ctx.fillText("DIFF: подготовка…",18,28)}
+      else{const rect=rects.source,scale=viewerScaleFor(rect,ref);drawViewerLayer(ctx,viewerState.diffCanvas,rect,viewerState.centers.source,scale,ref,viewerState.diffOpacity)}
+    }
+    drawViewerDefects(ctx,w,h);updateViewerUi();
+    stage.classList.remove("viewer-fallback");
+    return true;
+  }catch(error){
+    console.warn("viewer_canvas_render_failed",error);
+    stage.classList.add("viewer-fallback");
+    updateViewerUi();
+    return false;
   }
-  drawViewerDefects(ctx,w,h);updateViewerUi();
 }
 async function openViewer(){
-  if(!currentObjectUrl||!currentJob){toast("Для инспекции нужны SOURCE и RESULT.");return}
+  if(!currentJob){toast("Для инспекции нужны SOURCE и RESULT.");return}
   const viewer=$("viewer"),stage=$("viewer-stage"),loading=$("viewer-loading"),s=$("viewer-source"),r=$("viewer-result");
+  const mainSource=$("source-image"),mainResult=$("result-image");
   stage.classList.add("viewer-fallback");loading.hidden=false;
-  s.src=currentObjectUrl;r.src=resultUrl(currentJob,false);
+  viewerState.mode="side";updateViewerUi();
   viewer.showModal();
   requestAnimationFrame(()=>requestAnimationFrame(drawViewer));
   const progressive=()=>{requestAnimationFrame(drawViewer)};
+  const loadFirstAvailable=async(img,candidates)=>{
+    let lastError=null;
+    for(const url of Array.from(new Set(candidates.filter(Boolean)))){
+      try{
+        img.src=url;
+        await ensureViewerImage(img,progressive);
+        return img;
+      }catch(error){lastError=error}
+    }
+    throw lastError||new Error("viewer_image_load_failed");
+  };
   try{
-    await Promise.all([ensureViewerImage(s,progressive),ensureViewerImage(r,progressive)]);
+    await Promise.all([
+      loadFirstAvailable(s,[sourceUrl(currentJob),mainSource?.currentSrc||mainSource?.src,currentObjectUrl]),
+      loadFirstAvailable(r,[mainResult?.currentSrc||mainResult?.src,resultUrl(currentJob,false)])
+    ]);
   }catch{
     loading.textContent="Не удалось загрузить SOURCE / RESULT";
     toast("Не удалось загрузить SOURCE / RESULT для инспекции.");
-    setTimeout(()=>{if(viewer.open)viewer.close()},900);
+    setTimeout(()=>{if(viewer.open)viewer.close()},1200);
     return
   }
   loading.hidden=true;loading.textContent="Загрузка SOURCE / RESULT…";
-  viewerState.mode="side";resetViewerState();
+  resetViewerState();
   requestAnimationFrame(()=>requestAnimationFrame(drawViewer));
 }
 function viewerPointerDown(e){

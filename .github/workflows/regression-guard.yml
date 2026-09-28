@@ -132,7 +132,7 @@ jobs:
           from pathlib import Path
           html = Path("site/index.html").read_text(encoding="utf-8")
           required = [
-              "CORE 8.8.1 R4 · CLOUD UI R9.3",
+              "CORE 8.8.1 R4 · CLOUD UI R9.4",
               'class="comparison"',
               'id="source-image"',
               'id="result-image"',
@@ -246,10 +246,13 @@ jobs:
           html = Path("site/index.html").read_text(encoding="utf-8")
 
           required = [
-              "CORE 8.8.1 R4 · CLOUD UI R9.3",
+              "CORE 8.8.1 R4 · CLOUD UI R9.4",
               'id="viewer-loading"',
               'viewer-stage.viewer-fallback .viewer-buffer',
-              'stage.classList.toggle("viewer-fallback",!layoutReady||!imagesReady)',
+              'stage.classList.add("viewer-fallback");',
+              'stage.classList.remove("viewer-fallback");',
+              'console.warn("viewer_canvas_render_failed",error)',
+              'loadFirstAvailable(s,[sourceUrl(currentJob)',
               'const box=stage.getBoundingClientRect(),w=Math.floor(box.width),h=Math.floor(box.height);',
               'layoutReady=w>=32&&h>=32',
               'requestAnimationFrame(()=>requestAnimationFrame(drawViewer))',
@@ -272,8 +275,11 @@ jobs:
           canvas_resize_pos = html.index("canvas.width!==Math.round(w*dpr)", draw_pos)
           assert readiness_pos < canvas_resize_pos, "Canvas must wait for real layout/image dimensions"
 
-          fallback_pos = html.index('stage.classList.toggle("viewer-fallback",!layoutReady||!imagesReady)', draw_pos)
+          fallback_pos = html.index('stage.classList.add("viewer-fallback");', draw_pos)
+          paint_pos = html.index("drawViewerDefects(ctx,w,h);updateViewerUi();", draw_pos)
+          remove_pos = html.index('stage.classList.remove("viewer-fallback");', draw_pos)
           assert fallback_pos < readiness_pos, "Native image fallback must activate before early return"
+          assert paint_pos < remove_pos, "Native fallback may be hidden only after a completed canvas paint"
           print("Cloud Visual Review non-blank render contract: PASSED")
           PY
 
@@ -832,7 +838,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
-      - name: Verify deployed R9.3 / R11b contract without generation
+      - name: Verify deployed R9.4 / R11b contract without generation
         env:
           BASE_URL: https://4k-upscaler.marinsgroup.workers.dev
         run: |
@@ -845,7 +851,7 @@ jobs:
             curl -fsS --retry 2 --retry-delay 2 "$BASE_URL/?preflight=$GITHUB_SHA-$attempt" > "$TMP/root.html"
             curl -fsS --retry 2 --retry-delay 2 "$BASE_URL/api/health?preflight=$GITHUB_SHA-$attempt" > "$TMP/health.json"
 
-            if grep -q 'CLOUD UI R9.3' "$TMP/root.html"               && grep -q 'id="action-replace-source"' "$TMP/root.html"               && python - "$TMP/health.json" <<'PY'
+            if grep -q 'CLOUD UI R9.4' "$TMP/root.html"               && grep -q 'id="action-replace-source"' "$TMP/root.html"               && python - "$TMP/health.json" <<'PY'
           import json, sys
           d=json.load(open(sys.argv[1]))
           assert d.get("worker_build_id") == "pid1-tini-r11b", d
@@ -856,7 +862,7 @@ jobs:
             then
               STABLE=$((STABLE+1))
               if [[ "$STABLE" -ge 3 ]]; then
-                echo "Production preflight PASSED: UI R9.3 · replace-source · Worker pid1-tini-r11b · expected processor result-persist-r11b"
+                echo "Production preflight PASSED: UI R9.4 · replace-source · Worker pid1-tini-r11b · expected processor result-persist-r11b"
                 exit 0
               fi
             else
@@ -866,7 +872,7 @@ jobs:
             sleep 10
           done
 
-          echo "Production did not converge to the expected R9.3/R11b contract." >&2
+          echo "Production did not converge to the expected R9.4/R11b contract." >&2
           cat "$TMP/health.json" >&2 || true
           exit 1
 
@@ -893,16 +899,16 @@ jobs:
           # No paid work is allowed until the public Worker serves the intended UI.
           for attempt in $(seq 1 18); do
             curl -fsS --retry 2 --retry-delay 2 "$BASE_URL/?smoke=$GITHUB_SHA-$attempt" > "$TMP/root.html"
-            if grep -q 'CLOUD UI R9.3' "$TMP/root.html" && grep -q 'id="action-replace-source"' "$TMP/root.html"; then
+            if grep -q 'CLOUD UI R9.4' "$TMP/root.html" && grep -q 'id="action-replace-source"' "$TMP/root.html"; then
               break
             fi
             if [[ "$attempt" == "18" ]]; then
-              echo "Production UI is not R9.3 / replace-source yet; aborting before paid generation." >&2
+              echo "Production UI is not R9.4 / replace-source yet; aborting before paid generation." >&2
               exit 20
             fi
             sleep 10
           done
-          echo "Production UI R9.3 + replace-source: PASSED"
+          echo "Production UI R9.4 + replace-source: PASSED"
 
           # Wait for the Worker durability fix itself before any paid generation.
           WORKER_BUILD=""
