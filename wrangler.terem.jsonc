@@ -1,0 +1,11 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "terem-visual-dna",
+  "compatibility_date": "2026-09-28",
+  "assets": {
+    "directory": "./terem-site"
+  },
+  "observability": {
+    "enabled": true
+  }
+}
