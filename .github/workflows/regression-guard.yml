@@ -271,7 +271,7 @@ jobs:
           assert show_pos < redraw_pos, "Viewer must redraw after modal layout starts"
 
           draw_pos = html.index("function drawViewer()")
-          readiness_pos = html.index("if(!layoutReady||!imagesReady)return;", draw_pos)
+          readiness_pos = html.index("if(!layoutReady||!imagesReady)return false;", draw_pos)
           canvas_resize_pos = html.index("canvas.width!==Math.round(w*dpr)", draw_pos)
           assert readiness_pos < canvas_resize_pos, "Canvas must wait for real layout/image dimensions"
 
