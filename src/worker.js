@@ -32,11 +32,10 @@ const SESSION_TTL = 60 * 10;
 const PAIR_TTL = 60 * 10;
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 const CONTAINER_BUILD_ID = "result-persist-r11";
-const CONTAINER_INSTANCE_NAME = `primary-${CONTAINER_BUILD_ID}`;
+const CONTAINER_INSTANCE_NAME = "primary-result-persist-r10a";
 const LEGACY_CONTAINER_INSTANCE_NAMES = [
   "primary",
   "primary-result-persist-r10",
-  "primary-result-persist-r10a",
   "primary-result-persist-r10b",
 ];
 
@@ -360,11 +359,12 @@ async function ensureCloudProcessor(env, origin) {
 
   const retirement = await retirePreviousProcessorInstances(env);
   if (retirement.blocked) {
-    const b=retirement.blocker;throw new Error(`processor_rollout_waiting_for_inflight_job:${b?.id||"unknown"}:${b?.instance_name||"unknown"}:${b?.status||"unknown"}`);
+    const b=retirement.blocker;
+    throw new Error(`processor_rollout_waiting_for_inflight_job:${b?.id||"unknown"}:${b?.instance_name||"unknown"}:${b?.status||"unknown"}`);
   }
 
   const container = processorContainer(env);
-  await container.startAndWaitForPorts({
+  const startConfig = {
     ports: [8080],
     startOptions: {
       envVars: {
@@ -385,15 +385,42 @@ async function ensureCloudProcessor(env, origin) {
     cancellationOptions: {
       portReadyTimeoutMS: 60_000,
     },
-  });
+  };
 
-  const healthResponse = await container.fetch(new Request("http://container/healthz"));
-  const health = await healthResponse.json().catch(() => ({}));
+  const readHealth = async () => {
+    const response = await container.fetch(new Request("http://container/healthz"));
+    const health = await response.json().catch(() => ({}));
+    return { response, health };
+  };
+
+  await container.startAndWaitForPorts(startConfig);
+  let { response: healthResponse, health } = await readHealth();
+
+  if (!healthResponse.ok || String(health.build_id || "") !== CONTAINER_BUILD_ID) {
+    const blocker = await hasInFlightProcessorJob(env, new Set([CONTAINER_INSTANCE_NAME]));
+    if (blocker) {
+      throw new Error(
+        `processor_upgrade_waiting_for_inflight_job:${blocker.id}:${blocker.instance_name}:${blocker.status}`
+      );
+    }
+
+    console.log("MG4K_PROCESSOR_IN_PLACE_UPGRADE", {
+      instance: CONTAINER_INSTANCE_NAME,
+      expected: CONTAINER_BUILD_ID,
+      actual: String(health.build_id || "unknown"),
+    });
+
+    await container.shutdownContainer(`upgrade_to_${CONTAINER_BUILD_ID}`);
+    await container.startAndWaitForPorts(startConfig);
+    ({ response: healthResponse, health } = await readHealth());
+  }
+
   if (!healthResponse.ok || String(health.build_id || "") !== CONTAINER_BUILD_ID) {
     throw new Error(
       `container_build_mismatch:expected=${CONTAINER_BUILD_ID}:actual=${String(health.build_id || "unknown")}`
     );
   }
+
   await env.SESSION_STATE_R7.put("processor:active_instance", CONTAINER_INSTANCE_NAME);
   await env.SESSION_STATE_R7.put("processor:active_build_id", CONTAINER_BUILD_ID);
   return container;
