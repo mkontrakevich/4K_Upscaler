@@ -658,7 +658,11 @@ jobs:
           assert 'String(health.build_id || "") !== CONTAINER_BUILD_ID' in worker
           assert 'CONTAINER_BUILD_ID = os.environ.get("MG4K_CONTAINER_BUILD_ID"' in service
           assert '"build_id": CONTAINER_BUILD_ID' in service
-          assert '8.8.1-result-persist-r10b' in service
+          assert '8.8.1-result-persist-r11b' in service
+          assert 'const WORKER_BUILD_ID = "pid1-tini-r11b";' in worker
+          assert 'processor_build_expected: CONTAINER_BUILD_ID' in worker
+          assert 'processor_instance_expected: CONTAINER_INSTANCE_NAME' in worker
+          assert 'processor_lifecycle: "tini-pid1-group-forwarding"' in worker
           print("Versioned Container rollout guard: PASSED")
           PY
 
@@ -691,7 +695,7 @@ jobs:
           assert 'job.result_checksum_sha256 = checksum;' in pull_persist
           assert 'job.result_persist_source = "container_pull";' in pull_persist
           assert 'job.result_persisted_at = now();' in pull_persist
-          assert 'const WORKER_BUILD_ID = "review-durability-r11b";' in worker
+          assert 'const WORKER_BUILD_ID = "pid1-tini-r11b";' in worker
 
           # Runtime smoke: execute the persistence helper without network/API calls.
           import os, tempfile
@@ -823,6 +827,50 @@ jobs:
           echo "Regression suite uses only offline/self-test paths; no OPENROUTER_API_KEY is provided."
 
 
+  production_preflight:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Verify deployed R9.3 / R11b contract without generation
+        env:
+          BASE_URL: https://4k-upscaler.marinsgroup.workers.dev
+        run: |
+          set -euo pipefail
+          TMP="$(mktemp -d)"
+          trap 'rm -rf "$TMP"' EXIT
+
+          STABLE=0
+          for attempt in $(seq 1 42); do
+            curl -fsS --retry 2 --retry-delay 2 "$BASE_URL/?preflight=$GITHUB_SHA-$attempt" > "$TMP/root.html"
+            curl -fsS --retry 2 --retry-delay 2 "$BASE_URL/api/health?preflight=$GITHUB_SHA-$attempt" > "$TMP/health.json"
+
+            if grep -q 'CLOUD UI R9.3' "$TMP/root.html"               && grep -q 'id="action-replace-source"' "$TMP/root.html"               && python - "$TMP/health.json" <<'PY'
+          import json, sys
+          d=json.load(open(sys.argv[1]))
+          assert d.get("worker_build_id") == "pid1-tini-r11b", d
+          assert d.get("processor_build_expected") == "result-persist-r11b", d
+          assert d.get("processor_instance_expected") == "primary-result-persist-r11b", d
+          assert d.get("processor_lifecycle") == "tini-pid1-group-forwarding", d
+          PY
+            then
+              STABLE=$((STABLE+1))
+              if [[ "$STABLE" -ge 3 ]]; then
+                echo "Production preflight PASSED: UI R9.3 · replace-source · Worker pid1-tini-r11b · expected processor result-persist-r11b"
+                exit 0
+              fi
+            else
+              STABLE=0
+            fi
+
+            sleep 10
+          done
+
+          echo "Production did not converge to the expected R9.3/R11b contract." >&2
+          cat "$TMP/health.json" >&2 || true
+          exit 1
+
+
   live_r11b_smoke:
     if: github.event_name == 'push' && contains(github.event.head_commit.message, '[live-r11b]')
     runs-on: ubuntu-latest
@@ -861,11 +909,11 @@ jobs:
           for attempt in $(seq 1 24); do
             curl -fsS --retry 2 --retry-delay 2 "$BASE_URL/api/health?smoke=$GITHUB_SHA-$attempt" > "$TMP/health.json"
             WORKER_BUILD="$(python -c 'import json,sys; print(json.load(open(sys.argv[1])).get("worker_build_id",""))' "$TMP/health.json")"
-            if [[ "$WORKER_BUILD" == "review-durability-r11b" ]]; then
+            if [[ "$WORKER_BUILD" == "pid1-tini-r11b" ]]; then
               break
             fi
             if [[ "$attempt" == "24" ]]; then
-              echo "Production Worker is not review-durability-r11b; aborting before paid generation." >&2
+              echo "Production Worker is not pid1-tini-r11b; aborting before paid generation." >&2
               exit 24
             fi
             sleep 10

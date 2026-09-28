@@ -31,7 +31,7 @@ export class MG4KProcessor extends Container {
 const SESSION_TTL = 60 * 10;
 const PAIR_TTL = 60 * 10;
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
-const WORKER_BUILD_ID = "review-durability-r11b";
+const WORKER_BUILD_ID = "pid1-tini-r11b";
 const CONTAINER_BUILD_ID = "result-persist-r11b";
 const CONTAINER_INSTANCE_NAME = "primary-result-persist-r11b";
 const LEGACY_CONTAINER_INSTANCE_NAMES = [
@@ -711,6 +711,9 @@ async function handleApi(request, env, ctx, url) {
       version: "cloud-r2-ephemeral",
       worker: "4k-upscaler",
       worker_build_id: WORKER_BUILD_ID,
+      processor_build_expected: CONTAINER_BUILD_ID,
+      processor_instance_expected: CONTAINER_INSTANCE_NAME,
+      processor_lifecycle: "tini-pid1-group-forwarding",
       session_ttl_seconds: SESSION_TTL,
       persistence: "ephemeral-session-only",
       persistent_user_database: false,
