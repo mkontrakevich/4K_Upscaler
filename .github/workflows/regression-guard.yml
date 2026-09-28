@@ -261,7 +261,9 @@ jobs:
           bridge = Path("cloudflare_bridge.py").read_text(encoding="utf-8")
           service = Path("cloud_processor_service.py").read_text(encoding="utf-8")
           assert '["approve", "reject", "skip"]' in worker
-          assert '"skip_sent"' in worker
+          assert 'job.stage = "skipped_by_user";' in worker
+          assert 'job.status = "skipped";' in worker
+          assert '"review_result_not_persisted"' in worker
           assert '{"approve", "reject", "skip"}' in bridge
           assert '"skipped_by_user"' in bridge
           assert '"status": "skipped"' in bridge
