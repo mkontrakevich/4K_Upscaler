@@ -819,13 +819,38 @@ jobs:
           trap 'rm -rf "$TMP"' EXIT
 
           test -f UI_REFERENCE_APPROVED_V875.png
+          cp UI_REFERENCE_APPROVED_V875.png "$TMP/live_architecture_source.png"
           LOCKS='{"camera":"hard","geometry":"hard","architecture":"hard","textures":"hard","vegetation":"hard","people_vehicles":"hard","lighting":"free","sky":"free","water":"soft"}'
+
+          # No paid work is allowed until the public Worker serves the intended UI.
+          for attempt in $(seq 1 18); do
+            curl -fsS --retry 2 --retry-delay 2 "$BASE_URL/?smoke=$GITHUB_SHA-$attempt" > "$TMP/root.html"
+            if grep -q 'CLOUD UI R9.3' "$TMP/root.html" && grep -q 'id="action-replace-source"' "$TMP/root.html"; then
+              break
+            fi
+            if [[ "$attempt" == "18" ]]; then
+              echo "Production UI is not R9.3 / replace-source yet; aborting before paid generation." >&2
+              exit 20
+            fi
+            sleep 10
+          done
+          echo "Production UI R9.3 + replace-source: PASSED"
+
+          # Guard the smoke input against the service-asset exclusion policy.
+          python - "$TMP/live_architecture_source.png" <<'PY'
+          import sys
+          from pathlib import Path
+          from source_queue_policy import is_source_candidate
+          p=Path(sys.argv[1])
+          assert is_source_candidate(p, p.parent, "GEN_QUALITY_ARCH_LOCK_V8"), p
+          print("Smoke source queue admission: PASSED")
+          PY
 
           curl -fsS --retry 3 --retry-delay 2 -X POST "$BASE_URL/api/session/start" > "$TMP/session.json"
           SESSION_ID="$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["id"])' "$TMP/session.json")"
           SESSION_TOKEN="$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["token"])' "$TMP/session.json")"
 
-          curl -fsS --retry 2 --retry-delay 2 -X POST "$BASE_URL/api/jobs"             -H "X-Session-Id: $SESSION_ID"             -H "X-Session-Token: $SESSION_TOKEN"             -F "file=@UI_REFERENCE_APPROVED_V875.png;type=image/png"             -F "locks=$LOCKS"             -F "mode=generative" > "$TMP/job.json"
+          curl -fsS --retry 2 --retry-delay 2 -X POST "$BASE_URL/api/jobs"             -H "X-Session-Id: $SESSION_ID"             -H "X-Session-Token: $SESSION_TOKEN"             -F "file=@$TMP/live_architecture_source.png;type=image/png"             -F "locks=$LOCKS"             -F "mode=generative" > "$TMP/job.json"
 
           JOB_ID="$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["id"])' "$TMP/job.json")"
           JOB_TOKEN="$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["token"])' "$TMP/job.json")"
@@ -871,6 +896,11 @@ jobs:
             curl -fsS -X POST "$BASE_URL/api/jobs/$JOB_ID/decision"               -H "Content-Type: application/json"               -H "X-Job-Token: $JOB_TOKEN"               --data '{"action":"skip"}' > "$TMP/decision.json"
           fi
 
-          curl -fsS -X POST "$BASE_URL/api/session/end"             -H "Content-Type: application/json"             --data "{"session_id":"$SESSION_ID","session_token":"$SESSION_TOKEN"}" > "$TMP/end.json" || true
+          python - "$TMP/session.json" > "$TMP/end-payload.json" <<'PY'
+          import json, sys
+          d=json.load(open(sys.argv[1]))
+          print(json.dumps({"session_id":d["id"],"session_token":d["token"]}))
+          PY
+          curl -fsS -X POST "$BASE_URL/api/session/end"             -H "Content-Type: application/json"             --data-binary @"$TMP/end-payload.json" > "$TMP/end.json" || true
 
           echo "R11a live production smoke: PASSED · status=$STATUS · build=$BUILD"
