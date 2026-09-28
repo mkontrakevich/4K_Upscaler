@@ -104,7 +104,7 @@ jobs:
           assert c["class_name"] == "MG4KProcessor"
           assert c["image"] == "./Dockerfile"
           assert c["instance_type"] == "standard-1"
-          assert c["max_instances"] == 1
+          assert c["max_instances"] == 2
           bindings = cfg["durable_objects"]["bindings"]
           assert any(b["name"] == "MG4K_PROCESSOR" and b["class_name"] == "MG4KProcessor" for b in bindings)
           migrations = cfg["migrations"]
@@ -112,7 +112,7 @@ jobs:
           worker = Path("src/worker.js").read_text(encoding="utf-8")
           assert 'import { Container, getContainer } from "@cloudflare/containers";' in worker
           assert "ensureCloudProcessor" in worker
-          assert 'const CONTAINER_BUILD_ID = "result-persist-r10b";' in worker
+          assert 'const CONTAINER_BUILD_ID = "result-persist-r11";' in worker
           assert 'const CONTAINER_INSTANCE_NAME = `primary-${CONTAINER_BUILD_ID}`;' in worker
           assert 'return getContainer(env.MG4K_PROCESSOR, CONTAINER_INSTANCE_NAME);' in worker
           assert 'container_build_mismatch' in worker
