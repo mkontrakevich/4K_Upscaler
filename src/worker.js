@@ -500,6 +500,8 @@ async function storeContainerResult(env, container, job) {
   if (declaredBytes > 0 && declaredBytes !== actualBytes) {
     throw new Error(`container_result_size_mismatch:declared=${declaredBytes}:actual=${actualBytes}`);
   }
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  const checksum = Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, "0")).join("");
 
   const resultKey = `sessions/${job.session_id}/jobs/${job.id}/result/${resultName}`;
   if (job.result_key && job.result_key !== resultKey) {
@@ -514,12 +516,17 @@ async function storeContainerResult(env, container, job) {
       kind: "result",
       original_name: resultName,
       bytes: String(actualBytes),
+      sha256: checksum,
+      persist_source: "container_pull",
     },
   });
 
   job.result_key = resultKey;
   job.result_bytes = actualBytes;
   job.result_content_type = contentType;
+  job.result_checksum_sha256 = checksum;
+  job.result_persist_source = "container_pull";
+  job.result_persisted_at = now();
   job.result_sync_attempts = 0;
   job.result_sync_warning = null;
   return job;
