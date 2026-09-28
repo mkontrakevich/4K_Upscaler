@@ -31,7 +31,7 @@ export class MG4KProcessor extends Container {
 const SESSION_TTL = 60 * 10;
 const PAIR_TTL = 60 * 10;
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
-const CONTAINER_BUILD_ID = "result-persist-r11";
+const CONTAINER_BUILD_ID = "result-persist-r11a";
 const CONTAINER_INSTANCE_NAME = "primary-result-persist-r10a";
 const LEGACY_CONTAINER_INSTANCE_NAMES = [
   "primary",
@@ -359,7 +359,7 @@ async function ensureCloudProcessor(env, origin) {
 
   const retirement = await retirePreviousProcessorInstances(env);
   if (retirement.blocked) {
-    const b=retirement.blocker;
+    const b = retirement.blocker;
     throw new Error(`processor_rollout_waiting_for_inflight_job:${b?.id||"unknown"}:${b?.instance_name||"unknown"}:${b?.status||"unknown"}`);
   }
 
@@ -387,31 +387,67 @@ async function ensureCloudProcessor(env, origin) {
     },
   };
 
+  const assertSafeToRecycleCurrentInstance = async (reason) => {
+    const blocker = await hasInFlightProcessorJob(env, new Set([CONTAINER_INSTANCE_NAME]));
+    if (blocker) {
+      throw new Error(
+        `processor_recycle_waiting_for_inflight_job:${blocker.id}:${blocker.instance_name}:${blocker.status}:${reason}`
+      );
+    }
+  };
+
+  const recycleCurrentInstance = async (reason) => {
+    await assertSafeToRecycleCurrentInstance(reason);
+    const result = await container.shutdownContainer(reason);
+    console.log("MG4K_PROCESSOR_PRESTART_RECYCLE", {
+      instance: CONTAINER_INSTANCE_NAME,
+      reason,
+      was_running: Boolean(result?.was_running),
+    });
+    return result;
+  };
+
+  const startWithCapacityRecovery = async () => {
+    let lastError = null;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        await container.startAndWaitForPorts(startConfig);
+        return;
+      } catch (error) {
+        lastError = error;
+        const message = String(error?.message || error || "");
+        const capacityError = message.includes("Maximum number of running container instances exceeded");
+        if (!capacityError || attempt >= 3) throw error;
+
+        await recycleCurrentInstance(`capacity_recovery_${CONTAINER_BUILD_ID}_attempt_${attempt}`);
+        await new Promise(resolve => setTimeout(resolve, 750 * attempt));
+      }
+    }
+    throw lastError || new Error("processor_start_failed");
+  };
+
+  // IMPORTANT: do not call startAndWaitForPorts before stale-slot recovery.
+  // Cloudflare enforces max_instances before health can be inspected, so an
+  // old Container can otherwise block the very code that would replace it.
+  const rememberedBuild = String(
+    await env.SESSION_STATE_R7.get("processor:active_build_id") || ""
+  );
+  if (rememberedBuild !== CONTAINER_BUILD_ID) {
+    await recycleCurrentInstance(`prestart_upgrade_to_${CONTAINER_BUILD_ID}`);
+  }
+
   const readHealth = async () => {
     const response = await container.fetch(new Request("http://container/healthz"));
     const health = await response.json().catch(() => ({}));
     return { response, health };
   };
 
-  await container.startAndWaitForPorts(startConfig);
+  await startWithCapacityRecovery();
   let { response: healthResponse, health } = await readHealth();
 
   if (!healthResponse.ok || String(health.build_id || "") !== CONTAINER_BUILD_ID) {
-    const blocker = await hasInFlightProcessorJob(env, new Set([CONTAINER_INSTANCE_NAME]));
-    if (blocker) {
-      throw new Error(
-        `processor_upgrade_waiting_for_inflight_job:${blocker.id}:${blocker.instance_name}:${blocker.status}`
-      );
-    }
-
-    console.log("MG4K_PROCESSOR_IN_PLACE_UPGRADE", {
-      instance: CONTAINER_INSTANCE_NAME,
-      expected: CONTAINER_BUILD_ID,
-      actual: String(health.build_id || "unknown"),
-    });
-
-    await container.shutdownContainer(`upgrade_to_${CONTAINER_BUILD_ID}`);
-    await container.startAndWaitForPorts(startConfig);
+    await recycleCurrentInstance(`health_mismatch_upgrade_to_${CONTAINER_BUILD_ID}`);
+    await startWithCapacityRecovery();
     ({ response: healthResponse, health } = await readHealth());
   }
 
@@ -425,7 +461,6 @@ async function ensureCloudProcessor(env, origin) {
   await env.SESSION_STATE_R7.put("processor:active_build_id", CONTAINER_BUILD_ID);
   return container;
 }
-
 
 function applyContainerState(job, state) {
   if (!state) return job;
