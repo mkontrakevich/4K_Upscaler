@@ -420,7 +420,7 @@ def _ensure_job_runner(job_id: str) -> bool:
 
 
 class ProcessorHandler(BaseHTTPRequestHandler):
-    server_version = "MG4KCloudProcessor/8.8.1-result-persist-r10b"
+    server_version = "MG4KCloudProcessor/8.8.1-result-persist-r11b"
 
     def _json(self, status: int, payload: dict[str, Any]) -> None:
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
@@ -442,7 +442,7 @@ class ProcessorHandler(BaseHTTPRequestHandler):
             self._json(200, {
                 "status": "ok",
                 "service": "mg4k-cloud-processor",
-                "version": "8.8.1-result-persist-r10a",
+                "version": "8.8.1-result-persist-r11b",
                 "build_id": CONTAINER_BUILD_ID,
                 "uptime_seconds": int(time.time() - STARTED_AT),
                 "ephemeral_jobs": True,

@@ -48,6 +48,17 @@ jobs:
           print("Container application naming contract: PASSED")
           PY
 
+      - name: Container PID1 signal-forwarding contract
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          docker = Path("Dockerfile").read_text(encoding="utf-8")
+          assert "libgomp1 tini" in docker
+          assert 'ENTRYPOINT ["/usr/bin/tini", "-g", "--"]' in docker
+          assert 'CMD ["python", "cloud_processor_service.py"]' in docker
+          print("Container PID1 signal-forwarding contract: PASSED")
+          PY
+
       - name: Cloudflare bundle dry-run
         run: |
           npm install
@@ -543,7 +554,7 @@ jobs:
           retire = worker.index("await retirePreviousProcessorInstances(env)")
           start = worker.index("await container.startAndWaitForPorts(startConfig);")
           assert retire < start, "Stale processor must be retired before starting the replacement"
-          print("R11a single-instance in-place processor lifecycle handoff: PASSED")
+          print("R11b single-instance in-place processor lifecycle handoff: PASSED")
           PY
 
       - name: Paid generation rollout stabilization contract
@@ -581,7 +592,7 @@ jobs:
           cfg = json.loads(Path("wrangler.jsonc").read_text(encoding="utf-8"))
 
           assert cfg["containers"][0]["max_instances"] == 1
-          assert 'const CONTAINER_BUILD_ID = "result-persist-r11a";' in worker
+          assert 'const CONTAINER_BUILD_ID = "result-persist-r11b";' in worker
           assert "const assertSafeToRecycleCurrentInstance = async (reason) =>" in worker
           assert "const recycleCurrentInstance = async (reason) =>" in worker
           assert "const startWithCapacityRecovery = async () =>" in worker
@@ -607,7 +618,7 @@ jobs:
           print("Pre-start stale Container capacity recovery: PASSED")
           PY
 
-      - name: Stable single-instance R11a upgrade contract
+      - name: Stable single-instance R11b upgrade contract
         run: |
           python - <<'PY'
           import json
@@ -616,7 +627,8 @@ jobs:
           cfg = json.loads(Path("wrangler.jsonc").read_text(encoding="utf-8"))
 
           assert cfg["containers"][0]["max_instances"] == 1
-          assert 'const CONTAINER_INSTANCE_NAME = "primary-result-persist-r10a";' in worker
+          assert 'const CONTAINER_INSTANCE_NAME = "primary-result-persist-r11b";' in worker
+          assert '"primary-result-persist-r10a"' in worker, "Previous R11a instance must remain in legacy retirement list"
           assert "const startConfig = {" in worker
           assert "const readHealth = async () =>" in worker
           assert "const startWithCapacityRecovery = async () =>" in worker
@@ -625,7 +637,7 @@ jobs:
           assert 'await recycleCurrentInstance(`prestart_upgrade_to_${CONTAINER_BUILD_ID}`);' in worker
           assert "await container.startAndWaitForPorts(startConfig);" in worker
           assert "persistedReviewIsDurable(job) || persistedDecisionIsDurable(job)" in worker
-          print("Stable single-instance R11a pre-start upgrade: PASSED")
+          print("Stable single-instance R11b pre-start upgrade: PASSED")
           PY
 
       - name: Versioned Container rollout contract
@@ -635,8 +647,8 @@ jobs:
           worker = Path("src/worker.js").read_text(encoding="utf-8")
           service = Path("cloud_processor_service.py").read_text(encoding="utf-8")
 
-          assert 'const CONTAINER_BUILD_ID = "result-persist-r11a";' in worker
-          assert 'const CONTAINER_INSTANCE_NAME = "primary-result-persist-r10a";' in worker
+          assert 'const CONTAINER_BUILD_ID = "result-persist-r11b";' in worker
+          assert 'const CONTAINER_INSTANCE_NAME = "primary-result-persist-r11b";' in worker
           assert 'return getContainer(env.MG4K_PROCESSOR, CONTAINER_INSTANCE_NAME);' in worker
           assert 'MG4K_PROCESSOR_PRESTART_RECYCLE' in worker
           assert 'processor_recycle_waiting_for_inflight_job:' in worker
@@ -811,14 +823,14 @@ jobs:
           echo "Regression suite uses only offline/self-test paths; no OPENROUTER_API_KEY is provided."
 
 
-  live_r11a_smoke:
-    if: github.event_name == 'push' && contains(github.event.head_commit.message, '[live-r11a]')
+  live_r11b_smoke:
+    if: github.event_name == 'push' && contains(github.event.head_commit.message, '[live-r11b]')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
-      - name: Live production R11a smoke
+      - name: Live production R11b smoke
         env:
           BASE_URL: https://4k-upscaler.marinsgroup.workers.dev
         run: |
@@ -898,7 +910,7 @@ jobs:
             DIAG="$(python -c 'import json,sys; d=json.load(open(sys.argv[1])); print(" ".join(str(d.get(k,"") or "") for k in ("error","diagnostic_excerpt","result_sync_warning")))' "$TMP/state.json")"
 
             if [[ "$STAGE" == "container_dispatch_failed" ]] || grep -q "Maximum number of running container instances exceeded" <<<"$DIAG"; then
-              echo "R11a capacity recovery FAILED" >&2
+              echo "R11b capacity recovery FAILED" >&2
               exit 21
             fi
 
@@ -908,7 +920,7 @@ jobs:
             sleep 12
           done
 
-          if [[ "$BUILD" != "result-persist-r11a" ]]; then
+          if [[ "$BUILD" != "result-persist-r11b" ]]; then
             echo "Unexpected processor build: $BUILD" >&2
             exit 22
           fi
@@ -943,4 +955,4 @@ jobs:
           PY
           curl -fsS -X POST "$BASE_URL/api/session/end"             -H "Content-Type: application/json"             --data-binary @"$TMP/end-payload.json" > "$TMP/end.json" || true
 
-          echo "R11a live production smoke: PASSED · status=$STATUS · processor=$BUILD · worker=$WORKER_BUILD"
+          echo "R11b live production smoke: PASSED · status=$STATUS · processor=$BUILD · worker=$WORKER_BUILD"

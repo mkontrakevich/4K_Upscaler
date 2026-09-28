@@ -32,9 +32,10 @@ const SESSION_TTL = 60 * 10;
 const PAIR_TTL = 60 * 10;
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 const WORKER_BUILD_ID = "review-durability-r11b";
-const CONTAINER_BUILD_ID = "result-persist-r11a";
-const CONTAINER_INSTANCE_NAME = "primary-result-persist-r10a";
+const CONTAINER_BUILD_ID = "result-persist-r11b";
+const CONTAINER_INSTANCE_NAME = "primary-result-persist-r11b";
 const LEGACY_CONTAINER_INSTANCE_NAMES = [
+  "primary-result-persist-r10a",
   "primary",
   "primary-result-persist-r10",
   "primary-result-persist-r10b",

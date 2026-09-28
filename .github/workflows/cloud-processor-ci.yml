@@ -112,13 +112,16 @@ jobs:
           worker = Path("src/worker.js").read_text(encoding="utf-8")
           assert 'import { Container, ContainerProxy, getContainer } from "@cloudflare/containers";' in worker
           assert "ensureCloudProcessor" in worker
-          assert 'const CONTAINER_BUILD_ID = "result-persist-r11a";' in worker
-          assert 'const CONTAINER_INSTANCE_NAME = "primary-result-persist-r10a";' in worker
+          assert 'const CONTAINER_BUILD_ID = "result-persist-r11b";' in worker
+          assert 'const CONTAINER_INSTANCE_NAME = "primary-result-persist-r11b";' in worker
           assert 'return getContainer(env.MG4K_PROCESSOR, CONTAINER_INSTANCE_NAME);' in worker
           assert 'container_build_mismatch' in worker
           assert 'MG4K_PROCESSOR_PRESTART_RECYCLE' in worker
           assert 'processor_recycle_waiting_for_inflight_job:' in worker
           assert 'instance_type' not in worker
+          docker = Path("Dockerfile").read_text(encoding="utf-8")
+          assert 'ENTRYPOINT ["/usr/bin/tini", "-g", "--"]' in docker
+          assert '"primary-result-persist-r10a"' in worker
           print("Native Cloudflare Container contract: PASSED")
           PY
 
