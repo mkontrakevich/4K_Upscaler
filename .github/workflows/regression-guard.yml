@@ -480,7 +480,7 @@ jobs:
           assert 'job.review_detached_from_container = true;' in worker
           assert 'job.container_review_released_at = now();' in worker
           assert 'MG4K_REVIEW_DECISION_CONTAINER_NOTIFY_WARNING' in worker
-          assert cfg["containers"][0]["max_instances"] == 2
+          assert cfg["containers"][0]["max_instances"] == 1
           print("Persisted REVIEW -> R2 authority / Container slot release: PASSED")
           PY
 
@@ -516,7 +516,7 @@ jobs:
           worker = Path("src/worker.js").read_text(encoding="utf-8")
           cfg = json.loads(Path("wrangler.jsonc").read_text(encoding="utf-8"))
 
-          assert cfg["containers"][0]["max_instances"] == 2, "R11 rescue deploy temporarily requires a second Container slot"
+          assert cfg["containers"][0]["max_instances"] == 1, "Paid processor concurrency must remain single-instance"
           assert "async shutdownContainer(reason" in worker
           assert "this.ctx.container.destroy" in worker
           assert "async function hasInFlightProcessorJob(env, instanceNames)" in worker
@@ -530,7 +530,7 @@ jobs:
           retire = worker.index("await retirePreviousProcessorInstances(env)")
           start = worker.index("await container.startAndWaitForPorts({")
           assert retire < start, "Stale processor must be retired before starting the replacement"
-          print("R11 rescue processor lifecycle handoff: PASSED")
+          print("R11 single-instance in-place processor lifecycle handoff: PASSED")
           PY
 
       - name: Paid generation rollout stabilization contract
@@ -558,6 +558,26 @@ jobs:
           print("Paid generation rollout stabilization: PASSED")
           PY
 
+      - name: Stable single-instance R11 upgrade contract
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          worker = Path("src/worker.js").read_text(encoding="utf-8")
+          cfg = json.loads(Path("wrangler.jsonc").read_text(encoding="utf-8"))
+
+          assert cfg["containers"][0]["max_instances"] == 1
+          assert 'const CONTAINER_INSTANCE_NAME = "primary-result-persist-r10a";' in worker
+          assert "const startConfig = {" in worker
+          assert "const readHealth = async () =>" in worker
+          assert "processor_upgrade_waiting_for_inflight_job:" in worker
+          assert "MG4K_PROCESSOR_IN_PLACE_UPGRADE" in worker
+          assert 'await container.shutdownContainer(`upgrade_to_${CONTAINER_BUILD_ID}`);' in worker
+          assert worker.count("await container.startAndWaitForPorts(startConfig);") >= 2
+          assert "persistedReviewIsDurable(job) || persistedDecisionIsDurable(job)" in worker
+          print("Stable single-instance R11 in-place upgrade: PASSED")
+          PY
+
       - name: Versioned Container rollout contract
         run: |
           python - <<'PY'
@@ -566,8 +586,11 @@ jobs:
           service = Path("cloud_processor_service.py").read_text(encoding="utf-8")
 
           assert 'const CONTAINER_BUILD_ID = "result-persist-r11";' in worker
-          assert 'const CONTAINER_INSTANCE_NAME = `primary-${CONTAINER_BUILD_ID}`;' in worker
+          assert 'const CONTAINER_INSTANCE_NAME = "primary-result-persist-r10a";' in worker
           assert 'return getContainer(env.MG4K_PROCESSOR, CONTAINER_INSTANCE_NAME);' in worker
+          assert 'MG4K_PROCESSOR_IN_PLACE_UPGRADE' in worker
+          assert 'processor_upgrade_waiting_for_inflight_job:' in worker
+          assert 'await container.shutdownContainer(`upgrade_to_${CONTAINER_BUILD_ID}`);' in worker
           assert 'MG4K_CONTAINER_BUILD_ID: CONTAINER_BUILD_ID' in worker
           assert 'container_build_mismatch' in worker
           assert 'String(health.build_id || "") !== CONTAINER_BUILD_ID' in worker
