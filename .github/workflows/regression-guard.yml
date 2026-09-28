@@ -606,12 +606,13 @@ jobs:
           assert 'const CONTAINER_INSTANCE_NAME = "primary-result-persist-r10a";' in worker
           assert "const startConfig = {" in worker
           assert "const readHealth = async () =>" in worker
-          assert "processor_upgrade_waiting_for_inflight_job:" in worker
-          assert "MG4K_PROCESSOR_IN_PLACE_UPGRADE" in worker
-          assert 'await container.shutdownContainer(`upgrade_to_${CONTAINER_BUILD_ID}`);' in worker
-          assert worker.count("await container.startAndWaitForPorts(startConfig);") >= 2
+          assert "const startWithCapacityRecovery = async () =>" in worker
+          assert "processor_recycle_waiting_for_inflight_job:" in worker
+          assert "MG4K_PROCESSOR_PRESTART_RECYCLE" in worker
+          assert 'await recycleCurrentInstance(`prestart_upgrade_to_${CONTAINER_BUILD_ID}`);' in worker
+          assert "await container.startAndWaitForPorts(startConfig);" in worker
           assert "persistedReviewIsDurable(job) || persistedDecisionIsDurable(job)" in worker
-          print("Stable single-instance R11a in-place upgrade: PASSED")
+          print("Stable single-instance R11a pre-start upgrade: PASSED")
           PY
 
       - name: Versioned Container rollout contract
@@ -624,9 +625,9 @@ jobs:
           assert 'const CONTAINER_BUILD_ID = "result-persist-r11a";' in worker
           assert 'const CONTAINER_INSTANCE_NAME = "primary-result-persist-r10a";' in worker
           assert 'return getContainer(env.MG4K_PROCESSOR, CONTAINER_INSTANCE_NAME);' in worker
-          assert 'MG4K_PROCESSOR_IN_PLACE_UPGRADE' in worker
-          assert 'processor_upgrade_waiting_for_inflight_job:' in worker
-          assert 'await container.shutdownContainer(`upgrade_to_${CONTAINER_BUILD_ID}`);' in worker
+          assert 'MG4K_PROCESSOR_PRESTART_RECYCLE' in worker
+          assert 'processor_recycle_waiting_for_inflight_job:' in worker
+          assert 'await recycleCurrentInstance(`prestart_upgrade_to_${CONTAINER_BUILD_ID}`);' in worker
           assert 'MG4K_CONTAINER_BUILD_ID: CONTAINER_BUILD_ID' in worker
           assert 'container_build_mismatch' in worker
           assert 'String(health.build_id || "") !== CONTAINER_BUILD_ID' in worker
