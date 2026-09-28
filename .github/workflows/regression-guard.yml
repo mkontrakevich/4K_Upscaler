@@ -801,3 +801,76 @@ jobs:
       - name: No paid generation in regression
         run: |
           echo "Regression suite uses only offline/self-test paths; no OPENROUTER_API_KEY is provided."
+
+
+  live_r11a_smoke:
+    if: github.event_name == 'push' && contains(github.event.head_commit.message, '[live-r11a]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Live production R11a smoke
+        env:
+          BASE_URL: https://4k-upscaler.marinsgroup.workers.dev
+        run: |
+          set -euo pipefail
+          TMP="$(mktemp -d)"
+          trap 'rm -rf "$TMP"' EXIT
+
+          test -f UI_REFERENCE_APPROVED_V875.png
+          LOCKS='{"camera":"hard","geometry":"hard","architecture":"hard","textures":"hard","vegetation":"hard","people_vehicles":"hard","lighting":"free","sky":"free","water":"soft"}'
+
+          curl -fsS --retry 3 --retry-delay 2 -X POST "$BASE_URL/api/session/start" > "$TMP/session.json"
+          SESSION_ID="$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["id"])' "$TMP/session.json")"
+          SESSION_TOKEN="$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["token"])' "$TMP/session.json")"
+
+          curl -fsS --retry 2 --retry-delay 2 -X POST "$BASE_URL/api/jobs"             -H "X-Session-Id: $SESSION_ID"             -H "X-Session-Token: $SESSION_TOKEN"             -F "file=@UI_REFERENCE_APPROVED_V875.png;type=image/png"             -F "locks=$LOCKS"             -F "mode=generative" > "$TMP/job.json"
+
+          JOB_ID="$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["id"])' "$TMP/job.json")"
+          JOB_TOKEN="$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["token"])' "$TMP/job.json")"
+          echo "Production smoke job: ${JOB_ID:0:8}"
+
+          STATUS=""
+          BUILD=""
+          for attempt in $(seq 1 80); do
+            curl -fsS --retry 2 --retry-delay 2               -H "X-Job-Token: $JOB_TOKEN"               "$BASE_URL/api/jobs/$JOB_ID" > "$TMP/state.json"
+
+            python - "$TMP/state.json" <<'PY'
+          import json, sys
+          d=json.load(open(sys.argv[1]))
+          keys=["id","status","stage","progress","container_build_id","result_available","result_bytes","diagnostic_excerpt","error","result_sync_warning"]
+          print(json.dumps({k:d.get(k) for k in keys}, ensure_ascii=False))
+          PY
+
+            STATUS="$(python -c 'import json,sys; print(json.load(open(sys.argv[1])).get("status",""))' "$TMP/state.json")"
+            BUILD="$(python -c 'import json,sys; print(json.load(open(sys.argv[1])).get("container_build_id",""))' "$TMP/state.json")"
+            STAGE="$(python -c 'import json,sys; print(json.load(open(sys.argv[1])).get("stage",""))' "$TMP/state.json")"
+            DIAG="$(python -c 'import json,sys; d=json.load(open(sys.argv[1])); print(" ".join(str(d.get(k,"") or "") for k in ("error","diagnostic_excerpt","result_sync_warning")))' "$TMP/state.json")"
+
+            if [[ "$STAGE" == "container_dispatch_failed" ]] || grep -q "Maximum number of running container instances exceeded" <<<"$DIAG"; then
+              echo "R11a capacity recovery FAILED" >&2
+              exit 21
+            fi
+
+            if [[ "$STATUS" == "review" || "$STATUS" == "done" || "$STATUS" == "failed" || "$STATUS" == "skipped" ]]; then
+              break
+            fi
+            sleep 12
+          done
+
+          if [[ "$BUILD" != "result-persist-r11a" ]]; then
+            echo "Unexpected processor build: $BUILD" >&2
+            exit 22
+          fi
+          if [[ "$STATUS" == "failed" || -z "$STATUS" ]]; then
+            echo "Production job did not complete successfully: status=$STATUS" >&2
+            exit 23
+          fi
+          if [[ "$STATUS" == "review" ]]; then
+            curl -fsS -X POST "$BASE_URL/api/jobs/$JOB_ID/decision"               -H "Content-Type: application/json"               -H "X-Job-Token: $JOB_TOKEN"               --data '{"action":"skip"}' > "$TMP/decision.json"
+          fi
+
+          curl -fsS -X POST "$BASE_URL/api/session/end"             -H "Content-Type: application/json"             --data "{"session_id":"$SESSION_ID","session_token":"$SESSION_TOKEN"}" > "$TMP/end.json" || true
+
+          echo "R11a live production smoke: PASSED · status=$STATUS · build=$BUILD"
