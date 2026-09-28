@@ -673,6 +673,14 @@ jobs:
           assert 'job.result_persisted_at = now();' in worker
           assert 'job.result_sync_attempts = 0;' in worker
 
+          pull_persist = worker[worker.index("async function storeContainerResult"):worker.index("async function dispatchJobToContainer")]
+          assert 'crypto.subtle.digest("SHA-256", bytes)' in pull_persist
+          assert 'persist_source: "container_pull"' in pull_persist
+          assert 'job.result_checksum_sha256 = checksum;' in pull_persist
+          assert 'job.result_persist_source = "container_pull";' in pull_persist
+          assert 'job.result_persisted_at = now();' in pull_persist
+          assert 'const WORKER_BUILD_ID = "review-durability-r11b";' in worker
+
           # Runtime smoke: execute the persistence helper without network/API calls.
           import os, tempfile
           from pathlib import Path as RuntimePath
@@ -836,6 +844,22 @@ jobs:
           done
           echo "Production UI R9.3 + replace-source: PASSED"
 
+          # Wait for the Worker durability fix itself before any paid generation.
+          WORKER_BUILD=""
+          for attempt in $(seq 1 24); do
+            curl -fsS --retry 2 --retry-delay 2 "$BASE_URL/api/health?smoke=$GITHUB_SHA-$attempt" > "$TMP/health.json"
+            WORKER_BUILD="$(python -c 'import json,sys; print(json.load(open(sys.argv[1])).get("worker_build_id",""))' "$TMP/health.json")"
+            if [[ "$WORKER_BUILD" == "review-durability-r11b" ]]; then
+              break
+            fi
+            if [[ "$attempt" == "24" ]]; then
+              echo "Production Worker is not review-durability-r11b; aborting before paid generation." >&2
+              exit 24
+            fi
+            sleep 10
+          done
+          echo "Production Worker durability build: $WORKER_BUILD"
+
           # Guard the smoke input against the service-asset exclusion policy.
           python - "$TMP/live_architecture_source.png" <<'PY'
           import sys
@@ -864,7 +888,7 @@ jobs:
             python - "$TMP/state.json" <<'PY'
           import json, sys
           d=json.load(open(sys.argv[1]))
-          keys=["id","status","stage","progress","container_build_id","result_available","result_bytes","diagnostic_excerpt","error","result_sync_warning"]
+          keys=["id","status","stage","progress","container_build_id","result_available","result_bytes","result_checksum_sha256","result_persist_source","result_persisted_at","review_detached_from_container","diagnostic_excerpt","error","result_sync_warning"]
           print(json.dumps({k:d.get(k) for k in keys}, ensure_ascii=False))
           PY
 
@@ -893,7 +917,23 @@ jobs:
             exit 23
           fi
           if [[ "$STATUS" == "review" ]]; then
+            python - "$TMP/state.json" <<'PY'
+          import json, sys
+          d=json.load(open(sys.argv[1]))
+          assert d.get("result_available") is True, d
+          assert int(d.get("result_bytes") or 0) > 0, d
+          assert d.get("result_persisted_at"), d
+          assert d.get("result_persist_source") in {"container_push", "container_pull"}, d
+          print("Durable R2 review result: PASSED")
+          PY
             curl -fsS -X POST "$BASE_URL/api/jobs/$JOB_ID/decision"               -H "Content-Type: application/json"               -H "X-Job-Token: $JOB_TOKEN"               --data '{"action":"skip"}' > "$TMP/decision.json"
+            python - "$TMP/decision.json" <<'PY'
+          import json, sys
+          d=json.load(open(sys.argv[1]))
+          assert d.get("ok") is True, d
+          assert (d.get("job") or {}).get("status") == "skipped", d
+          print("Review release decision: PASSED")
+          PY
           fi
 
           python - "$TMP/session.json" > "$TMP/end-payload.json" <<'PY'
@@ -903,4 +943,4 @@ jobs:
           PY
           curl -fsS -X POST "$BASE_URL/api/session/end"             -H "Content-Type: application/json"             --data-binary @"$TMP/end-payload.json" > "$TMP/end.json" || true
 
-          echo "R11a live production smoke: PASSED · status=$STATUS · build=$BUILD"
+          echo "R11a live production smoke: PASSED · status=$STATUS · processor=$BUILD · worker=$WORKER_BUILD"
