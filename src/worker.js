@@ -31,12 +31,12 @@ export class MG4KProcessor extends Container {
 const SESSION_TTL = 60 * 10;
 const PAIR_TTL = 60 * 10;
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
-const CONTAINER_BUILD_ID = "result-persist-r10b";
-const CONTAINER_INSTANCE_NAME = `primary-${CONTAINER_BUILD_ID}`;
+const CONTAINER_BUILD_ID = "result-persist-r11";
+const CONTAINER_INSTANCE_NAME = "primary-result-persist-r10a";
 const LEGACY_CONTAINER_INSTANCE_NAMES = [
   "primary",
   "primary-result-persist-r10",
-  "primary-result-persist-r10a",
+  "primary-result-persist-r10b",
 ];
 
 function processorContainer(env) {
@@ -51,6 +51,20 @@ function processorContainerForJob(env, job) {
   };
 }
 
+function persistedReviewIsDurable(job) {
+  return String(job?.status || "") === "review"
+    && Boolean(job?.result_key)
+    && Number(job?.result_bytes || 0) > 0
+    && Boolean(job?.result_persisted_at);
+}
+
+function persistedDecisionIsDurable(job) {
+  return String(job?.status || "") === "decision_pending"
+    && Boolean(job?.result_key)
+    && Number(job?.result_bytes || 0) > 0
+    && ["approve", "reject", "skip"].includes(String(job?.decision || ""));
+}
+
 async function hasInFlightProcessorJob(env, instanceNames) {
   const targets = new Set(Array.from(instanceNames || []).map(String));
   if (!targets.size) return null;
@@ -60,7 +74,15 @@ async function hasInFlightProcessorJob(env, instanceNames) {
     const raw = await env.SESSION_STATE_R7.get(key.name);
     if (!raw) continue;
     const job = JSON.parse(raw);
+
+    const session = await readSession(env, job.session_id);
+    if (!session) {
+      await env.SESSION_STATE_R7.delete(key.name);
+      continue;
+    }
+
     if (!job.container_dispatched) continue;
+    if (persistedReviewIsDurable(job) || persistedDecisionIsDurable(job)) continue;
 
     const status = String(job.status || "");
     if (!["processing", "review", "decision_pending"].includes(status)) continue;
@@ -200,6 +222,8 @@ function publicJob(job) {
     manual_retry_required: Boolean(job.manual_retry_required),
     validation: job.validation || null,
     decision: job.decision || null,
+    approval_mode: job.approval_mode || null,
+    review_detached_from_container: Boolean(job.review_detached_from_container),
   };
 }
 
@@ -335,11 +359,12 @@ async function ensureCloudProcessor(env, origin) {
 
   const retirement = await retirePreviousProcessorInstances(env);
   if (retirement.blocked) {
-    const b=retirement.blocker;throw new Error(`processor_rollout_waiting_for_inflight_job:${b?.id||"unknown"}:${b?.instance_name||"unknown"}:${b?.status||"unknown"}`);
+    const b=retirement.blocker;
+    throw new Error(`processor_rollout_waiting_for_inflight_job:${b?.id||"unknown"}:${b?.instance_name||"unknown"}:${b?.status||"unknown"}`);
   }
 
   const container = processorContainer(env);
-  await container.startAndWaitForPorts({
+  const startConfig = {
     ports: [8080],
     startOptions: {
       envVars: {
@@ -360,15 +385,42 @@ async function ensureCloudProcessor(env, origin) {
     cancellationOptions: {
       portReadyTimeoutMS: 60_000,
     },
-  });
+  };
 
-  const healthResponse = await container.fetch(new Request("http://container/healthz"));
-  const health = await healthResponse.json().catch(() => ({}));
+  const readHealth = async () => {
+    const response = await container.fetch(new Request("http://container/healthz"));
+    const health = await response.json().catch(() => ({}));
+    return { response, health };
+  };
+
+  await container.startAndWaitForPorts(startConfig);
+  let { response: healthResponse, health } = await readHealth();
+
+  if (!healthResponse.ok || String(health.build_id || "") !== CONTAINER_BUILD_ID) {
+    const blocker = await hasInFlightProcessorJob(env, new Set([CONTAINER_INSTANCE_NAME]));
+    if (blocker) {
+      throw new Error(
+        `processor_upgrade_waiting_for_inflight_job:${blocker.id}:${blocker.instance_name}:${blocker.status}`
+      );
+    }
+
+    console.log("MG4K_PROCESSOR_IN_PLACE_UPGRADE", {
+      instance: CONTAINER_INSTANCE_NAME,
+      expected: CONTAINER_BUILD_ID,
+      actual: String(health.build_id || "unknown"),
+    });
+
+    await container.shutdownContainer(`upgrade_to_${CONTAINER_BUILD_ID}`);
+    await container.startAndWaitForPorts(startConfig);
+    ({ response: healthResponse, health } = await readHealth());
+  }
+
   if (!healthResponse.ok || String(health.build_id || "") !== CONTAINER_BUILD_ID) {
     throw new Error(
       `container_build_mismatch:expected=${CONTAINER_BUILD_ID}:actual=${String(health.build_id || "unknown")}`
     );
   }
+
   await env.SESSION_STATE_R7.put("processor:active_instance", CONTAINER_INSTANCE_NAME);
   await env.SESSION_STATE_R7.put("processor:active_build_id", CONTAINER_BUILD_ID);
   return container;
@@ -767,7 +819,8 @@ async function handleApi(request, env, ctx, url) {
     let job = await readJob(env, jobStatusMatch[1]);
     if (!job) return json({ error: "job_not_found" }, 404);
     if (!await authorizeJob(request, url, job)) return json({ error: "forbidden" }, 403);
-    if (!["done", "failed", "skipped"].includes(job.status)) {
+    const durableReview = persistedReviewIsDurable(job);
+    if (!["done", "failed", "skipped"].includes(job.status) && !durableReview) {
       try {
         job = await syncJobFromContainer(env, job, url.origin);
       } catch (error) {
@@ -788,19 +841,52 @@ async function handleApi(request, env, ctx, url) {
     if (!job) return json({ error: "job_not_found" }, 404);
     if (!await authorizeJob(request, url, job)) return json({ error: "forbidden" }, 403);
     if (job.status !== "review") return json({ error: "job_not_waiting_for_review", status: job.status }, 409);
+    if (!persistedReviewIsDurable(job)) {
+      return json({ error: "review_result_not_persisted", status: job.status }, 409);
+    }
+
     let body = {};
     try { body = await request.json(); } catch {}
     const action = String(body.action || "").toLowerCase();
     if (!["approve", "reject", "skip"].includes(action)) return json({ error: "invalid_decision" }, 400);
-    try {
-      await sendContainerDecision(env, job, action);
-    } catch (error) {
-      return json({ error: "container_decision_failed", message: error?.message || String(error) }, 502);
+
+    // The review pixels are already durable in R2. Container notification is
+    // best-effort only, so a retired/stale Container can never hold the user's
+    // decision hostage or block the next job.
+    if (job.container_instance_name) {
+      const notify = sendContainerDecision(env, job, action).catch(error => {
+        console.warn("MG4K_REVIEW_DECISION_CONTAINER_NOTIFY_WARNING", job.id, error?.message || String(error));
+      });
+      if (ctx?.waitUntil) ctx.waitUntil(notify);
     }
+
     job.decision = action;
-    job.status = "decision_pending";
-    job.stage = action === "approve" ? "approval_sent" : action === "reject" ? "rejection_sent" : "skip_sent";
-    job.progress = 95;
+    job.container_dispatched = false;
+    job.review_detached_from_container = true;
+    job.review_decided_at = now();
+    job.manual_retry_required = false;
+
+    if (action === "approve") {
+      job.status = "done";
+      job.stage = "final";
+      job.progress = 100;
+      job.error = null;
+      const validationPassed = Boolean(job.validation?.passed);
+      job.approval_mode = validationPassed ? "explicit_user_approval" : "explicit_user_manual_override";
+    } else if (action === "reject") {
+      job.status = "failed";
+      job.stage = "rejected";
+      job.progress = 100;
+      job.error = "rejected_by_user";
+      job.approval_mode = "rejected_by_user";
+    } else {
+      job.status = "skipped";
+      job.stage = "skipped_by_user";
+      job.progress = 100;
+      job.error = null;
+      job.approval_mode = "skipped_by_user";
+    }
+
     await writeJob(env, job);
     return json({ ok: true, job: publicJob(job) });
   }
@@ -821,15 +907,12 @@ async function handleApi(request, env, ctx, url) {
     }
 
     let resetWarning = null;
-    if (status === "review" && job.container_dispatched) {
-      try {
-        await sendContainerDecision(env, job, "skip");
-      } catch (error) {
-        // A reset explicitly abandons this review job. If its old Container is
-        // already unavailable, the Worker state still has to be released so a
-        // future processor rollout can retire that stale instance.
+    if (status === "review" && job.container_instance_name) {
+      const notify = sendContainerDecision(env, job, "skip").catch(error => {
         resetWarning = error?.message || String(error);
-      }
+        console.warn("MG4K_RESET_CONTAINER_NOTIFY_WARNING", job.id, resetWarning);
+      });
+      if (ctx?.waitUntil) ctx.waitUntil(notify);
     }
 
     job.decision = "reset";
@@ -1058,7 +1141,13 @@ async function handleApi(request, env, ctx, url) {
     job.progress = requestedStatus === "review" ? 90 : 100;
     job.validation = validation;
     job.error = null;
-    if (requestedStatus !== "review") job.decision = "approve";
+    if (requestedStatus === "review") {
+      job.container_dispatched = false;
+      job.review_detached_from_container = true;
+      job.container_review_released_at = now();
+    } else {
+      job.decision = "approve";
+    }
     await writeJob(env, job);
     await writeSession(env, session);
 
