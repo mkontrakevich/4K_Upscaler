@@ -530,7 +530,7 @@ jobs:
           retire = worker.index("await retirePreviousProcessorInstances(env)")
           start = worker.index("await container.startAndWaitForPorts(startConfig);")
           assert retire < start, "Stale processor must be retired before starting the replacement"
-          print("R11 single-instance in-place processor lifecycle handoff: PASSED")
+          print("R11a single-instance in-place processor lifecycle handoff: PASSED")
           PY
 
       - name: Paid generation rollout stabilization contract
@@ -558,7 +558,43 @@ jobs:
           print("Paid generation rollout stabilization: PASSED")
           PY
 
-      - name: Stable single-instance R11 upgrade contract
+      - name: Pre-start stale Container capacity recovery
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          worker = Path("src/worker.js").read_text(encoding="utf-8")
+          cfg = json.loads(Path("wrangler.jsonc").read_text(encoding="utf-8"))
+
+          assert cfg["containers"][0]["max_instances"] == 1
+          assert 'const CONTAINER_BUILD_ID = "result-persist-r11a";' in worker
+          assert "const assertSafeToRecycleCurrentInstance = async (reason) =>" in worker
+          assert "const recycleCurrentInstance = async (reason) =>" in worker
+          assert "const startWithCapacityRecovery = async () =>" in worker
+          assert "MG4K_PROCESSOR_PRESTART_RECYCLE" in worker
+          assert "processor_recycle_waiting_for_inflight_job:" in worker
+          assert "Maximum number of running container instances exceeded" in worker
+          assert 'await recycleCurrentInstance(`prestart_upgrade_to_${CONTAINER_BUILD_ID}`);' in worker
+          assert "await new Promise(resolve => setTimeout(resolve, 750 * attempt));" in worker
+
+          ensure = worker[worker.index("async function ensureCloudProcessor"):worker.index("function applyContainerState")]
+          pre = ensure.index("prestart_upgrade_to_")
+          start = ensure.index("await startWithCapacityRecovery();")
+          assert pre < start, "Stale current instance must be recycled before capacity allocation"
+
+          recycle = ensure[ensure.index("const recycleCurrentInstance"):ensure.index("const startWithCapacityRecovery")]
+          assert "assertSafeToRecycleCurrentInstance(reason)" in recycle
+          assert "shutdownContainer(reason)" in recycle
+
+          safety = ensure[ensure.index("const assertSafeToRecycleCurrentInstance"):ensure.index("const recycleCurrentInstance")]
+          assert "hasInFlightProcessorJob" in safety
+          assert "processor_recycle_waiting_for_inflight_job:" in safety
+
+          print("Pre-start stale Container capacity recovery: PASSED")
+          PY
+
+      - name: Stable single-instance R11a upgrade contract
         run: |
           python - <<'PY'
           import json
@@ -575,7 +611,7 @@ jobs:
           assert 'await container.shutdownContainer(`upgrade_to_${CONTAINER_BUILD_ID}`);' in worker
           assert worker.count("await container.startAndWaitForPorts(startConfig);") >= 2
           assert "persistedReviewIsDurable(job) || persistedDecisionIsDurable(job)" in worker
-          print("Stable single-instance R11 in-place upgrade: PASSED")
+          print("Stable single-instance R11a in-place upgrade: PASSED")
           PY
 
       - name: Versioned Container rollout contract
@@ -585,7 +621,7 @@ jobs:
           worker = Path("src/worker.js").read_text(encoding="utf-8")
           service = Path("cloud_processor_service.py").read_text(encoding="utf-8")
 
-          assert 'const CONTAINER_BUILD_ID = "result-persist-r11";' in worker
+          assert 'const CONTAINER_BUILD_ID = "result-persist-r11a";' in worker
           assert 'const CONTAINER_INSTANCE_NAME = "primary-result-persist-r10a";' in worker
           assert 'return getContainer(env.MG4K_PROCESSOR, CONTAINER_INSTANCE_NAME);' in worker
           assert 'MG4K_PROCESSOR_IN_PLACE_UPGRADE' in worker
