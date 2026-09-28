@@ -31,6 +31,7 @@ export class MG4KProcessor extends Container {
 const SESSION_TTL = 60 * 10;
 const PAIR_TTL = 60 * 10;
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
+const WORKER_BUILD_ID = "review-durability-r11b";
 const CONTAINER_BUILD_ID = "result-persist-r11a";
 const CONTAINER_INSTANCE_NAME = "primary-result-persist-r10a";
 const LEGACY_CONTAINER_INSTANCE_NAMES = [
@@ -708,6 +709,7 @@ async function handleApi(request, env, ctx, url) {
       service: "MG 4K Cloud Intake",
       version: "cloud-r2-ephemeral",
       worker: "4k-upscaler",
+      worker_build_id: WORKER_BUILD_ID,
       session_ttl_seconds: SESSION_TTL,
       persistence: "ephemeral-session-only",
       persistent_user_database: false,
