@@ -146,3 +146,28 @@ Controlled:
 **MG 4K / ARCH LOCK: production scope R11a/R11b + UI R9.3 is closed.**
 
 The next real operator generation will be handled by the R11b Worker contract, which enforces the expected processor build before source dispatch. No additional paid smoke is required for the completed scope.
+
+
+## Post-verification hotfix — Cloud UI R9.4 inspection viewer
+
+After the R11b/R9.3 production baseline was closed, a real operator review exposed a remaining UI defect: the inspection dialog opened, but SOURCE and RESULT could disappear after the viewer switched from the native-image fallback to the canvas renderer.
+
+The production hotfix changes the viewer contract as follows:
+
+- Cloud UI version advanced to `R9.4`;
+- the viewer now keeps the native SOURCE/RESULT fallback active until a canvas frame has actually completed;
+- any canvas render exception leaves the native two-pane comparison visible instead of producing a blank inspection area;
+- the inspection SOURCE first uses the persisted job source endpoint, with the already loaded page image and local object URL as fallback candidates;
+- the inspection RESULT first reuses the already loaded page result and only then performs a fresh result request;
+- the blank-viewer regression guard now verifies that fallback removal happens only after a completed paint;
+- no paid generation is triggered by this hotfix.
+
+Production verification:
+- fix commit: `9be52a800a3100f47ed3655809afbe14f53ae3a8`;
+- regression-guard correction: `11e5d6f0c8c47c5f3c663c162791b962e285c727`;
+- workflow run: `36400176218`;
+- `regression`: **success**;
+- `production_preflight`: **success**;
+- `live_r11b_smoke`: **skipped**.
+
+Current production UI contract: **CORE 8.8.1 R4 · CLOUD UI R9.4** with processor contract **result-persist-r11b**.
