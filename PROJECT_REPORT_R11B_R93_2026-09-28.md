@@ -227,3 +227,26 @@ Contract:
 - the existing local V8.8.1 inspection engine remains unchanged.
 
 Canonical production: `https://4k-upscaler.kontrakevich.workers.dev/`.
+
+
+## Final project closure — READY
+
+**Date:** 2026-09-29  
+**Project:** MG 4K / ARCH LOCK  
+**State:** **DONE / PRODUCTION READY**  
+**Production:** `https://4k-upscaler.kontrakevich.workers.dev/`  
+**Repository:** `https://github.com/mkontrakevich/4K_Upscaler`  
+**Final UI:** **CORE 8.8.1 R4 · CLOUD UI R9.7**  
+**Processor:** `result-persist-r11b`
+
+Accepted production scope:
+- stable cloud generation and persisted RESULT;
+- strict ARCH LOCK review workflow;
+- proven local V8.8.1 inspection mechanics in cloud;
+- SIDE / SPLIT / DIFF / BLINK comparison modes;
+- safe RESULT saving without a new paid generation;
+- SOURCE replacement while preserving LOCK settings;
+- full-screen SOURCE / RESULT preview by double click;
+- diagnostics, recovery controls and regression guards.
+
+The project is now considered complete. Subsequent changes are maintenance or explicitly requested feature additions.
