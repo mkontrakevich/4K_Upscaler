@@ -212,3 +212,18 @@ Contract:
 - remains independent from approval/rejection/regeneration decisions.
 
 Canonical production: `https://4k-upscaler.kontrakevich.workers.dev/`.
+
+
+## Double-click image preview — Cloud UI R9.7
+
+A dedicated full-screen image preview was added to the main SOURCE / RESULT cards.
+
+Contract:
+- double-click SOURCE opens the current source image in a full-screen native-image dialog;
+- double-click RESULT opens the current generated result, including review/rejected/final states when displayed;
+- double-click inside the preview toggles FIT ↔ native 100% size;
+- Esc or the close button exits preview;
+- preview reuses already displayed image URLs and does not create jobs, call Nano Banana, or change ARCH LOCK decisions;
+- the existing local V8.8.1 inspection engine remains unchanged.
+
+Canonical production: `https://4k-upscaler.kontrakevich.workers.dev/`.

@@ -46,6 +46,7 @@ body{overflow-x:hidden}
 .image-card>header span{font-size:11px;color:var(--muted)}
 .image-stage{position:relative;min-height:430px;background:#030a10;display:grid;place-items:center;overflow:hidden}
 .image-stage img{display:block;width:100%;height:100%;min-height:430px;max-height:67vh;object-fit:contain;background:#030a10}
+.image-stage img:not([hidden]){cursor:zoom-in}
 .image-stage .empty{position:absolute;inset:0;display:grid;place-items:center;text-align:center;color:#71899d;padding:30px;font-size:13px}
 .upload-overlay{position:absolute;inset:0;display:grid;place-items:center;background:radial-gradient(circle at 50% 35%,rgba(18,48,73,.85),rgba(3,10,16,.95) 70%);transition:.2s}
 .upload-overlay.hidden{opacity:0;pointer-events:none}
@@ -117,6 +118,19 @@ body{overflow-x:hidden}
 .log-lines{padding:8px 12px;min-height:90px;max-height:220px;overflow:auto;font:10px/1.55 Consolas,monospace;color:#9fb4c5}
 .log-line{display:grid;grid-template-columns:74px 80px 1fr;gap:8px}
 .log-line .ok{color:#42d680}.log-line .err{color:#ff6576}.log-line .info{color:#21c9f6}.log-line .warn{color:#ffb42c}
+.quick-preview{width:100vw;height:100vh;max-width:none;max-height:none;border:0;padding:0;margin:0;background:#010508;color:#eef5ff;overflow:hidden}
+.quick-preview::backdrop{background:#000}
+.quick-preview-shell{width:100vw;height:100vh;display:grid;grid-template-rows:auto minmax(0,1fr) auto;background:#010508}
+.quick-preview-toolbar{min-height:54px;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 12px;border-bottom:1px solid #294054;background:#071522}
+.quick-preview-title{display:grid;gap:2px;min-width:0}
+.quick-preview-title strong{font-size:12px;letter-spacing:.08em}.quick-preview-title span{font:10px Consolas,monospace;color:#8199ae;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.quick-preview-close{width:38px;height:38px;border:1px solid #627b91;border-radius:50%;background:#0c1d2b;color:#fff;font-size:24px;line-height:1;cursor:pointer}
+.quick-preview-stage{position:relative;min-height:0;overflow:auto;display:grid;place-items:center;padding:16px;background:#010508}
+.quick-preview-stage img{display:block;max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;background:#010508;user-select:none;-webkit-user-drag:none;cursor:zoom-in}
+.quick-preview-stage.native-size{display:block;text-align:center}
+.quick-preview-stage.native-size img{max-width:none;max-height:none;margin:auto;cursor:zoom-out}
+.quick-preview-footer{min-height:30px;display:flex;align-items:center;justify-content:center;padding:5px 10px;border-top:1px solid #294054;background:#06111c;color:#6f879d;font-size:9px}
+@media(max-width:700px){.quick-preview-stage{padding:6px}.quick-preview-title strong{font-size:11px}}
 .viewer{width:100vw;height:100vh;max-width:none;max-height:none;border:0;padding:0;margin:0;background:#02070c;color:#eef5ff;overflow:hidden}
 .viewer::backdrop{background:#000}
 .inspection-viewer{width:100vw;height:100vh;max-width:none;max-height:none;border:0;padding:0;margin:0;background:#02070c;overflow:hidden}
@@ -195,7 +209,7 @@ body{overflow-x:hidden}
       <button type="button" id="mode-safe" disabled><strong>SAFE</strong><span>локальный upscale</span></button>
       <button type="button" id="mode-generative" class="active"><strong>GENERATIVE</strong><span>Nano Banana Pro</span></button>
     </div>
-    <div class="version">CORE 8.8.1 R4 · CLOUD UI R9.6</div>
+    <div class="version">CORE 8.8.1 R4 · CLOUD UI R9.7</div>
   </header>
 
   <section class="status-strip">
@@ -315,6 +329,19 @@ body{overflow-x:hidden}
   <button class="btn ghost" id="mobile-inspect" type="button" disabled>Инспекция</button>
 </div>
 
+<dialog id="quick-preview" class="quick-preview" data-preview-engine="native-image-v1">
+  <div class="quick-preview-shell">
+    <header class="quick-preview-toolbar">
+      <div class="quick-preview-title"><strong id="quick-preview-title">ПРОСМОТР</strong><span id="quick-preview-meta">—</span></div>
+      <button id="quick-preview-close" class="quick-preview-close" type="button" aria-label="Закрыть">×</button>
+    </header>
+    <div id="quick-preview-stage" class="quick-preview-stage">
+      <img id="quick-preview-image" alt="Просмотр изображения">
+    </div>
+    <footer class="quick-preview-footer">Двойной щелчок — 100% / FIT · Esc — закрыть</footer>
+  </div>
+</dialog>
+
 <dialog id="viewer" class="viewer inspection-viewer" data-inspection-engine="local-v8.8.1">
   <div class="viewer-shell">
     <header class="viewer-toolbar">
@@ -397,7 +424,7 @@ function logExportText(){
   const item=currentSourceItem();
   const header=[
     "MG 4K / ARCH LOCK — PROCESS LOG",
-    "UI: CORE 8.8.1 R4 · CLOUD UI R9.6",
+    "UI: CORE 8.8.1 R4 · CLOUD UI R9.7",
     "Processor build: "+(latestJobState?.container_build_id||"—"),
     "Exported: "+new Date().toISOString(),
     "Job: "+(currentJob?.id||"—"),
@@ -1015,6 +1042,46 @@ $("action-skip").addEventListener("click",()=>sendDecision("skip"));
 $("action-regenerate").addEventListener("click",()=>prepareJob(true));
 $("log-copy").addEventListener("click",copyProcessLog);
 $("log-save").addEventListener("click",saveProcessLog);
+
+// ----- Quick image preview --------------------------------------------------
+const quickPreview={mode:"fit",source:""};
+function closeQuickPreview(){
+  const dlg=$("quick-preview");
+  if(dlg?.open)dlg.close();
+  $("quick-preview-stage")?.classList.remove("native-size");
+  quickPreview.mode="fit";
+}
+function quickPreviewDimensions(img){
+  return img?.naturalWidth&&img?.naturalHeight ? img.naturalWidth+" × "+img.naturalHeight : "—";
+}
+function openQuickPreview(kind){
+  const isResult=kind==="result";
+  const sourceNode=$(isResult?"result-image":"source-image");
+  const src=sourceNode?.currentSrc||sourceNode?.src||(isResult?(currentJob?resultUrl(currentJob,false):""):currentObjectUrl);
+  if(!src){toast("Нет изображения для просмотра.");return}
+  const dlg=$("quick-preview"),img=$("quick-preview-image"),stage=$("quick-preview-stage");
+  quickPreview.mode="fit";quickPreview.source=kind;stage.classList.remove("native-size");
+  $("quick-preview-title").textContent=isResult?"RESULT · ПРОСМОТР":"SOURCE · ПРОСМОТР";
+  $("quick-preview-meta").textContent=quickPreviewDimensions(sourceNode);
+  img.onload=()=>{$("quick-preview-meta").textContent=quickPreviewDimensions(img)};
+  img.src=src;
+  dlg.showModal();
+}
+function toggleQuickPreviewScale(){
+  const stage=$("quick-preview-stage");
+  quickPreview.mode=quickPreview.mode==="fit"?"native":"fit";
+  stage.classList.toggle("native-size",quickPreview.mode==="native");
+  if(quickPreview.mode==="fit"){stage.scrollTop=0;stage.scrollLeft=0}
+}
+$("source-image").addEventListener("dblclick",event=>{event.preventDefault();openQuickPreview("source")});
+$("result-image").addEventListener("dblclick",event=>{event.preventDefault();openQuickPreview("result")});
+$("quick-preview-image").addEventListener("dblclick",event=>{event.preventDefault();toggleQuickPreviewScale()});
+$("quick-preview-close").addEventListener("click",closeQuickPreview);
+$("quick-preview").addEventListener("cancel",event=>{event.preventDefault();closeQuickPreview()});
+$("quick-preview").addEventListener("close",()=>{
+  const img=$("quick-preview-image");img.removeAttribute("src");
+  $("quick-preview-stage").classList.remove("native-size");quickPreview.mode="fit";quickPreview.source="";
+});
 
 // ----- Inspection viewer · local V8.8.1 mechanics ---------------------------
 const inspection = {
