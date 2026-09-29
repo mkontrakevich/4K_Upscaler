@@ -197,3 +197,18 @@ No Nano Banana generation is started by this migration.
 ## Canonical production URL correction
 
 The canonical production endpoint is `https://4k-upscaler.kontrakevich.workers.dev/`. Earlier references to `4k-upscaler.marinsgroup.workers.dev` were stale project metadata and have been corrected across CI, reports, bridge defaults, environment examples, and Docker Compose defaults.
+
+
+## RESULT download / save — Cloud UI R9.6
+
+A dedicated **«Сохранить результат»** action was added to the review console.
+
+Contract:
+- enabled whenever a real RESULT is available, including rejected ARCH LOCK candidates, skipped results and approved FINAL;
+- downloads the existing stored RESULT only; it never creates a new job and never calls Nano Banana;
+- preserves the returned binary content without re-encoding;
+- creates a readable filename based on SOURCE name + result state + short job id;
+- logs successful saves and download errors in the process log;
+- remains independent from approval/rejection/regeneration decisions.
+
+Canonical production: `https://4k-upscaler.kontrakevich.workers.dev/`.

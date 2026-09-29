@@ -93,6 +93,7 @@ body{overflow-x:hidden}
 .actions .btn{min-height:48px}
 .actions .queue-nav{background:#0d2031;border-color:#3b5b73}
 .actions .skip{background:#162536;border-color:#647b8e}
+.actions .save-result{background:#0d2734;border-color:#2b738e;color:#d6f6ff}
 .analysis-panel{display:none}
 .analysis-panel.visible{display:block}
 .analysis-summary{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;padding:10px}
@@ -194,7 +195,7 @@ body{overflow-x:hidden}
       <button type="button" id="mode-safe" disabled><strong>SAFE</strong><span>локальный upscale</span></button>
       <button type="button" id="mode-generative" class="active"><strong>GENERATIVE</strong><span>Nano Banana Pro</span></button>
     </div>
-    <div class="version">CORE 8.8.1 R4 · CLOUD UI R9.5</div>
+    <div class="version">CORE 8.8.1 R4 · CLOUD UI R9.6</div>
   </header>
 
   <section class="status-strip">
@@ -267,6 +268,7 @@ body{overflow-x:hidden}
       <button class="btn ghost" id="action-replace-source" type="button" disabled>Заменить исходник</button>
       <button class="btn primary" id="action-process" type="button" disabled>▶ Запустить / продолжить</button>
       <button class="btn ghost" id="action-inspect" type="button" disabled>Инспекция</button>
+      <button class="btn ghost save-result" id="action-save-result" type="button" disabled>↓ Сохранить результат</button>
       <button class="btn approve" id="action-approve" type="button" disabled>✓ Утвердить</button>
       <button class="btn reject" id="action-reject" type="button" disabled>× Отклонить</button>
       <button class="btn generate" id="action-regenerate" type="button" disabled>↻ Регенерировать</button>
@@ -395,7 +397,7 @@ function logExportText(){
   const item=currentSourceItem();
   const header=[
     "MG 4K / ARCH LOCK — PROCESS LOG",
-    "UI: CORE 8.8.1 R4 · CLOUD UI R9.5",
+    "UI: CORE 8.8.1 R4 · CLOUD UI R9.6",
     "Processor build: "+(latestJobState?.container_build_id||"—"),
     "Exported: "+new Date().toISOString(),
     "Job: "+(currentJob?.id||"—"),
@@ -463,7 +465,7 @@ function resetResult(){
   $("result-image").hidden=true;$("result-image").removeAttribute("src");
   $("result-stage").classList.remove("ready");$("result-badges").hidden=true;
   $("result-caption").textContent="ожидает обработки";$("analysis-panel").classList.remove("visible");
-  $("action-approve").disabled=true;$("action-reject").disabled=true;$("action-regenerate").disabled=true;$("action-inspect").disabled=true;$("mobile-inspect").disabled=true;
+  $("action-approve").disabled=true;$("action-reject").disabled=true;$("action-regenerate").disabled=true;$("action-inspect").disabled=true;$("action-save-result").disabled=true;$("mobile-inspect").disabled=true;
 }
 function currentSourceItem(){return sourceItems[currentSourceIndex]||null}
 function updateRecoveryActions(state=latestJobState){
@@ -664,12 +666,13 @@ function renderValidation(state){
 }
 function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]))}
 function resultUrl(job,download=false){return"/api/jobs/"+job.id+"/result?token="+encodeURIComponent(job.token)+(download?"&download=1":"")+"&v="+Date.now()}
-function setReviewActions({approve=false,reject=false,skip=false,regenerate=false,inspect=false}={}){
+function setReviewActions({approve=false,reject=false,skip=false,regenerate=false,inspect=false,save=false}={}){
   $("action-approve").disabled=!approve;
   $("action-reject").disabled=!reject;
   $("action-skip").disabled=!skip;
   $("action-regenerate").disabled=!regenerate;
   $("action-inspect").disabled=!inspect;
+  $("action-save-result").disabled=!save;
   $("mobile-inspect").disabled=!inspect;
 }
 function showResult(state,mode="review"){
@@ -704,7 +707,7 @@ function renderJobState(state){
     const rejected=String(state.validation?.decision||"").toUpperCase().startsWith("REJECTED")
       || (state.validation?.mandatory_failures||[]).length>0
       || (state.validation?.passed===false);
-    setReviewActions({approve:!rejected,reject:true,skip:true,regenerate:true,inspect:true});
+    setReviewActions({approve:!rejected,reject:true,skip:true,regenerate:true,inspect:true,save:true});
     setStatus(
       rejected
         ?"Кандидат сформирован, но ARCH LOCK отклонил его. Доступны инспекция, отклонение, регенерация или пропуск; утверждение заблокировано."
@@ -717,7 +720,7 @@ function renderJobState(state){
     clearInterval(jobPollTimer);jobPollTimer=null;
     showResult(state,"final");
     $("action-process").disabled=false;$("action-process").textContent="Скачать FINAL 4K";$("mobile-process").disabled=false;$("mobile-process").textContent="Скачать";
-    setReviewActions({regenerate:true,inspect:true});
+    setReviewActions({regenerate:true,inspect:true,save:true});
     setProgress(100,"100%");
     setStatus("FINAL 4K утверждён. Результат можно скачать; новый исходник добавляется через основную навигацию.","ok");
     return state;
@@ -737,7 +740,7 @@ function renderJobState(state){
     const manualRetry=Boolean(state.manual_retry_required);
     $("action-process").textContent=manualRetry?"Регенерировать вручную":"Повторить";
     $("mobile-process").textContent=manualRetry?"Регенерация":"Повторить";
-    setReviewActions({regenerate:true,inspect:Boolean(state.result_available)});
+    setReviewActions({regenerate:true,inspect:Boolean(state.result_available),save:Boolean(state.result_available)});
     renderValidation(state);
     if(stage==="result_lost_after_container_restart"){
       setStatus("RESULT был сформирован, но временный Container перезапустился до сохранения файла. Автоповтор заблокирован; регенерация только вручную.","warn");
@@ -753,7 +756,7 @@ function renderJobState(state){
   }
   if(state.status==="decision_pending"){
     $("action-process").disabled=true;$("mobile-process").disabled=true;
-    setReviewActions({inspect:Boolean(state.result_available)});
+    setReviewActions({inspect:Boolean(state.result_available),save:Boolean(state.result_available)});
     const message=state.decision==="approve"?"Утверждение передано процессору…":state.decision==="reject"?"Отклонение передано процессору…":"Файл помечается как пропущенный; освобождаю процессор для следующего…";
     setStatus(message);
     return state;
@@ -912,6 +915,62 @@ async function replaceCurrentSource(file,source="Системный файлов
   return true;
 }
 
+function safeResultBaseName(name){
+  return String(name||"result")
+    .replace(/\.[^.]+$/,"")
+    .replace(/[<>:"/\\|?*\x00-\x1F]/g,"_")
+    .replace(/\s+/g," ")
+    .trim()
+    .slice(0,120)||"result";
+}
+function resultExtension(contentType){
+  const type=String(contentType||"").toLowerCase();
+  if(type.includes("jpeg")||type.includes("jpg"))return"jpg";
+  if(type.includes("webp"))return"webp";
+  if(type.includes("tiff"))return"tif";
+  if(type.includes("avif"))return"avif";
+  return"png";
+}
+function resultSaveLabel(state=latestJobState){
+  const status=String(state?.status||"review").toLowerCase();
+  const rejected=String(state?.validation?.decision||"").toUpperCase().startsWith("REJECTED")
+    || (state?.validation?.mandatory_failures||[]).length>0
+    || state?.validation?.passed===false;
+  if(status==="done")return"FINAL";
+  if(rejected)return"REJECTED";
+  if(status==="skipped")return"SKIPPED";
+  return"RESULT";
+}
+async function saveCurrentResult(){
+  if(!currentJob){toast("Нет результата для сохранения.");return}
+  const state=latestJobState||currentSourceItem()?.lastState||null;
+  if(!state?.result_available){toast("RESULT ещё не доступен для сохранения.");return}
+  const btn=$("action-save-result"),previous=btn.textContent;
+  btn.disabled=true;btn.textContent="Сохранение…";
+  try{
+    const response=await fetch(resultUrl(currentJob,true),{cache:"no-store"});
+    if(!response.ok)throw new Error("result_download_failed_"+response.status);
+    const blob=await response.blob();
+    if(!blob.size)throw new Error("result_download_empty");
+    const base=safeResultBaseName(currentFile?.name||currentSourceItem()?.file?.name||state?.filename||"result");
+    const ext=resultExtension(blob.type||state?.result_content_type||state?.content_type);
+    const jobId=String(currentJob.id||"").slice(0,8);
+    const filename=base+"_MG4K_"+resultSaveLabel(state)+(jobId?"_"+jobId:"")+"."+ext;
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");a.href=url;a.download=filename;
+    document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),3000);
+    log("ok","RESULT сохранён: "+filename+" · "+humanSize(blob.size));
+    toast("Результат сохранён: "+filename);
+  }catch(error){
+    log("err","Ошибка сохранения RESULT: "+(error?.message||error));
+    toast("Не удалось сохранить результат.");
+  }finally{
+    btn.textContent=previous;
+    btn.disabled=!Boolean((latestJobState||state)?.result_available);
+  }
+}
+
 async function prepareJob(forceNew=false){
   if(!currentFile){toast("Сначала добавьте исходник.");return}
   if(currentJob&&!forceNew){
@@ -949,6 +1008,7 @@ $("action-refresh").addEventListener("click",refreshCurrentJob);
 $("action-reset-job").addEventListener("click",()=>resetCurrentJob({confirmReset:true}));
 $("action-reload-source").addEventListener("click",reloadCurrentSource);
 $("action-process").addEventListener("click",()=>prepareJob(false));$("mobile-process").addEventListener("click",()=>prepareJob(false));
+$("action-save-result").addEventListener("click",saveCurrentResult);
 $("action-approve").addEventListener("click",()=>sendDecision("approve"));
 $("action-reject").addEventListener("click",()=>sendDecision("reject"));
 $("action-skip").addEventListener("click",()=>sendDecision("skip"));
