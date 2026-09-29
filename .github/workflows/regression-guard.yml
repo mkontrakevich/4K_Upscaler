@@ -839,7 +839,7 @@ jobs:
     steps:
       - name: Verify deployed R9.5 / R11b contract without generation
         env:
-          BASE_URL: https://4k-upscaler.marinsgroup.workers.dev
+          BASE_URL: https://4k-upscaler.kontrakevich.workers.dev
         run: |
           set -euo pipefail
           TMP="$(mktemp -d)"
@@ -885,7 +885,7 @@ jobs:
 
       - name: Live production R11b smoke
         env:
-          BASE_URL: https://4k-upscaler.marinsgroup.workers.dev
+          BASE_URL: https://4k-upscaler.kontrakevich.workers.dev
         run: |
           set -euo pipefail
           TMP="$(mktemp -d)"

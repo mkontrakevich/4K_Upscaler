@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parent
 CONFIG = json.loads((ROOT / "config.json").read_text(encoding="utf-8"))
 CLOUD_URL = os.environ.get(
     "MG4K_CLOUD_URL",
-    "https://4k-upscaler.marinsgroup.workers.dev",
+    "https://4k-upscaler.kontrakevich.workers.dev",
 ).rstrip("/")
 BRIDGE_DIR = Path(
     os.environ.get(

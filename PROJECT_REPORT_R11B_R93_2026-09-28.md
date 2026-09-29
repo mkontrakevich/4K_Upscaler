@@ -2,7 +2,7 @@
 
 **Date:** 2026-09-28  
 **Repository:** `mkontrakevich/4K_Upscaler`  
-**Production:** `https://4k-upscaler.marinsgroup.workers.dev`
+**Production:** `https://4k-upscaler.kontrakevich.workers.dev`
 
 ## Project / Target / Stage / Progress
 
@@ -192,3 +192,8 @@ R9.5 inspection contract:
 The previous R9.4 native-image fallback renderer is intentionally removed so that every inspection mode uses one consistent rendering engine.
 
 No Nano Banana generation is started by this migration.
+
+
+## Canonical production URL correction
+
+The canonical production endpoint is `https://4k-upscaler.kontrakevich.workers.dev/`. Earlier references to `4k-upscaler.marinsgroup.workers.dev` were stale project metadata and have been corrected across CI, reports, bridge defaults, environment examples, and Docker Compose defaults.
