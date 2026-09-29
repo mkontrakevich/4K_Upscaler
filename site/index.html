@@ -116,43 +116,32 @@ body{overflow-x:hidden}
 .log-lines{padding:8px 12px;min-height:90px;max-height:220px;overflow:auto;font:10px/1.55 Consolas,monospace;color:#9fb4c5}
 .log-line{display:grid;grid-template-columns:74px 80px 1fr;gap:8px}
 .log-line .ok{color:#42d680}.log-line .err{color:#ff6576}.log-line .info{color:#21c9f6}.log-line .warn{color:#ffb42c}
-.viewer{width:min(98vw,1580px);height:min(96vh,1000px);padding:0;border:1px solid #38536a;border-radius:10px;background:#06111b;color:#eef5ff}
-.viewer::backdrop{background:rgba(0,0,0,.84)}
-.viewer-shell{height:100%;display:grid;grid-template-rows:auto auto 1fr auto;min-height:0}
-.viewer-toolbar{display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid #294054;background:#0b1c2c;flex-wrap:wrap}
-.viewer-title{display:flex;flex-direction:column;min-width:170px;margin-right:auto}
-.viewer-title strong{font-size:12px}.viewer-title span{font-size:9px;color:#8aa1b4;margin-top:2px}
-.viewer-tools{display:flex;gap:5px;flex-wrap:wrap;align-items:center}
-.viewer-tools button{height:32px;padding:0 9px;border:1px solid #38546a;border-radius:6px;background:#0b1c2b;color:#a6bac9;font-size:9px;font-weight:800;cursor:pointer}
-.viewer-tools button.active{border-color:#1ccaf3;color:#5cdcff;background:#0b2a3b;box-shadow:inset 0 0 0 1px rgba(28,202,243,.18)}
-.viewer-tools button:disabled{opacity:.3;cursor:not-allowed}
-.viewer-tools>span{padding:0 7px;font:10px Consolas,monospace;color:#b6c9da}
-.viewer-diff-controls{min-height:44px;display:flex;align-items:center;gap:14px;padding:6px 10px;border-bottom:1px solid #253c50;background:#08121d;flex-wrap:wrap}
-.viewer-diff-controls[hidden]{display:none!important}
-.viewer-diff-controls label{display:flex;align-items:center;gap:7px;color:#aabdd0;font-size:10px}
-.viewer-diff-controls input{accent-color:#16c5f4;width:145px}
-.viewer-diff-controls label span{width:40px;font:10px Consolas,monospace;color:#dce8f3}
-.viewer-diff-note{margin-left:auto;color:#667f95;font-size:9px}
+.viewer{width:100vw;height:100vh;max-width:none;max-height:none;border:0;padding:0;margin:0;background:#02070c;color:#eef5ff;overflow:hidden}
+.viewer::backdrop{background:#000}
+.inspection-viewer{width:100vw;height:100vh;max-width:none;max-height:none;border:0;padding:0;margin:0;background:#02070c;overflow:hidden}
+.viewer-shell{height:100%;display:grid;grid-template-rows:auto auto minmax(0,1fr) auto;background:#02070c}
+.viewer-toolbar{min-height:62px;display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid #294054;background:#071522;flex-wrap:wrap}
+.viewer-title-group{display:grid;min-width:220px;margin-right:auto}
+.viewer-title-group strong{font-size:13px;letter-spacing:.04em}.viewer-title-group span{color:#8299ad;font-size:10px;margin-top:2px}
+.viewer-toolgroup{display:flex;align-items:center;border:1px solid #2d4559;border-radius:7px;overflow:hidden;background:#081725}
+.viewer-toolgroup button{height:34px;padding:0 10px;border:0;border-right:1px solid #2d4559;background:#0a1928;color:#9fb3c7;font-size:11px;font-weight:800;cursor:pointer}
+.viewer-toolgroup button:last-of-type{border-right:0}.viewer-toolgroup button:hover:not(:disabled){color:white;background:#10283a}
+.viewer-toolgroup button.active{color:#22d2ff;background:#0d2c40;box-shadow:inset 0 0 0 1px #16c5f4}
+.viewer-toolgroup button:disabled{opacity:.25;cursor:not-allowed}.viewer-toolgroup>span{padding:0 9px;font:10px Consolas,monospace;color:#b6c9da}
+.viewer-close{width:38px;height:38px;border-radius:50%;border:1px solid #627b91;background:#0c1d2b;color:#fff;font-size:24px;cursor:pointer;margin-left:2px}
+.diff-controls{min-height:46px;display:flex;align-items:center;gap:16px;padding:6px 12px;border-bottom:1px solid #253c50;background:#08121d;flex-wrap:wrap}
+.diff-controls[hidden]{display:none!important}.diff-controls label{display:flex;align-items:center;gap:8px;color:#aabdd0;font-size:11px}
+.diff-controls input{accent-color:#16c5f4;width:150px}.diff-controls label span{width:38px;font:10px Consolas,monospace;color:#dce8f3}
+.diff-note{margin-left:auto;color:#667f95;font-size:10px}
 .viewer-stage{position:relative;min-height:0;overflow:hidden;background:#010508;touch-action:none}
-.viewer-canvas{position:absolute;inset:0;width:100%;height:100%;display:block;cursor:grab;touch-action:none}
-.viewer-canvas:active{cursor:grabbing}
-.viewer-divider{position:absolute;top:0;bottom:0;width:26px;margin-left:-13px;z-index:8;cursor:ew-resize;touch-action:none}
-.viewer-divider::before{content:"";position:absolute;left:12px;top:0;bottom:0;width:2px;background:#4de0ff;box-shadow:0 0 0 1px rgba(0,0,0,.45),0 0 14px rgba(77,224,255,.35)}
-.viewer-divider::after{content:"↔";position:absolute;left:1px;top:50%;transform:translateY(-50%);width:24px;height:32px;display:grid;place-items:center;border:1px solid #4de0ff;border-radius:7px;background:#092435;color:#8feaff;font:700 13px/1 Arial}
-.viewer-labels{position:absolute;left:0;right:0;top:12px;display:flex;justify-content:space-between;padding:0 16px;pointer-events:none;z-index:7}
-.viewer-labels span{padding:5px 8px;border-radius:4px;background:rgba(2,9,15,.74);color:#d3e3f1;font:9px Consolas,monospace;letter-spacing:.08em}
-.viewer-buffer{display:none!important}
-.viewer-stage.viewer-fallback .viewer-canvas{visibility:hidden}
-.viewer-stage.viewer-fallback .viewer-buffer{display:block!important;position:absolute;top:0;height:100%;width:calc(50% - 5px);object-fit:contain;background:#010508;z-index:2}
-.viewer-stage.viewer-fallback #viewer-source{left:0}
-.viewer-stage.viewer-fallback #viewer-result{right:0}
-.viewer-stage.viewer-fallback .viewer-labels{display:flex!important}
-.viewer-stage.viewer-fallback::after{content:"";position:absolute;top:0;bottom:0;left:50%;width:1px;background:#294054;z-index:3}
-.viewer-loading{position:absolute;inset:0;display:grid;place-items:center;z-index:9;pointer-events:none;background:rgba(1,5,8,.28);color:#8aa1b4;font:11px/1.4 Consolas,monospace;letter-spacing:.03em}
-.viewer-loading[hidden]{display:none!important}
-.viewer-footer{min-height:34px;display:flex;align-items:center;justify-content:space-between;gap:14px;padding:5px 10px;border-top:1px solid #294054;background:#06111c;color:#6f879d;font-size:9px}
+.viewer-stage canvas{display:block;width:100%;height:100%;cursor:grab;touch-action:none}.viewer-stage canvas:active{cursor:grabbing}
+.viewer-split-labels{display:none;position:absolute;left:0;right:0;top:14px;justify-content:space-between;padding:0 18px;pointer-events:none}
+.viewer-split-labels.visible{display:flex}.viewer-split-labels span{padding:5px 8px;border-radius:4px;background:rgba(2,9,15,.74);color:#d3e3f1;font:10px Consolas,monospace;letter-spacing:.08em}
+.viewer-no-result{position:absolute;left:50%;bottom:20px;transform:translateX(-50%);padding:8px 12px;border:1px solid #42596e;border-radius:6px;background:rgba(5,17,28,.9);color:#9eb3c6;font-size:11px;pointer-events:none}
+.viewer-footer{min-height:34px;display:flex;align-items:center;justify-content:space-between;gap:14px;padding:5px 12px;border-top:1px solid #294054;background:#06111c;color:#6f879d;font-size:10px}
 .viewer-footer span:last-child{text-align:right}
-.viewer-close{width:38px;height:32px;border:1px solid #38546a;border-radius:6px;background:#0a1826;color:#fff;font-size:18px;cursor:pointer}
+@media(max-width:1100px){.viewer-toolbar{align-items:flex-start}.viewer-title-group{width:100%;margin-right:0}.viewer-footer span:last-child{display:none}.diff-note{display:none}}
+@media(max-width:700px){.viewer-toolbar{gap:6px;padding:7px}.viewer-toolgroup button{padding:0 7px}.viewer-zoom [data-zoom="0.5"]{display:none}.diff-controls{gap:8px}.diff-controls input{width:100px}.viewer-footer{font-size:9px}}
 .mobile-bar{display:none}
 .toast{position:fixed;left:50%;bottom:22px;transform:translate(-50%,90px);opacity:0;transition:.22s;padding:10px 14px;background:#0d2131;border:1px solid #49657b;border-radius:7px;z-index:80;box-shadow:0 18px 50px rgba(0,0,0,.35);font-size:12px;max-width:min(520px,calc(100vw - 28px));text-align:center}
 .toast.show{transform:translate(-50%,0);opacity:1}
@@ -205,7 +194,7 @@ body{overflow-x:hidden}
       <button type="button" id="mode-safe" disabled><strong>SAFE</strong><span>локальный upscale</span></button>
       <button type="button" id="mode-generative" class="active"><strong>GENERATIVE</strong><span>Nano Banana Pro</span></button>
     </div>
-    <div class="version">CORE 8.8.1 R4 · CLOUD UI R9.4</div>
+    <div class="version">CORE 8.8.1 R4 · CLOUD UI R9.5</div>
   </header>
 
   <section class="status-strip">
@@ -324,52 +313,46 @@ body{overflow-x:hidden}
   <button class="btn ghost" id="mobile-inspect" type="button" disabled>Инспекция</button>
 </div>
 
-<dialog id="viewer" class="viewer">
+<dialog id="viewer" class="viewer inspection-viewer" data-inspection-engine="local-v8.8.1">
   <div class="viewer-shell">
     <header class="viewer-toolbar">
-      <div class="viewer-title"><strong>ИНСПЕКЦИЯ SOURCE / RESULT</strong><span>SIDE · SPLIT · DIFF · BLINK</span></div>
-      <div class="viewer-tools" aria-label="Режим сравнения">
-        <button type="button" data-view="side" class="active">SIDE</button>
-        <button type="button" data-view="split">SPLIT</button>
-        <button type="button" data-view="diff">DIFF</button>
-        <button type="button" data-view="blink">BLINK</button>
+      <div class="viewer-title-group"><strong id="viewer-title">ИНСПЕКЦИЯ SOURCE / RESULT</strong><span id="viewer-subtitle">—</span></div>
+      <div class="viewer-toolgroup viewer-modes" aria-label="Режим сравнения">
+        <button type="button" data-view-mode="side">SIDE</button>
+        <button type="button" data-view-mode="split">SPLIT</button>
+        <button type="button" data-view-mode="diff">DIFF</button>
+        <button type="button" data-view-mode="blink">BLINK</button>
       </div>
-      <div class="viewer-tools" aria-label="Масштаб">
-        <button type="button" data-zoom="fit" class="active">FIT</button>
+      <div class="viewer-toolgroup viewer-zoom" aria-label="Масштаб">
+        <button type="button" data-zoom="fit">FIT</button>
         <button type="button" data-zoom="0.5">50%</button>
         <button type="button" data-zoom="1">100%</button>
         <button type="button" data-zoom="2">200%</button>
         <span id="viewer-zoom-value">FIT</span>
       </div>
-      <div class="viewer-tools">
+      <div class="viewer-toolgroup">
         <button id="viewer-sync" type="button" class="active">SYNC</button>
         <button id="viewer-defects" type="button">ДЕФЕКТ</button>
         <button id="viewer-reset" type="button">RESET</button>
       </div>
-      <button class="viewer-close" id="viewer-close" type="button" aria-label="Закрыть">×</button>
+      <button id="viewer-close" class="viewer-close" type="button" aria-label="Закрыть">×</button>
     </header>
-    <div class="viewer-diff-controls" id="viewer-diff-controls" hidden>
-      <div class="viewer-tools">
-        <button type="button" data-diff="absolute" class="active">ABS</button>
-        <button type="button" data-diff="edge">EDGE</button>
-        <button type="button" data-diff="heatmap">HEATMAP</button>
+    <div id="diff-controls" class="diff-controls" hidden>
+      <div class="viewer-toolgroup">
+        <button type="button" data-diff-mode="absolute">ABS</button>
+        <button type="button" data-diff-mode="edge">EDGE</button>
+        <button type="button" data-diff-mode="heatmap">HEATMAP</button>
       </div>
-      <label>Threshold <input id="viewer-diff-threshold" type="range" min="0" max="96" value="24"><span id="viewer-diff-threshold-value">24</span></label>
-      <label>Opacity <input id="viewer-diff-opacity" type="range" min="10" max="100" value="72"><span id="viewer-diff-opacity-value">72%</span></label>
-      <span class="viewer-diff-note">DIFF preview ≤ 2048 px</span>
+      <label>Threshold <input id="diff-threshold" type="range" min="0" max="96" value="24"><span id="diff-threshold-value">24</span></label>
+      <label>Opacity <input id="diff-opacity" type="range" min="10" max="100" value="72"><span id="diff-opacity-value">72%</span></label>
+      <span class="diff-note">DIFF preview ≤ 2048 px</span>
     </div>
-    <div class="viewer-stage" id="viewer-stage">
-      <canvas class="viewer-canvas" id="viewer-canvas"></canvas>
-      <div class="viewer-loading" id="viewer-loading">Загрузка SOURCE / RESULT…</div>
-      <div class="viewer-divider" id="viewer-divider" hidden></div>
-      <div class="viewer-labels" id="viewer-labels"><span>SOURCE</span><span>RESULT</span></div>
-      <img id="viewer-source" class="viewer-buffer" alt="SOURCE">
-      <img id="viewer-result" class="viewer-buffer" alt="RESULT">
+    <div id="viewer-stage" class="viewer-stage">
+      <canvas id="viewer-canvas"></canvas>
+      <div id="viewer-split-labels" class="viewer-split-labels"><span>SOURCE</span><span>RESULT</span></div>
+      <div id="viewer-no-result" class="viewer-no-result" hidden>Для сравнения нужен RESULT / rejected candidate.</div>
     </div>
-    <footer class="viewer-footer">
-      <span>Колесо — масштаб · drag — панорама · double click — FIT / 100% · Split — перетащите вертикальный разделитель</span>
-      <span>1 SIDE · 2 SPLIT · 3 DIFF · 4 BLINK · F FIT · Z 100% · X 200% · D DEFECT · R RESET</span>
-    </footer>
+    <footer class="viewer-footer"><span id="viewer-footer-left">Колесо — масштаб · drag — панорама · double click — FIT/100%</span><span id="viewer-footer-right">1 SIDE · 2 SPLIT · 3 DIFF · 4 BLINK · F FIT · Z 100% · X 200% · D DEFECT · 0 RESET</span></footer>
   </div>
 </dialog>
 
@@ -390,14 +373,7 @@ const defaults=[
 const $=id=>document.getElementById(id);
 let locks=JSON.parse(localStorage.getItem("mg4k.lockProfile")||"null")||Object.fromEntries(defaults.map(x=>[x.id,x.level]));
 let currentFile=null,currentObjectUrl=null,currentJob=null,cloudSession=null,sessionStartPromise=null,heartbeatTimer=null,jobPollTimer=null;
-let resultObjectUrl=null,viewerBlinkTimer=null;
-const viewerState={
-  mode:"side",zoomPreset:"fit",scale:1,split:.5,sync:true,showDefects:false,
-  centers:{source:{x:.5,y:.5},result:{x:.5,y:.5}},
-  panning:false,draggingSplit:false,activePane:"source",lastX:0,lastY:0,
-  blinkShowResult:true,diffMode:"absolute",diffThreshold:24,diffOpacity:.72,
-  diffCanvas:null,diffKey:""
-};
+let resultObjectUrl=null;
 let sourceItems=[],currentSourceIndex=-1;
 let latestJobState=null,lastStatusSignature="";
 const HISTORY_KEY="mg4k.sessionHistory.v1";
@@ -419,7 +395,7 @@ function logExportText(){
   const item=currentSourceItem();
   const header=[
     "MG 4K / ARCH LOCK — PROCESS LOG",
-    "UI: CORE 8.8.1 R4 · CLOUD UI R9.4",
+    "UI: CORE 8.8.1 R4 · CLOUD UI R9.5",
     "Processor build: "+(latestJobState?.container_build_id||"—"),
     "Exported: "+new Date().toISOString(),
     "Job: "+(currentJob?.id||"—"),
@@ -980,262 +956,327 @@ $("action-regenerate").addEventListener("click",()=>prepareJob(true));
 $("log-copy").addEventListener("click",copyProcessLog);
 $("log-save").addEventListener("click",saveProcessLog);
 
-function ensureViewerImage(img,onReady){
-  if(img.complete&&img.naturalWidth){onReady?.(img);return Promise.resolve(img)}
-  return new Promise((resolve,reject)=>{
-    let timer=null;
-    const cleanup=()=>{
-      if(timer)clearTimeout(timer);
-      img.removeEventListener("load",loaded);
-      img.removeEventListener("error",failed);
-    };
-    const loaded=()=>{cleanup();onReady?.(img);resolve(img)};
-    const failed=()=>{cleanup();reject(new Error("viewer_image_load_failed"))};
-    img.addEventListener("load",loaded,{once:true});
-    img.addEventListener("error",failed,{once:true});
-    timer=setTimeout(failed,20000);
-  });
+// ----- Inspection viewer · local V8.8.1 mechanics ---------------------------
+const inspection = {
+  open: false,
+  mode: "side",
+  zoomPreset: "fit",
+  customScale: 1,
+  centers: {source: {x: .5, y: .5}, result: {x: .5, y: .5}},
+  sync: true,
+  splitRatio: .5,
+  diffMode: "absolute",
+  diffOpacity: .72,
+  diffThreshold: 24,
+  showDefects: false,
+  images: {source: null, result: null},
+  urls: {source: null, result: null},
+  diffCanvas: null,
+  diffKey: "",
+  dragging: false,
+  dragKind: null,
+  lastX: 0,
+  lastY: 0,
+  blinkShowResult: true,
+  blinkTimer: null,
+  diffTimer: null,
+};
+
+function uniqueInspectionUrls(values){return Array.from(new Set(values.filter(Boolean)))}
+function inspectionSourceUrls(){
+  const main=$("source-image");
+  return uniqueInspectionUrls([
+    currentJob?sourceUrl(currentJob):null,
+    main?.currentSrc||main?.src,
+    currentObjectUrl,
+  ]);
 }
-function viewerClamp(v,min,max){return Math.max(min,Math.min(max,v))}
-function viewerRefSize(){
-  const r=$("viewer-result"),s=$("viewer-source");
-  const img=(r&&r.naturalWidth)?r:s;
-  return {w:Math.max(1,img?.naturalWidth||1),h:Math.max(1,img?.naturalHeight||1)};
+function inspectionResultUrls(){
+  const main=$("result-image");
+  return uniqueInspectionUrls([
+    main?.currentSrc||main?.src,
+    currentJob?resultUrl(currentJob,false):null,
+  ]);
 }
-function resetViewerState(){
-  viewerState.zoomPreset="fit";viewerState.scale=1;viewerState.split=.5;viewerState.sync=true;
-  viewerState.centers.source={x:.5,y:.5};viewerState.centers.result={x:.5,y:.5};
-  viewerState.showDefects=false;viewerState.blinkShowResult=true;viewerState.diffCanvas=null;viewerState.diffKey="";
-  stopBlink();updateViewerUi();drawViewer();
-}
-function stopBlink(){if(viewerBlinkTimer){clearInterval(viewerBlinkTimer);viewerBlinkTimer=null}}
-function startBlink(){
-  stopBlink();if(viewerState.mode!=="blink")return;
-  viewerBlinkTimer=setInterval(()=>{viewerState.blinkShowResult=!viewerState.blinkShowResult;drawViewer()},600);
-}
-function setViewerMode(mode){
-  if(!["side","split","diff","blink"].includes(mode))return;
-  viewerState.mode=mode;
-  if(mode==="blink")startBlink();else stopBlink();
-  if(mode==="diff")buildViewerDiff(true).then(drawViewer).catch(()=>{});
-  updateViewerUi();drawViewer();
-}
-function setViewerZoom(value){
-  viewerState.zoomPreset=value==="fit"?"fit":"numeric";
-  if(value!=="fit")viewerState.scale=viewerClamp(Number(value)||1,.05,8);
-  updateViewerUi();drawViewer();
-}
-function viewerPaneRects(w,h){
-  if(viewerState.mode==="side"){
-    const gap=10,half=Math.max(1,(w-gap)/2);
-    return {source:{x:0,y:0,w:half,h},result:{x:half+gap,y:0,w:half,h}};
+async function loadBrowserImageCandidates(candidates) {
+  let lastError=null;
+  for (const url of candidates) {
+    try {
+      const img=await new Promise((resolve,reject)=>{
+        const node=new Image();
+        const timer=setTimeout(()=>reject(new Error("inspection_image_timeout")),20000);
+        node.onload=()=>{clearTimeout(timer);resolve(node)};
+        node.onerror=()=>{clearTimeout(timer);reject(new Error("inspection_image_load_failed"))};
+        node.src=url;
+      });
+      return {img,url};
+    } catch(error){lastError=error}
   }
-  const full={x:0,y:0,w,h};return {source:full,result:full};
+  throw lastError||new Error("inspection_image_unavailable");
 }
-function viewerFitScale(rect,ref){return Math.max(.0001,Math.min(rect.w/ref.w,rect.h/ref.h)*.965)}
-function viewerScaleFor(rect,ref){return viewerState.zoomPreset==="fit"?viewerFitScale(rect,ref):viewerState.scale}
-function drawViewerLayer(ctx,img,rect,center,scale,ref,alpha){
-  if(!img||!img.naturalWidth)return;
-  const dw=ref.w*scale,dh=ref.h*scale;
+
+async function refreshInspectionAssets(force = false) {
+  if (!inspection.open || !currentJob) return;
+  const sourceCandidates=inspectionSourceUrls();
+  const resultCandidates=inspectionResultUrls();
+  const jobs=[];
+  if (force || !inspection.images.source) {
+    jobs.push(loadBrowserImageCandidates(sourceCandidates).then(({img,url})=>{inspection.images.source=img;inspection.urls.source=url;}));
+  }
+  if (force || !inspection.images.result) {
+    jobs.push(loadBrowserImageCandidates(resultCandidates).then(({img,url})=>{inspection.images.result=img;inspection.urls.result=url;inspection.diffKey="";}));
+  }
+  try { await Promise.all(jobs); }
+  catch(error) {
+    toast("Не удалось загрузить SOURCE / RESULT для инспекции.");
+    console.warn("inspection_assets_failed",error);
+  }
+  updateInspectionUI();
+  requestAnimationFrame(()=>drawInspection());
+}
+
+function resetInspectionView() {
+  inspection.zoomPreset="fit";
+  inspection.customScale=1;
+  inspection.centers.source={x:.5,y:.5};
+  inspection.centers.result={x:.5,y:.5};
+  inspection.splitRatio=.5;
+  inspection.blinkShowResult=true;
+  inspection.diffCanvas=null;
+  inspection.diffKey="";
+  updateInspectionUI();
+  drawInspection();
+}
+
+function stopBlink(){if(inspection.blinkTimer)clearInterval(inspection.blinkTimer);inspection.blinkTimer=null}
+function startBlink(){
+  stopBlink();
+  if(inspection.mode!=="blink"||!inspection.images.result)return;
+  inspection.blinkTimer=setInterval(()=>{inspection.blinkShowResult=!inspection.blinkShowResult;drawInspection()},600);
+}
+function setInspectionMode(mode) {
+  if(!["side","split","diff","blink"].includes(mode))return;
+  if(!inspection.images.result&&mode!=="side"){toast("Для этого режима нужен RESULT / candidate");return}
+  inspection.mode=mode;
+  $("diff-controls").hidden=mode!=="diff";
+  if(mode==="diff")scheduleDiffBuild(true);
+  if(mode==="blink")startBlink();else stopBlink();
+  updateInspectionUI();drawInspection();
+}
+function setZoomPreset(value) {
+  inspection.zoomPreset=value==="fit"?"fit":"numeric";
+  if(value!=="fit")inspection.customScale=Math.max(.05,Math.min(8,Number(value)));
+  updateInspectionUI();drawInspection();
+}
+function paneRects(width,height) {
+  if(inspection.mode==="side"&&inspection.images.result){
+    const gap=10,half=(width-gap)/2;
+    return {source:{x:0,y:0,w:half,h:height},result:{x:half+gap,y:0,w:half,h:height}};
+  }
+  const full={x:0,y:0,w:width,h:height};return {source:full,result:full};
+}
+function fitScale(rect,width,height){return Math.max(.0001,Math.min(rect.w/width,rect.h/height)*.965)}
+function scaleFor(rect,width,height){return inspection.zoomPreset==="fit"?fitScale(rect,width,height):inspection.customScale}
+function drawNative(ctx,img,rect,center,scale,alpha=1){
+  if(!img)return null;
+  const dw=img.naturalWidth*scale,dh=img.naturalHeight*scale;
   const x=rect.x+rect.w/2-center.x*dw,y=rect.y+rect.h/2-center.y*dh;
-  ctx.save();ctx.beginPath();ctx.rect(rect.x,rect.y,rect.w,rect.h);ctx.clip();ctx.globalAlpha=alpha==null?1:alpha;
-  ctx.drawImage(img,x,y,dw,dh);ctx.restore();
+  ctx.save();ctx.beginPath();ctx.rect(rect.x,rect.y,rect.w,rect.h);ctx.clip();ctx.globalAlpha=alpha;ctx.drawImage(img,x,y,dw,dh);ctx.restore();
+  return {x,y,w:dw,h:dh,scale,refW:img.naturalWidth,refH:img.naturalHeight};
+}
+function referenceDimensions(){
+  const img=inspection.images.result||inspection.images.source;
+  return img?{w:img.naturalWidth,h:img.naturalHeight}:{w:1,h:1};
+}
+function drawNormalized(ctx,img,rect,center,scale,refW,refH,alpha=1){
+  if(!img)return null;
+  const dw=refW*scale,dh=refH*scale;
+  const x=rect.x+rect.w/2-center.x*dw,y=rect.y+rect.h/2-center.y*dh;
+  ctx.save();ctx.beginPath();ctx.rect(rect.x,rect.y,rect.w,rect.h);ctx.clip();ctx.globalAlpha=alpha;ctx.drawImage(img,x,y,dw,dh);ctx.restore();
+  return {x,y,w:dw,h:dh,scale,refW,refH};
 }
 function viewerFailures(){
   const v=latestJobState?.validation||{};
   return Array.from(new Set([...(v.failed_checks||[]),...(v.mandatory_failures||[])].map(String)));
 }
-function drawViewerDefects(ctx,w,h){
-  if(!viewerState.showDefects)return;
-  const failed=viewerFailures(),critical=failed.some(x=>/canvas_integrity|perimeter|border|seam/i.test(x));
+function drawDefectOverlays(ctx,placement){
+  if(!inspection.showDefects||!placement)return;
+  const failed=viewerFailures();if(!failed.length)return;
+  const critical=failed.some(x=>/canvas_integrity|perimeter|border|seam/i.test(x));
   const color=critical?"#ff6576":"#ffb42c";
-  ctx.save();ctx.strokeStyle=color;ctx.lineWidth=3;ctx.setLineDash([10,7]);ctx.strokeRect(8,8,Math.max(1,w-16),Math.max(1,h-16));ctx.setLineDash([]);
-  const label=failed.length?("CHECK AREA · "+failed.slice(0,2).join(" · ")):"CHECK AREA · локальные причины не переданы";
-  ctx.font="11px Consolas,monospace";const tw=Math.min(w-24,ctx.measureText(label).width+18);
-  ctx.fillStyle="rgba(3,11,18,.86)";ctx.fillRect(12,h-38,tw,25);ctx.fillStyle=color;ctx.fillText(label,20,h-21);ctx.restore();
+  ctx.save();ctx.strokeStyle=color;ctx.lineWidth=3;ctx.setLineDash([10,7]);
+  ctx.strokeRect(placement.x+3,placement.y+3,Math.max(1,placement.w-6),Math.max(1,placement.h-6));ctx.setLineDash([]);
+  const label="CHECK AREA · "+failed.slice(0,2).join(" · ");
+  ctx.font="11px Consolas,monospace";const tw=Math.min(placement.w-16,ctx.measureText(label).width+18);
+  ctx.fillStyle="rgba(3,11,18,.86)";ctx.fillRect(placement.x+8,placement.y+8,Math.max(80,tw),25);
+  ctx.fillStyle=color;ctx.fillText(label,placement.x+16,placement.y+25);ctx.restore();
 }
-async function buildViewerDiff(force){
-  const s=$("viewer-source"),r=$("viewer-result");if(!s.naturalWidth||!r.naturalWidth)return;
-  const key=[s.src,r.src,viewerState.diffMode,viewerState.diffThreshold].join("|");
-  if(!force&&viewerState.diffCanvas&&viewerState.diffKey===key)return;
-  const maxDim=2048,aspect=r.naturalWidth/Math.max(1,r.naturalHeight);
-  let w,h;if(aspect>=1){w=Math.min(maxDim,r.naturalWidth);h=Math.max(1,Math.round(w/aspect))}else{h=Math.min(maxDim,r.naturalHeight);w=Math.max(1,Math.round(h*aspect))}
-  const a=document.createElement("canvas"),b=document.createElement("canvas"),o=document.createElement("canvas");
-  a.width=b.width=o.width=w;a.height=b.height=o.height=h;
-  const ac=a.getContext("2d",{willReadFrequently:true}),bc=b.getContext("2d",{willReadFrequently:true}),oc=o.getContext("2d",{willReadFrequently:true});
-  ac.drawImage(s,0,0,w,h);bc.drawImage(r,0,0,w,h);
-  const A=ac.getImageData(0,0,w,h),B=bc.getImageData(0,0,w,h),O=oc.createImageData(w,h),t=viewerState.diffThreshold;
-  const grayA=viewerState.diffMode==="edge"?new Float32Array(w*h):null,grayB=grayA?new Float32Array(w*h):null;
-  if(grayA){for(let i=0,p=0;i<A.data.length;i+=4,p++){grayA[p]=A.data[i]*.299+A.data[i+1]*.587+A.data[i+2]*.114;grayB[p]=B.data[i]*.299+B.data[i+1]*.587+B.data[i+2]*.114}}
-  for(let p=0,i=0;p<w*h;p++,i+=4){
-    let v=0,rr=0,gg=0,bb=0;
-    if(viewerState.diffMode==="edge"){
-      const x=p%w,y=(p/w)|0,l=x?p-1:p,u=y?p-w:p;
-      const ea=Math.abs(grayA[p]-grayA[l])+Math.abs(grayA[p]-grayA[u]);
-      const eb=Math.abs(grayB[p]-grayB[l])+Math.abs(grayB[p]-grayB[u]);
-      v=Math.max(0,Math.abs(ea-eb)-t)*5;rr=gg=bb=Math.min(255,v);
-    }else{
-      const dr=Math.abs(A.data[i]-B.data[i]),dg=Math.abs(A.data[i+1]-B.data[i+1]),db=Math.abs(A.data[i+2]-B.data[i+2]);
-      const d=(dr+dg+db)/3;v=Math.max(0,d-t);
-      if(viewerState.diffMode==="heatmap"){
-        const q=Math.min(255,v*7);rr=q;gg=Math.max(0,255-Math.abs(q-128)*2);bb=255-q;
-      }else{rr=Math.min(255,dr*3);gg=Math.min(255,dg*3);bb=Math.min(255,db*3)}
-    }
-    O.data[i]=rr;O.data[i+1]=gg;O.data[i+2]=bb;O.data[i+3]=255;
+function canvasMetrics(){
+  const stage=$("viewer-stage"),canvas=$("viewer-canvas"),rect=stage.getBoundingClientRect();
+  const dpr=Math.min(2.5,window.devicePixelRatio||1);
+  const width=Math.max(1,Math.floor(rect.width)),height=Math.max(1,Math.floor(rect.height));
+  if(canvas.width!==Math.floor(width*dpr)||canvas.height!==Math.floor(height*dpr)){
+    canvas.width=Math.floor(width*dpr);canvas.height=Math.floor(height*dpr);
+    canvas.style.width=width+"px";canvas.style.height=height+"px";
   }
-  oc.putImageData(O,0,0);viewerState.diffCanvas=o;viewerState.diffKey=key;
+  const ctx=canvas.getContext("2d",{alpha:false});ctx.setTransform(dpr,0,0,dpr,0,0);
+  return {ctx,width,height,dpr};
 }
-function updateViewerUi(){
-  document.querySelectorAll("[data-view]").forEach(b=>b.classList.toggle("active",b.dataset.view===viewerState.mode));
-  document.querySelectorAll("[data-zoom]").forEach(b=>b.classList.toggle("active",viewerState.zoomPreset==="fit"?b.dataset.zoom==="fit":Math.abs(Number(b.dataset.zoom)-viewerState.scale)<.001));
-  document.querySelectorAll("[data-diff]").forEach(b=>b.classList.toggle("active",b.dataset.diff===viewerState.diffMode));
-  $("viewer-zoom-value").textContent=viewerState.zoomPreset==="fit"?"FIT":Math.round(viewerState.scale*100)+"%";
-  $("viewer-sync").classList.toggle("active",viewerState.sync);$("viewer-defects").classList.toggle("active",viewerState.showDefects);
-  $("viewer-diff-controls").hidden=viewerState.mode!=="diff";$("viewer-divider").hidden=viewerState.mode!=="split";
-  $("viewer-divider").style.left=(viewerState.split*100)+"%";
-  $("viewer-labels").style.display=viewerState.mode==="diff"?"none":"flex";
-  $("viewer-diff-threshold-value").textContent=String(viewerState.diffThreshold);
-  $("viewer-diff-opacity-value").textContent=Math.round(viewerState.diffOpacity*100)+"%";
-}
-function drawViewer(){
-  const stage=$("viewer-stage"),canvas=$("viewer-canvas");if(!stage||!canvas)return false;
-  const box=stage.getBoundingClientRect(),w=Math.floor(box.width),h=Math.floor(box.height);
-  const source=$("viewer-source"),result=$("viewer-result");
-  const layoutReady=w>=32&&h>=32,imagesReady=Boolean(source?.naturalWidth&&result?.naturalWidth);
-  stage.classList.add("viewer-fallback");
-  if(!layoutReady||!imagesReady)return false;
-  try{
-    const dpr=Math.min(2,window.devicePixelRatio||1);
-    if(canvas.width!==Math.round(w*dpr)||canvas.height!==Math.round(h*dpr)){canvas.width=Math.round(w*dpr);canvas.height=Math.round(h*dpr)}
-    const ctx=canvas.getContext("2d",{alpha:false});if(!ctx)return false;
-    ctx.setTransform(dpr,0,0,dpr,0,0);ctx.fillStyle="#010508";ctx.fillRect(0,0,w,h);
-    const s=source,r=result;
-    const ref=viewerRefSize(),rects=viewerPaneRects(w,h);
-    if(viewerState.mode==="side"){
-      drawViewerLayer(ctx,s,rects.source,viewerState.centers.source,viewerScaleFor(rects.source,ref),ref,1);
-      drawViewerLayer(ctx,r,rects.result,viewerState.centers.result,viewerScaleFor(rects.result,ref),ref,1);
-      ctx.strokeStyle="#294054";ctx.beginPath();ctx.moveTo(rects.source.w+5,0);ctx.lineTo(rects.source.w+5,h);ctx.stroke();
-    }else if(viewerState.mode==="split"){
-      const rect=rects.source,scale=viewerScaleFor(rect,ref);
-      drawViewerLayer(ctx,s,rect,viewerState.centers.source,scale,ref,1);
-      ctx.save();ctx.beginPath();ctx.rect(w*viewerState.split,0,w*(1-viewerState.split),h);ctx.clip();
-      drawViewerLayer(ctx,r,rect,viewerState.centers.result,scale,ref,1);ctx.restore();
-    }else if(viewerState.mode==="blink"){
-      const rect=rects.source,scale=viewerScaleFor(rect,ref),img=viewerState.blinkShowResult?r:s,center=viewerState.blinkShowResult?viewerState.centers.result:viewerState.centers.source;
-      drawViewerLayer(ctx,img,rect,center,scale,ref,1);
-    }else if(viewerState.mode==="diff"){
-      if(!viewerState.diffCanvas){buildViewerDiff(false).then(drawViewer).catch(()=>{});ctx.fillStyle="#8aa1b4";ctx.font="12px Consolas,monospace";ctx.fillText("DIFF: подготовка…",18,28)}
-      else{const rect=rects.source,scale=viewerScaleFor(rect,ref);drawViewerLayer(ctx,viewerState.diffCanvas,rect,viewerState.centers.source,scale,ref,viewerState.diffOpacity)}
-    }
-    drawViewerDefects(ctx,w,h);updateViewerUi();
-    stage.classList.remove("viewer-fallback");
-    return true;
-  }catch(error){
-    console.warn("viewer_canvas_render_failed",error);
-    stage.classList.add("viewer-fallback");
-    updateViewerUi();
-    return false;
-  }
-}
-async function openViewer(){
-  if(!currentJob){toast("Для инспекции нужны SOURCE и RESULT.");return}
-  const viewer=$("viewer"),stage=$("viewer-stage"),loading=$("viewer-loading"),s=$("viewer-source"),r=$("viewer-result");
-  const mainSource=$("source-image"),mainResult=$("result-image");
-  stage.classList.add("viewer-fallback");loading.hidden=false;
-  viewerState.mode="side";updateViewerUi();
-  viewer.showModal();
-  requestAnimationFrame(()=>requestAnimationFrame(drawViewer));
-  const progressive=()=>{requestAnimationFrame(drawViewer)};
-  const loadFirstAvailable=async(img,candidates)=>{
-    let lastError=null;
-    for(const url of Array.from(new Set(candidates.filter(Boolean)))){
-      try{
-        img.src=url;
-        await ensureViewerImage(img,progressive);
-        return img;
-      }catch(error){lastError=error}
-    }
-    throw lastError||new Error("viewer_image_load_failed");
-  };
-  try{
-    await Promise.all([
-      loadFirstAvailable(s,[sourceUrl(currentJob),mainSource?.currentSrc||mainSource?.src,currentObjectUrl]),
-      loadFirstAvailable(r,[mainResult?.currentSrc||mainResult?.src,resultUrl(currentJob,false)])
-    ]);
-  }catch{
-    loading.textContent="Не удалось загрузить SOURCE / RESULT";
-    toast("Не удалось загрузить SOURCE / RESULT для инспекции.");
-    setTimeout(()=>{if(viewer.open)viewer.close()},1200);
-    return
-  }
-  loading.hidden=true;loading.textContent="Загрузка SOURCE / RESULT…";
-  resetViewerState();
-  requestAnimationFrame(()=>requestAnimationFrame(drawViewer));
-}
-function viewerPointerDown(e){
-  if(!$("viewer").open)return;
-  const stage=$("viewer-stage"),rect=stage.getBoundingClientRect(),x=e.clientX-rect.left;
-  if(viewerState.mode==="split"&&Math.abs(x-rect.width*viewerState.split)<=22){
-    viewerState.draggingSplit=true;viewerState.panning=false;
+function drawBackground(ctx,width,height){ctx.fillStyle="#02070c";ctx.fillRect(0,0,width,height)}
+function drawInspection(){
+  if(!inspection.open)return;
+  const {ctx,width,height}=canvasMetrics();drawBackground(ctx,width,height);
+  const source=inspection.images.source,result=inspection.images.result;
+  $("viewer-no-result").hidden=!!result||inspection.mode==="side";
+  $("viewer-split-labels").classList.toggle("visible",inspection.mode==="split"&&!!result);
+  if(!source)return;
+  const rects=paneRects(width,height);
+  if(inspection.mode==="side"){
+    const sScale=scaleFor(rects.source,source.naturalWidth,source.naturalHeight);
+    const sPlacement=drawNative(ctx,source,rects.source,inspection.centers.source,sScale);
+    if(result){
+      const rScale=scaleFor(rects.result,result.naturalWidth,result.naturalHeight);
+      const rPlacement=drawNative(ctx,result,rects.result,inspection.centers.result,rScale);
+      drawDefectOverlays(ctx,rPlacement);
+      ctx.save();ctx.strokeStyle="#294054";ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(rects.result.x-5,0);ctx.lineTo(rects.result.x-5,height);ctx.stroke();ctx.restore();
+    }else drawDefectOverlays(ctx,sPlacement);
   }else{
-    viewerState.panning=true;viewerState.draggingSplit=false;
-    viewerState.activePane=viewerState.mode==="side"&&x>rect.width/2?"result":"source";
+    const ref=referenceDimensions(),rect=rects.source,scale=scaleFor(rect,ref.w,ref.h),center=inspection.centers.source;
+    if(inspection.mode==="split"){
+      const placement=drawNormalized(ctx,source,rect,center,scale,ref.w,ref.h);
+      ctx.save();ctx.beginPath();ctx.rect(rect.x+rect.w*inspection.splitRatio,rect.y,rect.w*(1-inspection.splitRatio),rect.h);ctx.clip();
+      drawNormalized(ctx,result,rect,center,scale,ref.w,ref.h);ctx.restore();
+      const splitX=rect.x+rect.w*inspection.splitRatio;
+      ctx.save();ctx.strokeStyle="#16c5f4";ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(splitX,rect.y);ctx.lineTo(splitX,rect.y+rect.h);ctx.stroke();
+      ctx.fillStyle="#16c5f4";ctx.fillRect(splitX-2,rect.y+rect.h/2-30,4,60);ctx.restore();drawDefectOverlays(ctx,placement);
+    }else if(inspection.mode==="diff"){
+      const placement=drawNormalized(ctx,source,rect,center,scale,ref.w,ref.h,.42);
+      if(inspection.diffCanvas)drawNormalized(ctx,inspection.diffCanvas,rect,center,scale,ref.w,ref.h,inspection.diffOpacity);
+      drawDefectOverlays(ctx,placement);
+    }else if(inspection.mode==="blink"){
+      const current=inspection.blinkShowResult?result:source;
+      const placement=drawNormalized(ctx,current,rect,center,scale,ref.w,ref.h);drawDefectOverlays(ctx,placement);
+    }
   }
-  viewerState.lastX=e.clientX;viewerState.lastY=e.clientY;stage.setPointerCapture?.(e.pointerId);e.preventDefault();
+  updateInspectionUI();
 }
-function viewerPointerMove(e){
-  if(!viewerState.panning&&!viewerState.draggingSplit)return;
-  const stage=$("viewer-stage"),rect=stage.getBoundingClientRect();
-  if(viewerState.draggingSplit){
-    viewerState.split=viewerClamp((e.clientX-rect.left)/Math.max(1,rect.width),.04,.96);drawViewer();return;
+function grayData(data){
+  const out=new Float32Array(data.length/4);
+  for(let i=0,j=0;i<data.length;i+=4,j++)out[j]=data[i]*.2126+data[i+1]*.7152+data[i+2]*.0722;
+  return out;
+}
+function sobel(gray,w,h){
+  const out=new Float32Array(w*h);
+  for(let y=1;y<h-1;y++)for(let x=1;x<w-1;x++){
+    const i=y*w+x,a=gray[i-w-1],b=gray[i-w],c=gray[i-w+1],d=gray[i-1],f=gray[i+1],g=gray[i+w-1],hh=gray[i+w],k=gray[i+w+1];
+    const gx=-a+c-2*d+2*f-g+k,gy=-a-2*b-c+g+2*hh+k;out[i]=Math.min(255,Math.hypot(gx,gy));
   }
-  const dx=e.clientX-viewerState.lastX,dy=e.clientY-viewerState.lastY;viewerState.lastX=e.clientX;viewerState.lastY=e.clientY;
-  const ref=viewerRefSize(),rects=viewerPaneRects(rect.width,rect.height),pane=rects[viewerState.activePane]||rects.source,scale=viewerScaleFor(pane,ref);
-  const apply=name=>{const c=viewerState.centers[name];c.x=viewerClamp(c.x-dx/Math.max(1,ref.w*scale),0,1);c.y=viewerClamp(c.y-dy/Math.max(1,ref.h*scale),0,1)};
-  apply(viewerState.activePane);if(viewerState.sync)apply(viewerState.activePane==="source"?"result":"source");drawViewer();
+  return out;
 }
-function viewerPointerUp(){viewerState.panning=false;viewerState.draggingSplit=false}
-function viewerWheel(e){
-  if(!$("viewer").open)return;e.preventDefault();
-  if(viewerState.zoomPreset==="fit"){
-    const rect=$("viewer-stage").getBoundingClientRect(),ref=viewerRefSize(),pane=viewerPaneRects(rect.width,rect.height).source;
-    viewerState.scale=viewerFitScale(pane,ref);
+async function buildDiff(){
+  const source=inspection.images.source,result=inspection.images.result;
+  if(!source||!result){inspection.diffCanvas=null;return}
+  const key=`${inspection.urls.source}|${inspection.urls.result}|${inspection.diffMode}|${inspection.diffThreshold}`;
+  if(inspection.diffKey===key&&inspection.diffCanvas)return;
+  const refW=result.naturalWidth,refH=result.naturalHeight,factor=Math.min(1,2048/Math.max(refW,refH));
+  const w=Math.max(2,Math.round(refW*factor)),h=Math.max(2,Math.round(refH*factor));
+  const a=document.createElement("canvas"),b=document.createElement("canvas"),out=document.createElement("canvas");
+  a.width=b.width=out.width=w;a.height=b.height=out.height=h;
+  const ca=a.getContext("2d",{willReadFrequently:true}),cb=b.getContext("2d",{willReadFrequently:true}),co=out.getContext("2d");
+  ca.drawImage(source,0,0,w,h);cb.drawImage(result,0,0,w,h);
+  const da=ca.getImageData(0,0,w,h),db=cb.getImageData(0,0,w,h),od=co.createImageData(w,h);
+  let edgeA=null,edgeB=null;if(inspection.diffMode==="edge"){edgeA=sobel(grayData(da.data),w,h);edgeB=sobel(grayData(db.data),w,h)}
+  const threshold=inspection.diffThreshold;
+  for(let p=0,px=0;p<da.data.length;p+=4,px++){
+    let mag;if(edgeA)mag=Math.abs(edgeA[px]-edgeB[px]);else mag=(Math.abs(da.data[p]-db.data[p])+Math.abs(da.data[p+1]-db.data[p+1])+Math.abs(da.data[p+2]-db.data[p+2]))/3;
+    if(mag<threshold){od.data[p+3]=0;continue}
+    if(inspection.diffMode==="heatmap"){
+      const v=Math.min(255,Math.max(0,(mag-threshold)*4));od.data[p]=Math.min(255,90+v);od.data[p+1]=Math.min(255,Math.max(20,v*.72));od.data[p+2]=Math.max(0,150-v);od.data[p+3]=Math.min(240,90+v);
+    }else{
+      od.data[p]=255;od.data[p+1]=edgeA?183:82;od.data[p+2]=edgeA?55:103;od.data[p+3]=Math.min(245,80+mag*2.2);
+    }
   }
-  viewerState.zoomPreset="numeric";viewerState.scale=viewerClamp(viewerState.scale*Math.exp(-e.deltaY*.0012),.05,8);updateViewerUi();drawViewer();
+  co.putImageData(od,0,0);inspection.diffCanvas=out;inspection.diffKey=key;
 }
-$("action-inspect").addEventListener("click",openViewer);$("mobile-inspect").addEventListener("click",openViewer);
-$("viewer-close").addEventListener("click",()=>{$("viewer").close();stopBlink()});
-$("viewer").addEventListener("close",()=>{stopBlink();viewerPointerUp()});
-document.querySelectorAll("[data-view]").forEach(b=>b.addEventListener("click",()=>setViewerMode(b.dataset.view)));
-document.querySelectorAll("[data-zoom]").forEach(b=>b.addEventListener("click",()=>setViewerZoom(b.dataset.zoom)));
-document.querySelectorAll("[data-diff]").forEach(b=>b.addEventListener("click",()=>{viewerState.diffMode=b.dataset.diff;viewerState.diffCanvas=null;viewerState.diffKey="";updateViewerUi();buildViewerDiff(true).then(drawViewer).catch(()=>{})}));
-$("viewer-sync").addEventListener("click",()=>{viewerState.sync=!viewerState.sync;if(viewerState.sync)viewerState.centers.result={...viewerState.centers.source};updateViewerUi();drawViewer()});
-$("viewer-defects").addEventListener("click",()=>{viewerState.showDefects=!viewerState.showDefects;updateViewerUi();drawViewer()});
-$("viewer-reset").addEventListener("click",resetViewerState);
-$("viewer-diff-threshold").addEventListener("input",e=>{viewerState.diffThreshold=Number(e.target.value);viewerState.diffCanvas=null;viewerState.diffKey="";updateViewerUi();buildViewerDiff(false).then(drawViewer).catch(()=>{})});
-$("viewer-diff-opacity").addEventListener("input",e=>{viewerState.diffOpacity=Number(e.target.value)/100;updateViewerUi();drawViewer()});
-$("viewer-stage").addEventListener("pointerdown",viewerPointerDown);$("viewer-stage").addEventListener("pointermove",viewerPointerMove);$("viewer-stage").addEventListener("pointerup",viewerPointerUp);
-let viewerResizeFrame=0;
-const scheduleViewerRedraw=()=>{
-  if(!$("viewer").open)return;
-  if(viewerResizeFrame)cancelAnimationFrame(viewerResizeFrame);
-  viewerResizeFrame=requestAnimationFrame(()=>{viewerResizeFrame=0;drawViewer()});
-};
-if("ResizeObserver" in window){
-  const viewerResizeObserver=new ResizeObserver(scheduleViewerRedraw);
-  viewerResizeObserver.observe($("viewer-stage"));
+function scheduleDiffBuild(immediate=false){
+  clearTimeout(inspection.diffTimer);
+  inspection.diffTimer=setTimeout(async()=>{await buildDiff();drawInspection()},immediate?0:90);
 }
-window.addEventListener("resize",scheduleViewerRedraw);
-$("viewer-stage").addEventListener("pointercancel",viewerPointerUp);
-$("viewer-stage").addEventListener("wheel",viewerWheel,{passive:false});
-$("viewer-stage").addEventListener("dblclick",()=>setViewerZoom(viewerState.zoomPreset==="fit"?"1":"fit"));
-window.addEventListener("resize",()=>{if($("viewer").open)drawViewer()});
-document.addEventListener("keydown",e=>{
-  if(!$("viewer").open)return;
-  const k=e.key.toLowerCase();
-  if(k==="1")setViewerMode("side");else if(k==="2")setViewerMode("split");else if(k==="3")setViewerMode("diff");else if(k==="4")setViewerMode("blink");
-  else if(k==="f")setViewerZoom("fit");else if(k==="z")setViewerZoom("1");else if(k==="x")setViewerZoom("2");
-  else if(k==="d"){$("viewer-defects").click()}else if(k==="r")resetViewerState();
+function updateInspectionUI(){
+  document.querySelectorAll("[data-view-mode]").forEach(btn=>{btn.classList.toggle("active",btn.dataset.viewMode===inspection.mode);btn.disabled=!inspection.images.result&&btn.dataset.viewMode!=="side"});
+  document.querySelectorAll("[data-zoom]").forEach(btn=>{const value=btn.dataset.zoom,active=inspection.zoomPreset==="fit"?value==="fit":Number(value)===inspection.customScale;btn.classList.toggle("active",active)});
+  document.querySelectorAll("[data-diff-mode]").forEach(btn=>btn.classList.toggle("active",btn.dataset.diffMode===inspection.diffMode));
+  $("viewer-sync").classList.toggle("active",inspection.sync);$("viewer-defects").classList.toggle("active",inspection.showDefects);
+  $("viewer-defects").disabled=!viewerFailures().length;
+  $("viewer-zoom-value").textContent=inspection.zoomPreset==="fit"?"FIT":`${Math.round(inspection.customScale*100)}%`;
+  $("diff-controls").hidden=inspection.mode!=="diff";
+  $("diff-threshold-value").textContent=String(inspection.diffThreshold);$("diff-opacity-value").textContent=`${Math.round(inspection.diffOpacity*100)}%`;
+  const s=inspection.images.source,r=inspection.images.result;
+  $("viewer-subtitle").textContent=r?`${s?.naturalWidth||"?"}×${s?.naturalHeight||"?"} SOURCE · ${r.naturalWidth}×${r.naturalHeight} RESULT`:s?`${s.naturalWidth}×${s.naturalHeight} SOURCE`:"—";
+  $("viewer-footer-left").textContent=inspection.mode==="split"?"Drag линии — Split · drag кадра — панорама · колесо — масштаб":"Колесо — масштаб · drag — панорама · double click — FIT/100%";
+}
+async function openInspection(){
+  if(!currentJob){toast("Для инспекции нужны SOURCE и RESULT.");return}
+  inspection.open=true;inspection.showDefects=false;inspection.mode="side";
+  $("viewer-title").textContent=String(latestJobState?.validation?.decision||"").toUpperCase().startsWith("REJECTED")?"SOURCE ↔ REJECTED CANDIDATE":"SOURCE ↔ RESULT";
+  $("viewer").showModal();updateInspectionUI();
+  await refreshInspectionAssets(true);resetInspectionView();requestAnimationFrame(()=>drawInspection());
+}
+function closeInspection(){inspection.open=false;stopBlink();$("viewer").close()}
+$("action-inspect").addEventListener("click",openInspection);$("mobile-inspect").addEventListener("click",openInspection);
+$("viewer-close").addEventListener("click",closeInspection);
+$("viewer").addEventListener("cancel",event=>{event.preventDefault();closeInspection()});
+$("viewer").addEventListener("close",()=>{inspection.open=false;stopBlink();inspection.dragging=false;inspection.dragKind=null});
+document.querySelectorAll("[data-view-mode]").forEach(btn=>btn.addEventListener("click",()=>setInspectionMode(btn.dataset.viewMode)));
+document.querySelectorAll("[data-zoom]").forEach(btn=>btn.addEventListener("click",()=>setZoomPreset(btn.dataset.zoom)));
+document.querySelectorAll("[data-diff-mode]").forEach(btn=>btn.addEventListener("click",()=>{inspection.diffMode=btn.dataset.diffMode;inspection.diffKey="";updateInspectionUI();scheduleDiffBuild(true)}));
+$("viewer-sync").addEventListener("click",()=>{inspection.sync=!inspection.sync;updateInspectionUI()});
+$("viewer-defects").addEventListener("click",()=>{inspection.showDefects=!inspection.showDefects;updateInspectionUI();drawInspection()});
+$("viewer-reset").addEventListener("click",resetInspectionView);
+$("diff-threshold").addEventListener("input",event=>{inspection.diffThreshold=Number(event.target.value);inspection.diffKey="";updateInspectionUI();scheduleDiffBuild()});
+$("diff-opacity").addEventListener("input",event=>{inspection.diffOpacity=Number(event.target.value)/100;updateInspectionUI();drawInspection()});
+const viewerCanvas=$("viewer-canvas");
+viewerCanvas.addEventListener("pointerdown",event=>{
+  if(!inspection.open)return;
+  const rect=viewerCanvas.getBoundingClientRect(),x=event.clientX-rect.left,y=event.clientY-rect.top;
+  if(inspection.mode==="split"&&Math.abs(x-rect.width*inspection.splitRatio)<22)inspection.dragKind="split";
+  else if(inspection.mode==="side"&&inspection.images.result)inspection.dragKind=x<rect.width/2?"source":"result";else inspection.dragKind="source";
+  inspection.dragging=true;inspection.lastX=x;inspection.lastY=y;viewerCanvas.setPointerCapture(event.pointerId);
+});
+viewerCanvas.addEventListener("pointermove",event=>{
+  if(!inspection.dragging)return;
+  const rect=viewerCanvas.getBoundingClientRect(),x=event.clientX-rect.left,y=event.clientY-rect.top;
+  if(inspection.dragKind==="split")inspection.splitRatio=Math.max(.02,Math.min(.98,x/rect.width));
+  else{
+    const dx=x-inspection.lastX,dy=y-inspection.lastY;
+    const refImg=inspection.dragKind==="result"?inspection.images.result:inspection.images.source;
+    let paneW=rect.width,paneH=rect.height;if(inspection.mode==="side"&&inspection.images.result)paneW=(rect.width-10)/2;
+    const ref=inspection.mode==="side"?{w:refImg.naturalWidth,h:refImg.naturalHeight}:referenceDimensions();
+    const pane={x:0,y:0,w:paneW,h:paneH},scale=scaleFor(pane,ref.w,ref.h),nx=-dx/Math.max(1,ref.w*scale),ny=-dy/Math.max(1,ref.h*scale);
+    const apply=key=>{inspection.centers[key].x=Math.max(0,Math.min(1,inspection.centers[key].x+nx));inspection.centers[key].y=Math.max(0,Math.min(1,inspection.centers[key].y+ny))};
+    if(inspection.sync||inspection.mode!=="side"){apply("source");apply("result")}else apply(inspection.dragKind);
+  }
+  inspection.lastX=x;inspection.lastY=y;drawInspection();
+});
+viewerCanvas.addEventListener("pointerup",event=>{inspection.dragging=false;inspection.dragKind=null;try{viewerCanvas.releasePointerCapture(event.pointerId)}catch{}});
+viewerCanvas.addEventListener("pointercancel",()=>{inspection.dragging=false;inspection.dragKind=null});
+viewerCanvas.addEventListener("wheel",event=>{
+  event.preventDefault();
+  const rect=viewerCanvas.getBoundingClientRect(),ref=referenceDimensions();
+  const current=inspection.zoomPreset==="fit"?fitScale({x:0,y:0,w:inspection.mode==="side"&&inspection.images.result?(rect.width-10)/2:rect.width,h:rect.height},ref.w,ref.h):inspection.customScale;
+  inspection.zoomPreset="numeric";inspection.customScale=Math.max(.05,Math.min(8,current*Math.exp(-event.deltaY*.0012)));updateInspectionUI();drawInspection();
+},{passive:false});
+viewerCanvas.addEventListener("dblclick",()=>setZoomPreset(inspection.zoomPreset==="fit"?"1":"fit"));
+window.addEventListener("resize",()=>{if(inspection.open)drawInspection()});
+document.addEventListener("keydown",event=>{
+  if(!inspection.open||["INPUT","SELECT","TEXTAREA"].includes(document.activeElement?.tagName))return;
+  const key=event.key.toLowerCase();
+  if(key==="escape"){event.preventDefault();closeInspection();return}
+  if(key==="1")setInspectionMode("side");else if(key==="2")setInspectionMode("split");else if(key==="3")setInspectionMode("diff");else if(key==="4")setInspectionMode("blink");
+  else if(key==="f")setZoomPreset("fit");else if(key==="z")setZoomPreset("1");else if(key==="x")setZoomPreset("2");
+  else if(key==="d"){if(!$("viewer-defects").disabled)$("viewer-defects").click()}else if(key==="s")$("viewer-sync").click();
+  else if(key==="0"||key==="r")resetInspectionView();
+  else if(event.code==="Space"&&inspection.mode==="blink"){event.preventDefault();if(inspection.blinkTimer)stopBlink();else startBlink()}
 });
 
 async function initCloudUi(){

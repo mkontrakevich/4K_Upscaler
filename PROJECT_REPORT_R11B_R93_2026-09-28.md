@@ -171,3 +171,24 @@ Production verification:
 - `live_r11b_smoke`: **skipped**.
 
 Current production UI contract: **CORE 8.8.1 R4 · CLOUD UI R9.4** with processor contract **result-persist-r11b**.
+
+
+## Inspection parity migration — Cloud UI R9.5
+
+The operator supplied the last known-good local package `MG_GENERATIVE_QUALITY_IMMUTABLE_ARCH_V8_8_1_SCENE_STABILITY_PROFILE.zip`. Its `viewer_inspection_self_test.py` passed before migration, and the cloud inspection layer was rebuilt from the same local V8.8.1 mechanics rather than patched further.
+
+R9.5 inspection contract:
+- full-screen local inspection layout;
+- independent native-dimension rendering for SOURCE and RESULT in SIDE mode;
+- normalized common reference canvas for SPLIT / DIFF / BLINK;
+- local FIT / 50% / 100% / 200% zoom semantics;
+- synchronized or independent pan;
+- draggable SPLIT divider rendered by the canvas;
+- ABS / EDGE / HEATMAP diff pipeline using the local Sobel/difference implementation;
+- BLINK timer behavior from the local build;
+- local keyboard controls and RESET behavior;
+- cloud-only adaptation is limited to acquiring SOURCE/RESULT from the current job and mapping ARCH LOCK failure information to the defect overlay.
+
+The previous R9.4 native-image fallback renderer is intentionally removed so that every inspection mode uses one consistent rendering engine.
+
+No Nano Banana generation is started by this migration.
