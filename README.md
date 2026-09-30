@@ -2,7 +2,7 @@
 
 Status: **READY / PRODUCTION**
 
-CORE **8.8.1 R4** · CLOUD UI **R9.7** · processor **result-persist-r11b**
+CORE **8.8.1 R4** · CLOUD UI **R9.8** · processor **result-persist-r11b**
 
 Production: https://4k-upscaler.kontrakevich.workers.dev/
 
@@ -18,4 +18,10 @@ Ready scope:
 - double-click full-screen SOURCE / RESULT preview;
 - process diagnostics and regression protection.
 
-Project state: **done**. Further changes are maintenance or new feature work.
+Project state: **core product done / production ready**.
+
+Commercial extension:
+- account and credit UI is implemented in R9.8;
+- RU billing gateway + PostgreSQL ledger are included;
+- 2-credit trial, credit reservation/settlement and CloudPayments checkout/webhook foundation are implemented;
+- current workers.dev production keeps billing safely OFF until the RU-hosted billing gateway, merchant account and fiscalization are configured.

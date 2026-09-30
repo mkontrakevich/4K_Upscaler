@@ -250,3 +250,30 @@ Accepted production scope:
 - diagnostics, recovery controls and regression guards.
 
 The project is now considered complete. Subsequent changes are maintenance or explicitly requested feature additions.
+
+
+## Commercial extension — R9.8
+
+**Status:** implemented foundation; live charging intentionally disabled.
+
+Implemented:
+- account/credit shell in Cloud UI R9.8;
+- 2 free credits after verified account;
+- one-credit reservation before a commercial generation;
+- signed generation permit checked by the Worker;
+- atomic reservation claim in the RU billing gateway before paid processing;
+- idempotent commit/release settlement after provider usage/result state is known;
+- exact OpenRouter cost telemetry from `usage.cost`;
+- CloudPayments checkout + signed webhook validation foundation;
+- Russia-hosted PostgreSQL schema for identities, orders, immutable credit ledger, reservations and generation costs;
+- sandbox mode for end-to-end testing without real money;
+- billing remains OFF by default on the current production endpoint.
+
+Current production verification:
+- R9.8 UI: passed;
+- billing config on workers.dev: `mode=off`, `enabled=false`;
+- regression: passed;
+- production preflight: passed;
+- live paid smoke: skipped.
+
+Commercial activation still requires the RU-hosted billing server/database, CloudPayments merchant credentials, fiscalization and legal/accounting launch checks.
