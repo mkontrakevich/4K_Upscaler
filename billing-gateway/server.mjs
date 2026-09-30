@@ -103,7 +103,11 @@ async function grantTrial(c,accountId,emailHash){
   await c.query("INSERT INTO credit_ledger(id,account_id,delta,reason,external_ref) VALUES($1,$2,2,'trial_grant',$3)",[uuid(),accountId,"trial:"+accountId]);
   return true;
 }
+async function releaseExpiredReservations(client=pool){
+  await client.query("UPDATE credit_reservations SET status='released',settled_at=now(),settlement_reason='permit_expired' WHERE status='reserved' AND expires_at<=now()");
+}
 async function accountState(accountId){
+  await releaseExpiredReservations();
   const r=await pool.query(`
     SELECT
       COALESCE((SELECT SUM(delta) FROM credit_ledger WHERE account_id=$1),0)::int AS ledger,
@@ -202,6 +206,7 @@ async function route(req,res){
   if(path==="/api/generation/permit"&&req.method==="POST"){
     const session=requireSession(req);
     const result=await tx(async c=>{
+      await releaseExpiredReservations(c);
       const available=await c.query(`
         SELECT
           COALESCE((SELECT SUM(delta) FROM credit_ledger WHERE account_id=$1),0)::int
@@ -209,18 +214,24 @@ async function route(req,res){
       `,[session.sub]);
       if(Number(available.rows[0]?.balance||0)<1)throw Object.assign(new Error("insufficient_credits"),{status:402});
       const reservationId=uuid(),jti=uuid();
-      await c.query("INSERT INTO credit_reservations(id,account_id,permit_jti,credits,status) VALUES($1,$2,$3,1,'reserved')",[reservationId,session.sub,jti]);
+      await c.query("INSERT INTO credit_reservations(id,account_id,permit_jti,credits,status,expires_at) VALUES($1,$2,$3,1,'reserved',now()+interval '10 minutes')",[reservationId,session.sub,jti]);
       const permit=signToken({typ:"generation_permit",aud:"mg4k-worker",sub:session.sub,reservation_id:reservationId,jti,credits:1,exp:Math.floor(Date.now()/1000)+600},PERMIT_SECRET);
       return {permit,reservation_id:reservationId};
     });
     return json(res,201,result);
   }
 
+  if(path==="/api/generation/reservation/release"&&req.method==="POST"){
+    const session=requireSession(req);const {reservation_id}=await bodyJson(req);
+    const r=await pool.query("UPDATE credit_reservations SET status='released',settled_at=now(),settlement_reason='client_upload_failed' WHERE id=$1 AND account_id=$2 AND status='reserved' RETURNING id",[reservation_id,session.sub]);
+    return json(res,200,{ok:true,released:Boolean(r.rowCount)});
+  }
+
   if(path==="/api/internal/generation/claim"&&req.method==="POST"){
     requireWorker(req);const {permit,job_id}=await bodyJson(req);
     const p=verifyToken(permit,PERMIT_SECRET,"generation_permit");
     if(p.aud!=="mg4k-worker"||Number(p.credits)!==1)return json(res,403,{error:"invalid_permit"});
-    const r=await pool.query("UPDATE credit_reservations SET status='claimed',job_id=$2,claimed_at=now() WHERE id=$1 AND account_id=$3 AND permit_jti=$4 AND status='reserved' RETURNING id",[p.reservation_id,job_id,p.sub,p.jti]);
+    const r=await pool.query("UPDATE credit_reservations SET status='claimed',job_id=$2,claimed_at=now() WHERE id=$1 AND account_id=$3 AND permit_jti=$4 AND status='reserved' AND expires_at>now() RETURNING id",[p.reservation_id,job_id,p.sub,p.jti]);
     if(!r.rowCount)return json(res,409,{error:"permit_already_claimed_or_invalid"});
     return json(res,200,{ok:true,reservation_id:p.reservation_id,account_id:p.sub});
   }
@@ -253,11 +264,13 @@ async function route(req,res){
   }
 
   if(path==="/api/billing/checkout"&&req.method==="POST"){
-    const session=requireSession(req);const {pack_code}=await bodyJson(req);const pack=PACKS[String(pack_code||"")];
+    const session=requireSession(req);const {pack_code,receipt_email}=await bodyJson(req);const pack=PACKS[String(pack_code||"")];
     if(!pack?.enabled)return json(res,400,{error:"invalid_pack"});
     const orderId=uuid();
     await pool.query("INSERT INTO payment_orders(id,account_id,provider,pack_code,credits,amount_minor,currency,status) VALUES($1,$2,'cloudpayments',$3,$4,$5,'RUB','pending')",[orderId,session.sub,pack.code,pack.credits,pack.price_rub*100]);
     if(MODE==="sandbox")return json(res,201,{sandbox:true,order_id:orderId,pack});
+    const receiptEmail=normalizeEmail(receipt_email);
+    if(!validEmail(receiptEmail))return json(res,400,{error:"receipt_email_required"});
     if(!CLOUDPAYMENTS_PUBLIC_TERMINAL_ID)return json(res,503,{error:"cloudpayments_not_configured"});
     return json(res,201,{sandbox:false,order_id:orderId,intent:{
       publicTerminalId:CLOUDPAYMENTS_PUBLIC_TERMINAL_ID,
@@ -267,7 +280,7 @@ async function route(req,res){
       culture:"ru-RU",
       paymentSchema:"Single",
       externalId:orderId,
-      receiptEmail:session.email_masked,
+      receiptEmail,
       userInfo:{accountId:session.sub}
     }});
   }

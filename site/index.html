@@ -469,7 +469,7 @@ let resultObjectUrl=null;
 let sourceItems=[],currentSourceIndex=-1;
 let latestJobState=null,lastStatusSignature="";
 const BILLING_SESSION_KEY="mg4k.billingSession.v1";
-const billing={config:null,gatewayConfig:null,sessionToken:localStorage.getItem(BILLING_SESSION_KEY)||"",account:null,lastRefresh:0};
+const billing={config:null,gatewayConfig:null,sessionToken:localStorage.getItem(BILLING_SESSION_KEY)||"",account:null,lastRefresh:0,pendingReservationId:null,receiptEmail:sessionStorage.getItem("mg4k.billingReceiptEmail")||""};
 const HISTORY_KEY="mg4k.sessionHistory.v1";
 const HISTORY_TTL_MS=10*60*1000;
 
@@ -1069,6 +1069,7 @@ function billingClose(){if($("billing-dialog").open)$("billing-dialog").close()}
 async function billingRequestLogin(){
   const email=$("billing-email").value.trim();
   if(!email){billingSetStatus("Введите email.");return}
+  billing.receiptEmail=email;sessionStorage.setItem("mg4k.billingReceiptEmail",email);
   $("billing-login-button").disabled=true;
   try{
     const data=await billingApi("/api/auth/request-link",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({email,return_url:location.origin+location.pathname})});
@@ -1099,7 +1100,11 @@ function loadCloudPaymentsWidget(){
 async function billingStartCheckout(packCode){
   if(!billing.sessionToken){billingSetStatus("Сначала войдите.");return}
   try{
-    const checkout=await billingApi("/api/billing/checkout",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({pack_code:packCode})});
+    let receiptEmail=billing.receiptEmail;
+    if(billing.config?.mode==="live"&&!receiptEmail)receiptEmail=String(prompt("Email для чека CloudPayments:","")||"").trim();
+    if(billing.config?.mode==="live"&&!receiptEmail){billingSetStatus("Для оплаты нужен email для чека.");return}
+    if(receiptEmail){billing.receiptEmail=receiptEmail;sessionStorage.setItem("mg4k.billingReceiptEmail",receiptEmail)}
+    const checkout=await billingApi("/api/billing/checkout",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({pack_code:packCode,receipt_email:receiptEmail})});
     if(checkout.sandbox){
       if(!confirm("SANDBOX: тестово начислить пакет без реального платежа?"))return;
       await billingApi("/api/billing/sandbox/complete",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({order_id:checkout.order_id})});
@@ -1122,12 +1127,22 @@ async function billingAcquirePermit(){
   }
   try{
     const permit=await billingApi("/api/generation/permit",{method:"POST",headers:{"content-type":"application/json"},body:"{}"});
+    billing.pendingReservationId=permit.reservation_id||null;
     await billingRefreshAccount().catch(()=>{});
     return permit.permit;
   }catch(error){
     if(error.status===402){await billingOpen();billingSetStatus("Недостаточно кредитов. Выберите пакет пополнения.")}
     throw error;
   }
+}
+async function billingReleasePendingReservation(){
+  const reservationId=billing.pendingReservationId;
+  billing.pendingReservationId=null;
+  if(!reservationId||!billing.sessionToken||!billing.config?.enabled)return;
+  try{
+    await billingApi("/api/generation/reservation/release",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({reservation_id:reservationId})});
+    await billingRefreshAccount().catch(()=>{});
+  }catch(error){log("warn","Не удалось освободить резерв кредита: "+error.message)}
 }
 async function initBillingUi(){
   await billingConsumeHashSession();
@@ -1146,7 +1161,7 @@ $("billing-close").addEventListener("click",billingClose);
 $("billing-dialog").addEventListener("cancel",event=>{event.preventDefault();billingClose()});
 $("billing-login-button").addEventListener("click",billingRequestLogin);
 $("billing-refresh").addEventListener("click",()=>billingRefreshAccount().catch(error=>billingSetStatus(error.message)));
-$("billing-logout").addEventListener("click",()=>{billing.sessionToken="";billing.account=null;localStorage.removeItem(BILLING_SESSION_KEY);renderBillingUi();billingSetStatus("Вы вышли из аккаунта.");});
+$("billing-logout").addEventListener("click",()=>{billing.sessionToken="";billing.account=null;billing.pendingReservationId=null;billing.receiptEmail="";localStorage.removeItem(BILLING_SESSION_KEY);sessionStorage.removeItem("mg4k.billingReceiptEmail");renderBillingUi();billingSetStatus("Вы вышли из аккаунта.");});
 
 function safeResultBaseName(name){
   return String(name||"result")
@@ -1231,7 +1246,7 @@ async function prepareJob(forceNew=false){
     const r=await fetch("/api/jobs",{method:"POST",headers,body:form});
     const d=await r.json().catch(()=>({}));
     if(!r.ok)throw new Error(d.error||"upload_failed");
-    currentJob={id:d.id,token:d.token};
+    currentJob={id:d.id,token:d.token};billing.pendingReservationId=null;
     const item=currentSourceItem();if(item){item.job=currentJob;item.lastState={id:d.id,status:d.status,stage:d.stage,progress:d.progress,filename:currentFile?.name,content_type:currentFile?.type,bytes:currentFile?.size}}
     persistSessionHistory();
     $("action-process").textContent="Обработка…";$("mobile-process").textContent="Обработка";
@@ -1239,6 +1254,7 @@ async function prepareJob(forceNew=false){
     if(billing.config?.enabled)billingRefreshAccount().catch(()=>{});
     clearInterval(jobPollTimer);await pollCurrentJob();jobPollTimer=setInterval(pollCurrentJob,1800);
   }catch(e){
+    await billingReleasePendingReservation();
     $("action-process").disabled=false;$("mobile-process").disabled=false;$("action-process").textContent="Запустить / продолжить";$("mobile-process").textContent="Обработка";
     setStatus("Не удалось создать облачную задачу: "+e.message,"err");
   }

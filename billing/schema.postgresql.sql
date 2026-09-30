@@ -75,6 +75,7 @@ CREATE TABLE IF NOT EXISTS credit_reservations (
   credits integer NOT NULL CHECK (credits > 0),
   status text NOT NULL CHECK (status IN ('reserved','claimed','committed','released')),
   reserved_at timestamptz NOT NULL DEFAULT now(),
+  expires_at timestamptz NOT NULL DEFAULT (now() + interval '15 minutes'),
   claimed_at timestamptz,
   settled_at timestamptz,
   settlement_reason text
