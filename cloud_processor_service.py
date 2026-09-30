@@ -77,6 +77,10 @@ def _public_state(job_id: str) -> dict[str, Any] | None:
             "result_persisted": bool(state.get("result_persisted")),
             "result_persist_attempts": int(state.get("result_persist_attempts", 0) or 0),
             "result_persist_warning": state.get("result_persist_warning"),
+            "provider_cost_usd": state.get("provider_cost_usd"),
+            "provider_request_count": int(state.get("provider_request_count", 0) or 0),
+            "provider_cost_complete": bool(state.get("provider_cost_complete")),
+            "provider_cost_provider": state.get("provider_cost_provider"),
         }
 
 
@@ -143,6 +147,7 @@ def _persist_candidate_to_worker(
     validation: dict[str, Any] | None,
     status: str,
     progress_value: int,
+    cost_summary: dict[str, Any] | None = None,
 ) -> None:
     """Persist RESULT to Worker/R2 while the Container is definitely alive.
 
@@ -168,7 +173,7 @@ def _persist_candidate_to_worker(
             result_persist_warning=last_error or None,
         )
         try:
-            bridge.upload_candidate(token, job_id, path, validation, status)
+            bridge.upload_candidate(token, job_id, path, validation, status, cost_summary=cost_summary)
             _set_state(
                 job_id,
                 result_persisted=True,
@@ -280,12 +285,20 @@ def _process_job(job_id: str) -> None:
                     f"Current state: {status or 'unknown'}. See {log_file}"
                 )
 
+            cost_summary = bridge.generation_cost_summary(source_dir)
+            _set_state(
+                job_id,
+                provider_cost_usd=cost_summary.get("cost_usd"),
+                provider_request_count=int(cost_summary.get("request_count", 0) or 0),
+                provider_cost_complete=bool(cost_summary.get("complete")),
+                provider_cost_provider=str(cost_summary.get("provider") or "openrouter"),
+            )
             validation = bridge.report_validation(active)
 
         # Persist the generated candidate to Worker/R2 before review. The
         # Container may disappear at any point after this line without losing
         # the paid generation result.
-        _persist_candidate_to_worker(job_id, candidate, validation, "review", 88)
+        _persist_candidate_to_worker(job_id, candidate, validation, "review", 88, cost_summary=cost_summary)
         _set_state(
             job_id,
             status="review",
@@ -341,7 +354,7 @@ def _process_job(job_id: str) -> None:
 
         # Final approval can change the output path; persist that exact FINAL
         # before marking the Container job complete.
-        _persist_candidate_to_worker(job_id, final, validation, "done", 99)
+        _persist_candidate_to_worker(job_id, final, validation, "done", 99, cost_summary=cost_summary)
         _set_state(
             job_id,
             status="done",

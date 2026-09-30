@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 import shutil
 import subprocess
@@ -210,6 +211,48 @@ def active_state(source_dir: Path) -> dict[str, Any]:
     return dict(state.get("active") or {})
 
 
+def generation_cost_summary(source_dir: Path) -> dict[str, Any]:
+    """Aggregate exact OpenRouter usage.cost values from generation receipts."""
+    paths = sorted(set(source_dir.rglob("FRESH_API_GENERATION_RECEIPT_*.json")))
+    receipts: list[dict[str, Any]] = []
+    total = 0.0
+    reported = 0
+
+    for path in paths:
+        payload = load_json(path, {}) or {}
+        usage = payload.get("usage") if isinstance(payload.get("usage"), dict) else {}
+        raw_cost = usage.get("cost")
+        cost: float | None = None
+        try:
+            if raw_cost is not None:
+                candidate = float(raw_cost)
+                if math.isfinite(candidate) and candidate >= 0:
+                    cost = candidate
+        except (TypeError, ValueError):
+            cost = None
+
+        if cost is not None:
+            total += cost
+            reported += 1
+
+        receipts.append({
+            "receipt": path.name,
+            "model": str(payload.get("model") or usage.get("provider_model") or ""),
+            "cost_usd": cost,
+        })
+
+    request_count = len(receipts)
+    return {
+        "provider": "openrouter",
+        "currency": "USD",
+        "request_count": request_count,
+        "reported_cost_count": reported,
+        "cost_usd": round(total, 8) if reported else None,
+        "complete": bool(request_count) and reported == request_count,
+        "receipts": receipts,
+    }
+
+
 def report_validation(active: dict[str, Any]) -> dict[str, Any] | None:
     report = active.get("report")
     if report:
@@ -255,6 +298,7 @@ def upload_candidate(
     path: Path,
     validation: dict[str, Any] | None,
     status: str,
+    cost_summary: dict[str, Any] | None = None,
 ) -> None:
     mime = "image/png" if path.suffix.lower() == ".png" else "image/jpeg"
     with path.open("rb") as fh:
@@ -266,6 +310,7 @@ def upload_candidate(
             data={
                 "status": status,
                 "validation": json.dumps(validation, ensure_ascii=False) if validation else "null",
+                "provider_cost": json.dumps(cost_summary, ensure_ascii=False) if cost_summary else "null",
             },
             timeout=180,
         )
@@ -375,9 +420,10 @@ def process_job(token: str, job: dict[str, Any]) -> None:
                 f"Current state: {status or 'unknown'}. See {log_file}"
             )
 
+        cost_summary = generation_cost_summary(source_dir)
         validation = report_validation(active)
         progress(token, job_id, 82, "review_candidate_ready", validation=validation)
-        upload_candidate(token, job_id, candidate, validation, "review")
+        upload_candidate(token, job_id, candidate, validation, "review", cost_summary=cost_summary)
 
         decision = wait_for_decision(token, job_id)
         if decision == "skip":
@@ -407,7 +453,7 @@ def process_job(token: str, job: dict[str, Any]) -> None:
         run_pipeline(["--approve-final"], env, log_file)
         active = active_state(source_dir)
         final = candidate_path(active) or candidate
-        upload_candidate(token, job_id, final, validation, "done")
+        upload_candidate(token, job_id, final, validation, "done", cost_summary=cost_summary)
         print(f"[CLOUD] Job {job_id[:8]} approved and completed.")
 
     except Exception as exc:

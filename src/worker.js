@@ -155,6 +155,26 @@ function cleanName(name = "image") {
     .slice(0, 160) || "image";
 }
 
+function sanitizeProviderCostSummary(value) {
+  if (!value || typeof value !== "object") return null;
+  const requestCount = Math.max(0, Math.min(20, Math.trunc(Number(value.request_count || 0))));
+  const reportedCount = Math.max(0, Math.min(requestCount, Math.trunc(Number(value.reported_cost_count || 0))));
+  let costUsd = null;
+  if (value.cost_usd !== null && value.cost_usd !== undefined && value.cost_usd !== "") {
+    const parsed = Number(value.cost_usd);
+    if (!Number.isFinite(parsed) || parsed < 0 || parsed > 100) return null;
+    costUsd = Math.round(parsed * 100000000) / 100000000;
+  }
+  return {
+    provider: String(value.provider || "openrouter").slice(0, 40),
+    currency: String(value.currency || "USD").slice(0, 8),
+    request_count: requestCount,
+    reported_cost_count: reportedCount,
+    cost_usd: costUsd,
+    complete: Boolean(value.complete) && requestCount > 0 && reportedCount === requestCount && costUsd !== null,
+  };
+}
+
 function randomToken() {
   const bytes = new Uint8Array(24);
   crypto.getRandomValues(bytes);
@@ -226,6 +246,10 @@ function publicJob(job) {
     decision: job.decision || null,
     approval_mode: job.approval_mode || null,
     review_detached_from_container: Boolean(job.review_detached_from_container),
+    provider_cost_usd: job.provider_cost_usd ?? null,
+    provider_request_count: Number(job.provider_request_count || 0),
+    provider_cost_complete: Boolean(job.provider_cost_complete),
+    provider_cost_provider: job.provider_cost_provider || null,
   };
 }
 
@@ -473,6 +497,10 @@ function applyContainerState(job, state) {
   if (state.diagnostic_excerpt !== undefined) job.diagnostic_excerpt = state.diagnostic_excerpt || null;
   if (state.validation !== undefined) job.validation = state.validation || null;
   if (state.decision !== undefined) job.decision = state.decision || null;
+  if (state.provider_cost_usd !== undefined) job.provider_cost_usd = state.provider_cost_usd === null ? null : Number(state.provider_cost_usd);
+  if (state.provider_request_count !== undefined) job.provider_request_count = Math.max(0, Number(state.provider_request_count || 0));
+  if (state.provider_cost_complete !== undefined) job.provider_cost_complete = Boolean(state.provider_cost_complete);
+  if (state.provider_cost_provider !== undefined) job.provider_cost_provider = state.provider_cost_provider || null;
   job.container_result_available = Boolean(state.result_available);
   if (state.build_id) job.container_build_id = String(state.build_id);
   job.container_synced_at = now();
@@ -1149,6 +1177,8 @@ async function handleApi(request, env, ctx, url) {
 
     let validation = null;
     try { validation = JSON.parse(String(form.get("validation") || "null")); } catch {}
+    let providerCost = null;
+    try { providerCost = sanitizeProviderCostSummary(JSON.parse(String(form.get("provider_cost") || "null"))); } catch {}
     const requestedStatus = String(form.get("status") || "done").toLowerCase();
 
     const resultName = cleanName(file.name || `4K_${job.filename}`);
@@ -1184,6 +1214,13 @@ async function handleApi(request, env, ctx, url) {
     job.result_persisted_at = now();
     job.result_sync_attempts = 0;
     job.result_sync_warning = null;
+    if (providerCost) {
+      job.provider_cost_usd = providerCost.cost_usd;
+      job.provider_request_count = providerCost.request_count;
+      job.provider_cost_complete = providerCost.complete;
+      job.provider_cost_provider = providerCost.provider;
+      job.provider_cost_recorded_at = now();
+    }
     job.status = requestedStatus === "review" ? "review" : "done";
     job.stage = requestedStatus === "review" ? "awaiting_approval" : "final";
     job.progress = requestedStatus === "review" ? 90 : 100;
