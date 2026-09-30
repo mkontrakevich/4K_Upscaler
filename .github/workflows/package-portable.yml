@@ -1,0 +1,60 @@
+name: Build portable MG4K deployment archive
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'deploy/kontrakevich.com/**'
+      - '.github/workflows/package-portable.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate package inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f site/index.html
+          test -f src/worker.js
+          test -f Dockerfile
+          test -f deploy/kontrakevich.com/wrangler.kontrakevich.com.jsonc
+          test -f deploy/kontrakevich.com/PAYMENTS_ACCESS_ARCHITECTURE.md
+          grep -q '4k.kontrakevich.com' deploy/kontrakevich.com/wrangler.kontrakevich.com.jsonc
+          grep -q 'CORE 8.8.1 R4 · CLOUD UI R9.7' site/index.html
+
+      - name: Build archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          short_sha="${GITHUB_SHA::8}"
+          archive="MG4K_ARCH_LOCK_R9_7_KONTRAKEVICH_COM_${short_sha}.zip"
+          {
+            echo "MG 4K / ARCH LOCK portable deployment archive"
+            echo "Source commit: ${GITHUB_SHA}"
+            echo "Built: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "Target custom domain: https://4k.kontrakevich.com/"
+            echo "No production secrets are included."
+          } > PACKAGE_MANIFEST.txt
+          git ls-files -z | xargs -0 zip -q "$archive"
+          zip -q "$archive" PACKAGE_MANIFEST.txt
+          sha256sum "$archive" > "$archive.sha256"
+          echo "ARCHIVE=$archive" >> "$GITHUB_ENV"
+
+      - name: Upload archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: mg4k-kontrakevich-deploy
+          path: |
+            ${{ env.ARCHIVE }}
+            ${{ env.ARCHIVE }}.sha256
+          if-no-files-found: error
+          retention-days: 30
