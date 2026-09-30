@@ -1,22 +1,36 @@
--- Russia-hosted PostgreSQL 15+ billing ledger.
+-- MG 4K RU billing database — PostgreSQL 15+
+-- Deploy the primary customer/billing DB on infrastructure physically located in Russia.
+
 CREATE TABLE IF NOT EXISTS billing_accounts (
   id uuid PRIMARY KEY,
   status text NOT NULL DEFAULT 'active' CHECK (status IN ('active','blocked','closed')),
   created_at timestamptz NOT NULL DEFAULT now()
 );
+
 CREATE TABLE IF NOT EXISTS billing_identities (
   account_id uuid PRIMARY KEY REFERENCES billing_accounts(id) ON DELETE CASCADE,
   email_hash char(64) NOT NULL UNIQUE,
-  email_ciphertext text NOT NULL,
+  email_masked text NOT NULL,
   email_verified_at timestamptz,
   created_at timestamptz NOT NULL DEFAULT now()
 );
+
+CREATE TABLE IF NOT EXISTS auth_tokens (
+  token_hash char(64) PRIMARY KEY,
+  account_id uuid NOT NULL REFERENCES billing_accounts(id) ON DELETE CASCADE,
+  email_hash char(64) NOT NULL,
+  expires_at timestamptz NOT NULL,
+  used_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS trial_grants (
   account_id uuid PRIMARY KEY REFERENCES billing_accounts(id) ON DELETE CASCADE,
   credits integer NOT NULL CHECK (credits > 0),
   identity_fingerprint_hash char(64) NOT NULL UNIQUE,
   granted_at timestamptz NOT NULL DEFAULT now()
 );
+
 CREATE TABLE IF NOT EXISTS payment_orders (
   id uuid PRIMARY KEY,
   account_id uuid NOT NULL REFERENCES billing_accounts(id),
@@ -31,6 +45,7 @@ CREATE TABLE IF NOT EXISTS payment_orders (
   paid_at timestamptz,
   UNIQUE(provider, provider_transaction_id)
 );
+
 CREATE TABLE IF NOT EXISTS payment_events (
   provider text NOT NULL,
   event_id text NOT NULL,
@@ -41,6 +56,7 @@ CREATE TABLE IF NOT EXISTS payment_events (
   status text NOT NULL DEFAULT 'received',
   PRIMARY KEY(provider,event_id)
 );
+
 CREATE TABLE IF NOT EXISTS credit_ledger (
   id uuid PRIMARY KEY,
   account_id uuid NOT NULL REFERENCES billing_accounts(id),
@@ -50,16 +66,20 @@ CREATE TABLE IF NOT EXISTS credit_ledger (
   created_at timestamptz NOT NULL DEFAULT now(),
   UNIQUE(account_id, reason, external_ref)
 );
+
 CREATE TABLE IF NOT EXISTS credit_reservations (
   id uuid PRIMARY KEY,
   account_id uuid NOT NULL REFERENCES billing_accounts(id),
-  job_id uuid NOT NULL UNIQUE,
+  job_id uuid UNIQUE,
+  permit_jti uuid NOT NULL UNIQUE,
   credits integer NOT NULL CHECK (credits > 0),
-  status text NOT NULL CHECK (status IN ('reserved','committed','released')),
+  status text NOT NULL CHECK (status IN ('reserved','claimed','committed','released')),
   reserved_at timestamptz NOT NULL DEFAULT now(),
+  claimed_at timestamptz,
   settled_at timestamptz,
   settlement_reason text
 );
+
 CREATE TABLE IF NOT EXISTS generation_costs (
   job_id uuid PRIMARY KEY,
   account_id uuid REFERENCES billing_accounts(id),
@@ -70,5 +90,8 @@ CREATE TABLE IF NOT EXISTS generation_costs (
   exact_cost_complete boolean NOT NULL DEFAULT false,
   recorded_at timestamptz NOT NULL DEFAULT now()
 );
+
 CREATE INDEX IF NOT EXISTS idx_credit_ledger_account_created ON credit_ledger(account_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_payment_orders_account_created ON payment_orders(account_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_reservations_account_status ON credit_reservations(account_id, status);
+CREATE INDEX IF NOT EXISTS idx_auth_tokens_expiry ON auth_tokens(expires_at);

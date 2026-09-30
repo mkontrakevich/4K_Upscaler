@@ -1,0 +1,43 @@
+services:
+  billing-db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: mg4k_billing
+      POSTGRES_USER: mg4k
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+    volumes:
+      - billing-db:/var/lib/postgresql/data
+      - ../../billing/schema.postgresql.sql:/docker-entrypoint-initdb.d/001-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL","pg_isready -U mg4k -d mg4k_billing"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  billing-gateway:
+    build:
+      context: ../..
+      dockerfile: billing-gateway/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      billing-db:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      PORT: 8080
+      BILLING_MODE: ${BILLING_MODE:-sandbox}
+      DATABASE_URL: postgres://mg4k:${POSTGRES_PASSWORD}@billing-db:5432/mg4k_billing
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-https://pay.kontrakevich.com}
+      APP_ORIGIN: ${APP_ORIGIN:-https://4k.kontrakevich.com}
+      CORS_ORIGIN: ${APP_ORIGIN:-https://4k.kontrakevich.com}
+      BILLING_SESSION_HMAC_SECRET: ${BILLING_SESSION_HMAC_SECRET:?set BILLING_SESSION_HMAC_SECRET}
+      BILLING_PERMIT_HMAC_SECRET: ${BILLING_PERMIT_HMAC_SECRET:?set BILLING_PERMIT_HMAC_SECRET}
+      BILLING_WORKER_SHARED_SECRET: ${BILLING_WORKER_SHARED_SECRET:?set BILLING_WORKER_SHARED_SECRET}
+      CLOUDPAYMENTS_PUBLIC_TERMINAL_ID: ${CLOUDPAYMENTS_PUBLIC_TERMINAL_ID:-}
+      CLOUDPAYMENTS_API_SECRET: ${CLOUDPAYMENTS_API_SECRET:-}
+      EMAIL_DELIVERY_WEBHOOK_URL: ${EMAIL_DELIVERY_WEBHOOK_URL:-}
+
+volumes:
+  billing-db:

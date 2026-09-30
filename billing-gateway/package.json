@@ -1,0 +1,14 @@
+{
+  "name": "mg4k-billing-gateway",
+  "private": true,
+  "type": "module",
+  "version": "0.1.0",
+  "engines": {"node": ">=20"},
+  "scripts": {
+    "start": "node server.mjs",
+    "check": "node --check server.mjs"
+  },
+  "dependencies": {
+    "pg": "^8.13.1"
+  }
+}
