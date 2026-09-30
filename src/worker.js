@@ -359,6 +359,8 @@ function publicJob(job) {
     billing_reservation_id: job.billing_reservation_id || null,
     billing_settlement: job.billing_settlement || null,
     billing_settlement_warning: job.billing_settlement_warning || null,
+    prompt_override: job.prompt_override || null,
+    prompt_sha256: job.prompt_sha256 || null,
   };
 }
 
@@ -684,6 +686,7 @@ async function dispatchJobToContainer(env, job, origin) {
     "x-mg4k-locks": JSON.stringify(job.locks || {}),
     "x-mg4k-mode": job.mode || "generative",
     "x-mg4k-source-size": String(bytes.byteLength),
+    "x-mg4k-prompt-b64": job.prompt_override ? bytesToBase64url(new TextEncoder().encode(job.prompt_override)) : "",
   });
   const response = await container.fetch(new Request(
     `http://container/jobs/${job.id}/start`,
@@ -962,6 +965,8 @@ async function handleApi(request, env, ctx, url) {
     }
 
     const mode = String(form.get("mode") || "generative");
+    const promptOverride = String(form.get("prompt") || "").trim();
+    if (promptOverride.length > 30000) return json({ error: "prompt_too_long", max_chars: 30000 }, 413);
     const id = crypto.randomUUID();
     const accessToken = randomToken();
     const filename = cleanName(file.name || "source-image");
@@ -1004,6 +1009,8 @@ async function handleApi(request, env, ctx, url) {
       bytes: Number(file.size || 0),
       mode,
       locks,
+      prompt_override: promptOverride || null,
+      prompt_sha256: promptOverride ? await sha256(promptOverride) : null,
       source_key: sourceKey,
       result_key: null,
       error: null,

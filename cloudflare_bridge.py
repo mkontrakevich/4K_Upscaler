@@ -175,6 +175,11 @@ def pipeline_env(source_dir: Path, job: dict[str, Any]) -> dict[str, str]:
     env = os.environ.copy()
     env["MG4K_SOURCE"] = str(source_dir)
     env["MG4K_LOCK_PROFILE_JSON"] = json.dumps(job.get("locks") or {}, ensure_ascii=False)
+    prompt_override = str(job.get("prompt_override") or "").strip()
+    if prompt_override:
+        env["MG4K_PROMPT_OVERRIDE"] = prompt_override
+    else:
+        env.pop("MG4K_PROMPT_OVERRIDE", None)
     env["PYTHONUTF8"] = "1"
     env["PYTHONIOENCODING"] = "utf-8"
     return env

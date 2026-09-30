@@ -276,7 +276,10 @@ No plastic CGI look, fantasy styling, watermark, excessive sharpening, synthetic
 
 
 def donor_generation_prompt() -> str:
-    """Preserve the legacy local R4 prompt; use dynamic Lock Profile only for cloud jobs."""
+    """Preserve legacy/default prompt composition unless an exact UI override is supplied."""
+    override = os.environ.get("MG4K_PROMPT_OVERRIDE", "").strip()
+    if override:
+        return override
     if os.environ.get("MG4K_LOCK_PROFILE_JSON", "").strip():
         return CLOUD_GENERATION_PROMPT + cloud_lock_prompt()
     return GENERATION_PROMPT
@@ -947,10 +950,13 @@ def _post_json(endpoint: str, key: str, payload: dict[str, Any], trace_name: str
     raise RuntimeError(f"{trace_name} failed after retries: {last}")
 
 
-def generate_image(key: str, reference: Path, trace_name: str, seed: int) -> tuple[Image.Image, dict[str, Any]]:
+def generation_request_prompt(reference: Path) -> tuple[str, dict[str, Any]]:
     aspect = generation_aspect_request(reference)
+    override = os.environ.get("MG4K_PROMPT_OVERRIDE", "").strip()
+    if override:
+        return override, aspect
     if os.environ.get("MG4K_LOCK_PROFILE_JSON", "").strip():
-        request_prompt = (
+        prompt = (
             donor_generation_prompt()
             + "\nOUTPUT CANVAS CONTRACT: return exactly one complete "
             + str(aspect["aspect_ratio"])
@@ -958,13 +964,18 @@ def generate_image(key: str, reference: Path, trace_name: str, seed: int) -> tup
               "Camera/framing behaviour must follow the ACTIVE CAMERA lock level for this job."
         )
     else:
-        request_prompt = (
+        prompt = (
             donor_generation_prompt()
             + "\nOUTPUT CANVAS CONTRACT: return exactly one complete "
             + str(aspect["aspect_ratio"])
             + " image. Preserve the source framing inside that canvas; do not crop, pad, extend, "
               "recenter, zoom, rotate or change the camera."
         )
+    return prompt, aspect
+
+
+def generate_image(key: str, reference: Path, trace_name: str, seed: int) -> tuple[Image.Image, dict[str, Any]]:
+    request_prompt, aspect = generation_request_prompt(reference)
     payload: dict[str, Any] = {
         "model": CFG["model"],
         "prompt": request_prompt,
@@ -1002,6 +1013,8 @@ def generate_image(key: str, reference: Path, trace_name: str, seed: int) -> tup
     usage["generator"] = str(CFG.get("generator_display_name", "Nano Banana Pro"))
     usage["requested_model"] = str(CFG["model"])
     usage["provider_model"] = str(provider_model or CFG["model"])
+    usage["prompt_sha256"] = hashlib.sha256(request_prompt.encode("utf-8")).hexdigest()
+    usage["prompt_chars"] = len(request_prompt)
     usage["native_aspect_request"] = {
         **aspect,
         "generated_size": [output.width, output.height],

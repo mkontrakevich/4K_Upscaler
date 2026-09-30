@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import base64
+
 import json
 import mimetypes
 import os
@@ -526,6 +528,19 @@ class ProcessorHandler(BaseHTTPRequestHandler):
                 self._json(400, {"error": "invalid_lock_profile"})
                 return
 
+            prompt_override = ""
+            prompt_b64 = str(self.headers.get("x-mg4k-prompt-b64") or "").strip()
+            if prompt_b64:
+                try:
+                    padded = prompt_b64 + "=" * ((4 - len(prompt_b64) % 4) % 4)
+                    prompt_override = base64.urlsafe_b64decode(padded.encode("ascii")).decode("utf-8").strip()
+                except Exception:
+                    self._json(400, {"error": "invalid_prompt_encoding"})
+                    return
+                if len(prompt_override) > 30000:
+                    self._json(413, {"error": "prompt_too_long", "max_chars": 30000})
+                    return
+
             safe_name = Path(filename).name or "source.jpg"
             job_dir = JOBS_ROOT / job_id
             source_dir = job_dir / "source"
@@ -548,6 +563,7 @@ class ProcessorHandler(BaseHTTPRequestHandler):
                     "id": job_id,
                     "filename": safe_name,
                     "locks": locks,
+                    "prompt_override": prompt_override or None,
                     "mode": self.headers.get("x-mg4k-mode") or "generative",
                     "source_path": str(source_path),
                     "status": "queued",
