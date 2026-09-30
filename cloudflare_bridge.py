@@ -213,7 +213,7 @@ def active_state(source_dir: Path) -> dict[str, Any]:
 
 def generation_cost_summary(source_dir: Path) -> dict[str, Any]:
     """Aggregate exact OpenRouter usage.cost values from generation receipts."""
-    paths = sorted(set(source_dir.rglob("FRESH_API_GENERATION_RECEIPT_*.json")))
+    paths = sorted(set(source_dir.rglob("*FRESH_API_GENERATION_RECEIPT_*.json")))
     receipts: list[dict[str, Any]] = []
     total = 0.0
     reported = 0
