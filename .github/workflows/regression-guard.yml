@@ -953,19 +953,16 @@ jobs:
             curl -fsS --retry 2 --retry-delay 2 "$BASE_URL/api/health?preflight=$GITHUB_SHA-$attempt" > "$TMP/health.json"
             curl -fsS --retry 2 --retry-delay 2 "$BASE_URL/api/billing/config?preflight=$GITHUB_SHA-$attempt" > "$TMP/billing.json"
 
-            if grep -q 'CLOUD UI R9.8' "$TMP/root.html"               && grep -q 'id="action-replace-source"' "$TMP/root.html"               && grep -q 'data-inspection-engine="local-v8.8.1"' "$TMP/root.html"               && grep -q 'id="action-save-result"' "$TMP/root.html"               && grep -q 'data-preview-engine="native-image-v1"' "$TMP/root.html"               && python - "$TMP/health.json" <<'PY'
+            if grep -q 'CLOUD UI R9.8' "$TMP/root.html"               && grep -q 'id="action-replace-source"' "$TMP/root.html"               && grep -q 'data-inspection-engine="local-v8.8.1"' "$TMP/root.html"               && grep -q 'id="action-save-result"' "$TMP/root.html"               && grep -q 'data-preview-engine="native-image-v1"' "$TMP/root.html"               && python - "$TMP/health.json" "$TMP/billing.json" <<'PY'
           import json, sys
           d=json.load(open(sys.argv[1]))
           assert d.get("worker_build_id") == "pid1-tini-r11b", d
           assert d.get("processor_build_expected") == "result-persist-r11b", d
           assert d.get("processor_instance_expected") == "primary-result-persist-r11b", d
           assert d.get("processor_lifecycle") == "tini-pid1-group-forwarding", d
-          PY
-              && python - "$TMP/billing.json" <<'PY'
-          import json, sys
-          d=json.load(open(sys.argv[1]))
-          assert d.get("mode") == "off", d
-          assert d.get("enabled") is False, d
+          billing=json.load(open(sys.argv[2]))
+          assert billing.get("mode") == "off", billing
+          assert billing.get("enabled") is False, billing
           PY
             then
               STABLE=$((STABLE+1))
