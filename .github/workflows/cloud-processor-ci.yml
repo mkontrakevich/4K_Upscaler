@@ -48,6 +48,25 @@ jobs:
           print("Legacy local DONOR prompt unchanged: PASSED")
           PY
 
+      - name: Exact editable prompt override contract
+        run: |
+          python - <<'PY'
+          import os
+          import v8_safe_appearance as v
+          old_lock=os.environ.get("MG4K_LOCK_PROFILE_JSON")
+          old_prompt=os.environ.get("MG4K_PROMPT_OVERRIDE")
+          try:
+              os.environ["MG4K_LOCK_PROFILE_JSON"]='{"camera":"hard"}'
+              os.environ["MG4K_PROMPT_OVERRIDE"]="EXACT USER PROMPT — DO NOT APPEND"
+              assert v.donor_generation_prompt() == "EXACT USER PROMPT — DO NOT APPEND"
+          finally:
+              if old_lock is None: os.environ.pop("MG4K_LOCK_PROFILE_JSON",None)
+              else: os.environ["MG4K_LOCK_PROFILE_JSON"]=old_lock
+              if old_prompt is None: os.environ.pop("MG4K_PROMPT_OVERRIDE",None)
+              else: os.environ["MG4K_PROMPT_OVERRIDE"]=old_prompt
+          print("Exact editable prompt override contract: PASSED")
+          PY
+
       - name: Cloud source and lock profile contract
         run: |
           python - <<'PY'

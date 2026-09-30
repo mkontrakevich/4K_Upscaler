@@ -277,3 +277,26 @@ Current production verification:
 - live paid smoke: skipped.
 
 Commercial activation still requires the RU-hosted billing server/database, CloudPayments merchant credentials, fiscalization and legal/accounting launch checks.
+
+
+## Prompt Console / user presets — R9.9
+
+The Cloud UI now exposes the exact text that will be sent to the image generator.
+
+Implemented:
+- full editable prompt textarea;
+- default prompt is assembled from the same nine LOCK parameters;
+- HARD / SOFT / FREE buttons act as prompt-fragment presets;
+- SYNC WITH LOCK mode rebuilds the prompt immediately when a LOCK level changes;
+- manual editing switches the editor to MANUAL PROMPT and protects user text from automatic replacement;
+- **Собрать из LOCK** returns to synchronized mode;
+- built-in **ARCH LOCK** preset restores canonical lock levels;
+- user can save named presets containing both LOCK values and full prompt text;
+- saved presets can be applied or deleted from the panel;
+- browser persistence uses localStorage; project/session switching preserves the active prompt;
+- the exact prompt is included in the process-log export;
+- job intake stores a prompt SHA-256 and forwards the exact prompt to the processor;
+- the pipeline accepts `MG4K_PROMPT_OVERRIDE` as the authoritative provider prompt and does not append hidden text to it;
+- OpenRouter usage records include the prompt SHA-256 and prompt character count.
+
+No generation is triggered by editing, saving, applying or deleting a preset.

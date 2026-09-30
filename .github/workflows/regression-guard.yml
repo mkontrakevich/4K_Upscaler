@@ -132,7 +132,7 @@ jobs:
           from pathlib import Path
           html = Path("site/index.html").read_text(encoding="utf-8")
           required = [
-              "CORE 8.8.1 R4 · CLOUD UI R9.8",
+              "CORE 8.8.1 R4 · CLOUD UI R9.9",
               'class="comparison"',
               'id="source-image"',
               'id="result-image"',
@@ -245,7 +245,7 @@ jobs:
           from pathlib import Path
           html = Path("site/index.html").read_text(encoding="utf-8")
           required = [
-              "CORE 8.8.1 R4 · CLOUD UI R9.8",
+              "CORE 8.8.1 R4 · CLOUD UI R9.9",
               'id="quick-preview"',
               'data-preview-engine="native-image-v1"',
               'id="quick-preview-image"',
@@ -264,6 +264,45 @@ jobs:
           print("Cloud double-click image preview contract: PASSED")
           PY
 
+      - name: Cloud editable prompt and presets contract
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          ui=Path("site/index.html").read_text(encoding="utf-8")
+          worker=Path("src/worker.js").read_text(encoding="utf-8")
+          service=Path("cloud_processor_service.py").read_text(encoding="utf-8")
+          bridge=Path("cloudflare_bridge.py").read_text(encoding="utf-8")
+          pipeline=Path("v8_safe_appearance.py").read_text(encoding="utf-8")
+
+          for token in [
+              'CLOUD UI R9.9',
+              'id="prompt-editor"',
+              'id="prompt-presets"',
+              'function buildPromptFromLocks()',
+              'function savePromptPreset()',
+              'function deletePromptPreset(id)',
+              'form.append("prompt",currentPrompt)',
+              'PROMPT SENT TO GENERATOR',
+          ]:
+              assert token in ui, token
+
+          for token in [
+              'form.get("prompt")',
+              'x-mg4k-prompt-b64',
+              'prompt_override: job.prompt_override || null',
+              'prompt_sha256',
+          ]:
+              assert token in worker, token
+
+          assert 'x-mg4k-prompt-b64' in service
+          assert '"prompt_override": prompt_override or None' in service
+          assert 'MG4K_PROMPT_OVERRIDE' in bridge
+          assert 'def generation_request_prompt(' in pipeline
+          assert 'MG4K_PROMPT_OVERRIDE' in pipeline
+          assert 'usage["prompt_sha256"]' in pipeline
+          print("Editable prompt / presets contract: PASSED")
+          PY
+
       - name: Cloud commercial credit gate contract
         run: |
           python - <<'PY'
@@ -279,7 +318,7 @@ jobs:
               'id="billing-dialog"',
               'async function billingAcquirePermit()',
               'X-MG4K-Entitlement',
-              'CLOUD UI R9.8',
+              'CLOUD UI R9.9',
           ]:
               assert token in ui, token
 
@@ -318,7 +357,7 @@ jobs:
           from pathlib import Path
           html = Path("site/index.html").read_text(encoding="utf-8")
           required = [
-              "CORE 8.8.1 R4 · CLOUD UI R9.8",
+              "CORE 8.8.1 R4 · CLOUD UI R9.9",
               'id="action-save-result"',
               'function saveCurrentResult()',
               'fetch(resultUrl(currentJob,true),{cache:"no-store"})',
@@ -344,7 +383,7 @@ jobs:
           html = Path("site/index.html").read_text(encoding="utf-8")
 
           required = [
-              "CORE 8.8.1 R4 · CLOUD UI R9.8",
+              "CORE 8.8.1 R4 · CLOUD UI R9.9",
               'data-inspection-engine="local-v8.8.1"',
               'id="viewer-canvas"',
               'data-view-mode="side"',
@@ -376,7 +415,7 @@ jobs:
           assert "result.naturalWidth,result.naturalHeight" in draw, "SIDE RESULT must use native dimensions"
           assert "drawNormalized(ctx,source" in draw and "drawNormalized(ctx,result" in draw, "SPLIT must normalize SOURCE and RESULT on one reference canvas"
           assert 'inspection.mode==="diff"' in draw and 'inspection.mode==="blink"' in draw
-          assert "viewer-fallback" not in html, "R9.8 must use the proven local canvas engine, not the R9.4 fallback renderer"
+          assert "viewer-fallback" not in html, "R9.9 must use the proven local canvas engine, not the R9.4 fallback renderer"
           print("Cloud local V8.8.1 inspection parity: PASSED")
           PY
 
@@ -939,7 +978,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
-      - name: Verify deployed R9.8 / R11b contract without generation
+      - name: Verify deployed R9.9 / R11b contract without generation
         env:
           BASE_URL: https://4k-upscaler.kontrakevich.workers.dev
         run: |
@@ -953,7 +992,7 @@ jobs:
             curl -fsS --retry 2 --retry-delay 2 "$BASE_URL/api/health?preflight=$GITHUB_SHA-$attempt" > "$TMP/health.json"
             curl -fsS --retry 2 --retry-delay 2 "$BASE_URL/api/billing/config?preflight=$GITHUB_SHA-$attempt" > "$TMP/billing.json"
 
-            if grep -q 'CLOUD UI R9.8' "$TMP/root.html"               && grep -q 'id="action-replace-source"' "$TMP/root.html"               && grep -q 'data-inspection-engine="local-v8.8.1"' "$TMP/root.html"               && grep -q 'id="action-save-result"' "$TMP/root.html"               && grep -q 'data-preview-engine="native-image-v1"' "$TMP/root.html"               && python - "$TMP/health.json" "$TMP/billing.json" <<'PY'
+            if grep -q 'CLOUD UI R9.9' "$TMP/root.html"               && grep -q 'id="action-replace-source"' "$TMP/root.html"               && grep -q 'data-inspection-engine="local-v8.8.1"' "$TMP/root.html"               && grep -q 'id="action-save-result"' "$TMP/root.html"               && grep -q 'data-preview-engine="native-image-v1"' "$TMP/root.html"               && python - "$TMP/health.json" "$TMP/billing.json" <<'PY'
           import json, sys
           d=json.load(open(sys.argv[1]))
           assert d.get("worker_build_id") == "pid1-tini-r11b", d
@@ -967,7 +1006,7 @@ jobs:
             then
               STABLE=$((STABLE+1))
               if [[ "$STABLE" -ge 3 ]]; then
-                echo "Production preflight PASSED: UI R9.8 · billing safely OFF · double-click preview · local V8.8.1 inspection · save-result · replace-source · Worker pid1-tini-r11b · expected processor result-persist-r11b"
+                echo "Production preflight PASSED: UI R9.9 · editable prompt/presets · billing safely OFF · double-click preview · local V8.8.1 inspection · save-result · replace-source · Worker pid1-tini-r11b · expected processor result-persist-r11b"
                 exit 0
               fi
             else
@@ -977,7 +1016,7 @@ jobs:
             sleep 10
           done
 
-          echo "Production did not converge to the expected R9.8/R11b contract." >&2
+          echo "Production did not converge to the expected R9.9/R11b contract." >&2
           cat "$TMP/health.json" >&2 || true
           exit 1
 
@@ -1004,16 +1043,16 @@ jobs:
           # No paid work is allowed until the public Worker serves the intended UI.
           for attempt in $(seq 1 18); do
             curl -fsS --retry 2 --retry-delay 2 "$BASE_URL/?smoke=$GITHUB_SHA-$attempt" > "$TMP/root.html"
-            if grep -q 'CLOUD UI R9.8' "$TMP/root.html" && grep -q 'id="action-replace-source"' "$TMP/root.html" && grep -q 'data-inspection-engine="local-v8.8.1"' "$TMP/root.html" && grep -q 'id="action-save-result"' "$TMP/root.html" && grep -q 'data-preview-engine="native-image-v1"' "$TMP/root.html"; then
+            if grep -q 'CLOUD UI R9.9' "$TMP/root.html" && grep -q 'id="action-replace-source"' "$TMP/root.html" && grep -q 'data-inspection-engine="local-v8.8.1"' "$TMP/root.html" && grep -q 'id="action-save-result"' "$TMP/root.html" && grep -q 'data-preview-engine="native-image-v1"' "$TMP/root.html"; then
               break
             fi
             if [[ "$attempt" == "18" ]]; then
-              echo "Production UI is not R9.8 / replace-source yet; aborting before paid generation." >&2
+              echo "Production UI is not R9.9 / replace-source yet; aborting before paid generation." >&2
               exit 20
             fi
             sleep 10
           done
-          echo "Production UI R9.8 + double-click preview + local V8.8.1 inspection + save-result + replace-source: PASSED"
+          echo "Production UI R9.9 + double-click preview + local V8.8.1 inspection + save-result + replace-source: PASSED"
 
           # Wait for the Worker durability fix itself before any paid generation.
           WORKER_BUILD=""
