@@ -1,0 +1,55 @@
+name: Billing foundation CI
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'billing/**'
+      - 'cloudflare_bridge.py'
+      - 'cloud_processor_service.py'
+      - 'src/worker.js'
+      - '.github/workflows/billing-ci.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  billing-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: JavaScript billing self-test
+        run: node billing/billing_self_test.mjs
+      - name: Cost telemetry self-test
+        run: |
+          python -m pip install --disable-pip-version-check -q requests
+          python billing/cost_telemetry_self_test.py
+      - name: Billing safety contract
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          cfg=json.loads(Path("billing/config.example.json").read_text(encoding="utf-8"))
+          assert cfg["sales_enabled"] is False
+          assert cfg["prices_approved"] is False
+          assert cfg["trial"]["credits"] == 2
+          assert cfg["providers"]["crypto"]["enabled"] is False
+          assert cfg["providers"]["crypto"]["russian_retail"] == "prohibited"
+          worker=Path("src/worker.js").read_text(encoding="utf-8")
+          service=Path("cloud_processor_service.py").read_text(encoding="utf-8")
+          bridge=Path("cloudflare_bridge.py").read_text(encoding="utf-8")
+          assert "provider_cost_usd" in worker
+          assert "provider_cost_usd" in service
+          assert "def generation_cost_summary(" in bridge
+          print("Billing safety contract: PASSED")
+          PY
+      - name: No paid generation in billing CI
+        run: echo "No OpenRouter key or live payment secret is available to this workflow."

@@ -729,11 +729,11 @@ jobs:
           worker = Path("src/worker.js").read_text(encoding="utf-8")
 
           assert "def _persist_candidate_to_worker(" in service
-          assert 'bridge.upload_candidate(token, job_id, path, validation, status)' in service
-          review_persist = service.index('_persist_candidate_to_worker(job_id, candidate, validation, "review", 88)')
+          assert 'bridge.upload_candidate(token, job_id, path, validation, status, cost_summary=cost_summary)' in service
+          review_persist = service.index('_persist_candidate_to_worker(job_id, candidate, validation, "review", 88, cost_summary=cost_summary)')
           review_wait = service.index('decision = _wait_for_decision(job_id)')
           assert review_persist < review_wait, "RESULT must reach Worker/R2 before human review"
-          assert '_persist_candidate_to_worker(job_id, final, validation, "done", 99)' in service
+          assert '_persist_candidate_to_worker(job_id, final, validation, "done", 99, cost_summary=cost_summary)' in service
           assert 'result_persist_retry' in service
           assert 'RESULT was generated but Worker/R2 persistence failed' in service
 
@@ -751,6 +751,10 @@ jobs:
           assert 'job.result_persist_source = "container_pull";' in pull_persist
           assert 'job.result_persisted_at = now();' in pull_persist
           assert 'const WORKER_BUILD_ID = "pid1-tini-r11b";' in worker
+          assert 'def generation_cost_summary(' in Path("cloudflare_bridge.py").read_text(encoding="utf-8")
+          assert 'provider_cost_usd' in service
+          assert 'form.get("provider_cost")' in worker
+          assert 'provider_cost_usd: job.provider_cost_usd ?? null' in worker
 
           # Runtime smoke: execute the persistence helper without network/API calls.
           import os, tempfile

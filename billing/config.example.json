@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "sales_enabled": false,
+  "prices_approved": false,
+  "currency": "RUB",
+  "trial": {
+    "credits": 2,
+    "requires_verified_email": true,
+    "one_grant_per_identity": true,
+    "anti_abuse_rate_limit_required": true
+  },
+  "credit_policy": {
+    "credits_per_user_started_generation": 1,
+    "inspection_costs_credits": 0,
+    "download_existing_result_costs_credits": 0,
+    "refund_on_no_provider_request": true,
+    "refund_on_hard_system_failure_without_result": true,
+    "user_requested_regeneration_costs_new_credit": true
+  },
+  "packs": [
+    {"code":"starter_10","credits":10,"price_rub":790,"enabled":false,"provisional":true},
+    {"code":"pro_30","credits":30,"price_rub":1990,"enabled":false,"provisional":true},
+    {"code":"studio_100","credits":100,"price_rub":5990,"enabled":false,"provisional":true}
+  ],
+  "providers": {
+    "cloudpayments": {
+      "enabled": false,
+      "domestic_cards": true,
+      "sbp": true,
+      "tpay": true,
+      "mir_pay": true,
+      "foreign_cards": "requires_merchant_approval"
+    },
+    "crypto": {
+      "enabled": false,
+      "russian_retail": "prohibited",
+      "foreign_trade_only": "legal_review_required"
+    },
+    "digital_ruble": {
+      "enabled": false,
+      "note": "Separate lawful RUB payment rail; not cryptocurrency"
+    }
+  }
+}

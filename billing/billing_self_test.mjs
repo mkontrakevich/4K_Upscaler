@@ -1,0 +1,20 @@
+import assert from "node:assert/strict";
+import {cloudPaymentsHmac, verifyCloudPaymentsNotification, parseCloudPaymentsForm, validateCloudPaymentsPay} from "./cloudpayments.mjs";
+import {trialGrantDecision, generationReservationDecision, settlementDecision} from "./credit_policy.mjs";
+
+const body="TransactionId=504&Amount=790.00&Currency=RUB&InvoiceId=ord-1&AccountId=acct-1&OperationType=Payment";
+const secret="ci-test-secret";
+const signature=await cloudPaymentsHmac(body,secret);
+assert.equal(await verifyCloudPaymentsNotification(body,{"Content-HMAC":signature},secret),true);
+assert.equal(await verifyCloudPaymentsNotification(body+"x",{"Content-HMAC":signature},secret),false);
+const event=parseCloudPaymentsForm(body);
+const normalized=validateCloudPaymentsPay(event,{invoiceId:"ord-1",accountId:"acct-1",currency:"RUB",amountMinor:79000});
+assert.equal(normalized.amountMinor,79000);
+assert.equal(normalized.transactionId,"504");
+assert.throws(()=>validateCloudPaymentsPay(event,{invoiceId:"ord-1",accountId:"acct-1",currency:"RUB",amountMinor:79100}),/amount_mismatch/);
+assert.deepEqual(trialGrantDecision({emailVerified:true,alreadyGranted:false,abuseBlocked:false}),{allowed:true,credits:2,reason:"verified_first_trial"});
+assert.equal(generationReservationDecision({balance:0}).allowed,false);
+assert.equal(generationReservationDecision({balance:2}).reserve,1);
+assert.equal(settlementDecision({providerRequestCount:0,resultAvailable:false,hardSystemFailure:true}).action,"release");
+assert.equal(settlementDecision({providerRequestCount:1,resultAvailable:true,hardSystemFailure:false}).action,"commit");
+console.log("Billing foundation self-test: PASSED");

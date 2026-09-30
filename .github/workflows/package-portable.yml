@@ -7,6 +7,10 @@ on:
       - main
     paths:
       - 'deploy/kontrakevich.com/**'
+      - 'billing/**'
+      - 'cloudflare_bridge.py'
+      - 'cloud_processor_service.py'
+      - 'src/worker.js'
       - '.github/workflows/package-portable.yml'
 
 permissions:
