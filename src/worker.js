@@ -194,6 +194,111 @@ async function sha256(value) {
   return Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, "0")).join("");
 }
 
+function billingMode(env) {
+  const mode = String(env.BILLING_MODE || "off").toLowerCase();
+  return ["sandbox", "live"].includes(mode) ? mode : "off";
+}
+
+function billingEnabled(env) {
+  return billingMode(env) !== "off"
+    && Boolean(String(env.BILLING_GATEWAY_URL || "").trim())
+    && Boolean(String(env.BILLING_PERMIT_HMAC_SECRET || "").trim())
+    && Boolean(String(env.BILLING_WORKER_SHARED_SECRET || "").trim());
+}
+
+function base64urlToBytes(value) {
+  const normalized = String(value || "").replace(/-/g, "+").replace(/_/g, "/");
+  const padded = normalized + "=".repeat((4 - normalized.length % 4) % 4);
+  const binary = atob(padded);
+  return Uint8Array.from(binary, ch => ch.charCodeAt(0));
+}
+
+function bytesToBase64url(bytes) {
+  let binary = "";
+  for (const b of bytes) binary += String.fromCharCode(b);
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+function constantTimeTextEqual(a, b) {
+  const left = new TextEncoder().encode(String(a || ""));
+  const right = new TextEncoder().encode(String(b || ""));
+  let diff = left.length ^ right.length;
+  const size = Math.max(left.length, right.length);
+  for (let i = 0; i < size; i++) diff |= (left[i % Math.max(1, left.length)] || 0) ^ (right[i % Math.max(1, right.length)] || 0);
+  return diff === 0;
+}
+
+async function billingHmac(value, secret) {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(String(secret)),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const signature = new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(String(value))));
+  return bytesToBase64url(signature);
+}
+
+async function verifyBillingPermit(token, env) {
+  const [version, body, signature] = String(token || "").split(".");
+  if (version !== "v1" || !body || !signature) throw new Error("billing_permit_invalid");
+  const expected = await billingHmac(version + "." + body, String(env.BILLING_PERMIT_HMAC_SECRET || ""));
+  if (!constantTimeTextEqual(signature, expected)) throw new Error("billing_permit_signature_invalid");
+  let payload;
+  try {
+    payload = JSON.parse(new TextDecoder().decode(base64urlToBytes(body)));
+  } catch {
+    throw new Error("billing_permit_payload_invalid");
+  }
+  if (payload.typ !== "generation_permit" || payload.aud !== "mg4k-worker") throw new Error("billing_permit_type_invalid");
+  if (Number(payload.exp || 0) < Math.floor(Date.now() / 1000)) throw new Error("billing_permit_expired");
+  if (!payload.sub || !payload.reservation_id || !payload.jti || Number(payload.credits || 0) !== 1) throw new Error("billing_permit_fields_invalid");
+  return payload;
+}
+
+async function billingGatewayRequest(env, path, payload) {
+  const base = String(env.BILLING_GATEWAY_URL || "").replace(/\/$/, "");
+  if (!base) throw new Error("billing_gateway_missing");
+  const response = await fetch(base + path, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-mg4k-worker-secret": String(env.BILLING_WORKER_SHARED_SECRET || ""),
+    },
+    body: JSON.stringify(payload),
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(body.error || ("billing_gateway_http_" + response.status));
+  return body;
+}
+
+async function settleBilling(env, job, { resultAvailable = false, hardSystemFailure = false } = {}) {
+  if (!billingEnabled(env) || !job?.billing_reservation_id) return null;
+  try {
+    const outcome = await billingGatewayRequest(env, "/api/internal/generation/settle", {
+      reservation_id: job.billing_reservation_id,
+      job_id: job.id,
+      provider: job.provider_cost_provider || "openrouter",
+      provider_request_count: Number(job.provider_request_count || 0),
+      provider_cost_usd: job.provider_cost_usd ?? null,
+      provider_cost_complete: Boolean(job.provider_cost_complete),
+      result_available: Boolean(resultAvailable || job.result_key),
+      hard_system_failure: Boolean(hardSystemFailure),
+    });
+    job.billing_settlement = outcome.status || null;
+    job.billing_settlement_warning = null;
+    job.billing_settled_at = now();
+    await writeJob(env, job);
+    return outcome;
+  } catch (error) {
+    job.billing_settlement_warning = error?.message || String(error);
+    await writeJob(env, job);
+    console.warn("MG4K_BILLING_SETTLEMENT_WARNING", job.id, job.billing_settlement_warning);
+    return null;
+  }
+}
+
 async function readSession(env, id) {
   if (!id) return null;
   const raw = await env.SESSION_STATE_R7.get(`session:${id}`);
@@ -250,6 +355,10 @@ function publicJob(job) {
     provider_request_count: Number(job.provider_request_count || 0),
     provider_cost_complete: Boolean(job.provider_cost_complete),
     provider_cost_provider: job.provider_cost_provider || null,
+    billing_account_id: job.billing_account_id || null,
+    billing_reservation_id: job.billing_reservation_id || null,
+    billing_settlement: job.billing_settlement || null,
+    billing_settlement_warning: job.billing_settlement_warning || null,
   };
 }
 
@@ -698,6 +807,13 @@ async function syncJobFromContainer(env, job, origin) {
     }
   }
 
+  if (job.billing_reservation_id && ["review", "done", "failed", "skipped"].includes(String(job.status || ""))) {
+    await settleBilling(env, job, {
+      resultAvailable: Boolean(job.result_key || state.result_available),
+      hardSystemFailure: String(job.status || "") === "failed",
+    });
+  }
+
   return job;
 }
 
@@ -747,6 +863,19 @@ async function handleApi(request, env, ctx, url) {
       persistent_user_database: false,
       session_store: "Cloudflare KV with sliding TTL",
       image_buffer: "private Cloudflare R2, session-scoped",
+      billing_mode: billingMode(env),
+      billing_enabled: billingEnabled(env),
+    });
+  }
+
+  if (path === "/api/billing/config" && method === "GET") {
+    const enabled = billingEnabled(env);
+    return json({
+      enabled,
+      mode: billingMode(env),
+      gateway_url: enabled ? String(env.BILLING_GATEWAY_URL || "").replace(/\/$/, "") : null,
+      credits_per_generation: 1,
+      trial_credits: 2,
     });
   }
 
@@ -792,6 +921,18 @@ async function handleApi(request, env, ctx, url) {
     const session = await authorizeSession(request, url, env);
     if (!session) return json({ error: "session_required" }, 403);
 
+    const commercial = billingEnabled(env);
+    let billingPermitToken = "";
+    let billingPermit = null;
+    if (commercial) {
+      billingPermitToken = request.headers.get("x-mg4k-entitlement") || "";
+      try {
+        billingPermit = await verifyBillingPermit(billingPermitToken, env);
+      } catch (error) {
+        return json({ error: error?.message || "billing_permit_required" }, 402);
+      }
+    }
+
     let form;
     try {
       form = await request.formData();
@@ -836,6 +977,19 @@ async function handleApi(request, env, ctx, url) {
       },
     });
 
+    let billingClaim = null;
+    if (commercial) {
+      try {
+        billingClaim = await billingGatewayRequest(env, "/api/internal/generation/claim", {
+          permit: billingPermitToken,
+          job_id: id,
+        });
+      } catch (error) {
+        try { await env.TEMP_BUFFER_R7.delete(sourceKey); } catch {}
+        return json({ error: error?.message || "billing_permit_claim_failed" }, 402);
+      }
+    }
+
     const job = {
       id,
       session_id: session.id,
@@ -855,6 +1009,10 @@ async function handleApi(request, env, ctx, url) {
       error: null,
       validation: null,
       decision: null,
+      billing_account_id: commercial ? String(billingClaim?.account_id || billingPermit?.sub || "") : null,
+      billing_reservation_id: commercial ? String(billingClaim?.reservation_id || billingPermit?.reservation_id || "") : null,
+      billing_permit_jti: commercial ? String(billingPermit?.jti || "") : null,
+      billing_settlement: commercial ? "reserved" : null,
     };
 
     await writeJob(env, job);
@@ -877,6 +1035,7 @@ async function handleApi(request, env, ctx, url) {
         current.stage = "container_dispatch_failed";
         current.error = error?.message || String(error);
         await writeJob(env, current);
+        await settleBilling(env, current, { resultAvailable: false, hardSystemFailure: true });
       }
     }
 
@@ -1164,7 +1323,21 @@ async function handleApi(request, env, ctx, url) {
       job.progress = Math.max(0, Math.min(100, Number(body.progress ?? (job.status === "failed" ? job.progress : 100))));
       job.error = body.error || null;
       job.validation = body.validation || job.validation || null;
+      const providerCost = sanitizeProviderCostSummary(body.provider_cost);
+      if (providerCost) {
+        job.provider_cost_usd = providerCost.cost_usd;
+        job.provider_request_count = providerCost.request_count;
+        job.provider_cost_complete = providerCost.complete;
+        job.provider_cost_provider = providerCost.provider;
+        job.provider_cost_recorded_at = now();
+      }
       await writeJob(env, job);
+      if (job.billing_reservation_id && ["failed", "skipped", "done"].includes(job.status)) {
+        await settleBilling(env, job, {
+          resultAvailable: Boolean(job.result_key),
+          hardSystemFailure: job.status === "failed",
+        });
+      }
       return json({ ok: true, job: publicJob(job) });
     }
 
@@ -1235,6 +1408,9 @@ async function handleApi(request, env, ctx, url) {
     }
     await writeJob(env, job);
     await writeSession(env, session);
+    if (job.billing_reservation_id) {
+      await settleBilling(env, job, { resultAvailable: true, hardSystemFailure: false });
+    }
 
     return json({ ok: true, job: publicJob(job) });
   }

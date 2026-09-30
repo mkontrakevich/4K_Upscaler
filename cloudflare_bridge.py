@@ -317,7 +317,13 @@ def upload_candidate(
     r.raise_for_status()
 
 
-def post_failure(token: str, job_id: str, error: str, stage: str = "failed") -> None:
+def post_failure(
+    token: str,
+    job_id: str,
+    error: str,
+    stage: str = "failed",
+    cost_summary: dict[str, Any] | None = None,
+) -> None:
     try:
         r = api(
             "POST",
@@ -327,6 +333,7 @@ def post_failure(token: str, job_id: str, error: str, stage: str = "failed") -> 
                 "status": "failed",
                 "stage": stage,
                 "error": error[:1800],
+                "provider_cost": cost_summary,
             },
         )
         r.raise_for_status()
@@ -458,7 +465,7 @@ def process_job(token: str, job: dict[str, Any]) -> None:
 
     except Exception as exc:
         detail = f"{type(exc).__name__}: {exc}"
-        post_failure(token, job_id, detail)
+        post_failure(token, job_id, detail, cost_summary=generation_cost_summary(source_dir))
         diagnostic = {
             "job_id": job_id,
             "stage": "cloud_bridge",

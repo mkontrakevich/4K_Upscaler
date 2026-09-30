@@ -382,8 +382,13 @@ def _process_job(job_id: str) -> None:
         diag_path.parent.mkdir(parents=True, exist_ok=True)
         diag_path.write_text(json.dumps(diagnostic, ensure_ascii=False, indent=2), encoding="utf-8")
         tail = _safe_pipeline_tail(log_file)
+        cost_summary = bridge.generation_cost_summary(source_dir)
         _set_state(
             job_id,
+            provider_cost_usd=cost_summary.get("cost_usd"),
+            provider_request_count=int(cost_summary.get("request_count", 0) or 0),
+            provider_cost_complete=bool(cost_summary.get("complete")),
+            provider_cost_provider=str(cost_summary.get("provider") or "openrouter"),
             status="failed",
             stage="container_processing_failed",
             error=detail[:1800],
