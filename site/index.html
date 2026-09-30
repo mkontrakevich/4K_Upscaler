@@ -24,6 +24,10 @@ body{overflow-x:hidden}
 .brand-copy strong{font-size:25px;white-space:nowrap}
 .brand-copy span{color:var(--cyan);letter-spacing:.12em;font-size:12px;white-space:nowrap}
 .version{font:11px Consolas,monospace;color:var(--muted);border:1px solid var(--line);padding:7px 10px;border-radius:6px;white-space:nowrap}
+.top-actions{display:flex;align-items:center;gap:8px}
+.billing-chip{min-height:34px;padding:0 12px;border:1px solid #2b738e;border-radius:7px;background:#0a2432;color:#d6f6ff;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap}
+.billing-chip strong{color:#52d9ff}
+.billing-chip[hidden]{display:none!important}
 .mode-switch{display:flex;border:1px solid #35536b;border-radius:8px;overflow:hidden}
 .mode-switch button{min-width:190px;padding:10px 18px;border:0;border-right:1px solid #35536b;background:#0a1826;color:#8fa5b8;cursor:pointer}
 .mode-switch button:last-child{border-right:0}
@@ -97,7 +101,7 @@ body{overflow-x:hidden}
 .actions .save-result{background:#0d2734;border-color:#2b738e;color:#d6f6ff}
 .analysis-panel{display:none}
 .analysis-panel.visible{display:block}
-.analysis-summary{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;padding:10px}
+.analysis-summary{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;padding:10px}
 .stat{border:1px solid #294054;border-radius:7px;background:#071522;padding:8px 9px;min-width:0}
 .stat small{display:block;font-size:8px;letter-spacing:.08em;color:#71899c;margin-bottom:4px}
 .stat strong{display:block;font:11px Consolas,monospace;color:#dbe7f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -118,6 +122,25 @@ body{overflow-x:hidden}
 .log-lines{padding:8px 12px;min-height:90px;max-height:220px;overflow:auto;font:10px/1.55 Consolas,monospace;color:#9fb4c5}
 .log-line{display:grid;grid-template-columns:74px 80px 1fr;gap:8px}
 .log-line .ok{color:#42d680}.log-line .err{color:#ff6576}.log-line .info{color:#21c9f6}.log-line .warn{color:#ffb42c}
+.billing-dialog{width:min(620px,calc(100vw - 24px));max-height:88vh;border:1px solid #35536b;border-radius:12px;padding:0;background:#071421;color:#eef5ff;box-shadow:0 24px 90px rgba(0,0,0,.55)}
+.billing-dialog::backdrop{background:rgba(0,0,0,.72)}
+.billing-shell{display:grid;grid-template-rows:auto minmax(0,1fr);max-height:88vh}
+.billing-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 15px;border-bottom:1px solid #294054;background:#0a1b2a}
+.billing-head div{display:grid;gap:2px}.billing-head strong{font-size:13px;letter-spacing:.06em}.billing-head span{font-size:10px;color:#8299ad}
+.billing-body{padding:15px;overflow:auto}
+.billing-login{display:grid;gap:10px}.billing-login label{display:grid;gap:6px;font-size:11px;color:#9db1c3}
+.billing-login input{height:42px;border:1px solid #35536b;border-radius:7px;background:#06111c;color:#eef5ff;padding:0 11px;outline:none}
+.billing-login input:focus{border-color:#16c5f4}
+.billing-note{font-size:10px;line-height:1.45;color:#8299ad}
+.billing-account-card{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:12px;border:1px solid #294054;border-radius:9px;background:#081725}
+.billing-balance small{display:block;color:#8299ad;font-size:9px;letter-spacing:.08em}.billing-balance strong{display:block;font:26px Consolas,monospace;color:#5ae1ff;margin-top:3px}
+.billing-email{font-size:10px;color:#9eb1c2;margin-top:4px}
+.billing-packs{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}
+.billing-pack{display:grid;gap:5px;padding:12px 10px;border:1px solid #365369;border-radius:8px;background:#091a28;color:#eef5ff;cursor:pointer;text-align:left}
+.billing-pack:hover{border-color:#16c5f4;background:#0b2434}.billing-pack strong{font-size:12px}.billing-pack span{font:12px Consolas,monospace;color:#54d8fa}.billing-pack small{font-size:9px;color:#8299ad}
+.billing-actions{display:flex;justify-content:space-between;gap:8px;margin-top:12px;flex-wrap:wrap}
+.billing-status{margin-top:10px;padding:9px 10px;border:1px solid #294054;border-radius:7px;background:#06111c;color:#94a9ba;font-size:10px;line-height:1.45}
+@media(max-width:700px){.billing-packs{grid-template-columns:1fr}.top-actions{gap:4px}.billing-chip{padding:0 8px;font-size:9px}}
 .quick-preview{width:100vw;height:100vh;max-width:none;max-height:none;border:0;padding:0;margin:0;background:#010508;color:#eef5ff;overflow:hidden}
 .quick-preview::backdrop{background:#000}
 .quick-preview-shell{width:100vw;height:100vh;display:grid;grid-template-rows:auto minmax(0,1fr) auto;background:#010508}
@@ -170,6 +193,7 @@ body{overflow-x:hidden}
   .brand-copy{display:grid;gap:1px}
   .brand-copy strong{font-size:19px;line-height:1}.brand-copy span{font-size:8px}
   .version{font-size:8px;padding:5px 6px}
+  .billing-chip{min-height:30px}
   .mode-switch{display:none}
   .status-strip{grid-template-columns:1fr;padding:8px 9px;gap:6px}
   .current-file,.progress-box{display:none}
@@ -209,7 +233,10 @@ body{overflow-x:hidden}
       <button type="button" id="mode-safe" disabled><strong>SAFE</strong><span>локальный upscale</span></button>
       <button type="button" id="mode-generative" class="active"><strong>GENERATIVE</strong><span>Nano Banana Pro</span></button>
     </div>
-    <div class="version">CORE 8.8.1 R4 · CLOUD UI R9.7</div>
+    <div class="top-actions">
+      <button id="billing-chip" class="billing-chip" type="button" hidden>Кредиты: <strong id="billing-chip-balance">—</strong></button>
+      <div class="version">CORE 8.8.1 R4 · CLOUD UI R9.8</div>
+    </div>
   </header>
 
   <section class="status-strip">
@@ -298,6 +325,7 @@ body{overflow-x:hidden}
       <div class="stat"><small>РЕШЕНИЕ</small><strong id="analysis-decision">—</strong></div>
       <div class="stat"><small>ARCH LOCK</small><strong id="analysis-validation">—</strong></div>
       <div class="stat"><small>ПРОГРЕСС</small><strong id="analysis-progress">—</strong></div>
+      <div class="stat"><small>OPENROUTER COST</small><strong id="analysis-cost">—</strong></div>
     </div>
     <div class="analysis-grid">
       <div class="checks">
@@ -328,6 +356,41 @@ body{overflow-x:hidden}
   <button class="btn primary" id="mobile-process" type="button" disabled>Обработка</button>
   <button class="btn ghost" id="mobile-inspect" type="button" disabled>Инспекция</button>
 </div>
+
+<dialog id="billing-dialog" class="billing-dialog">
+  <div class="billing-shell">
+    <header class="billing-head">
+      <div><strong>MG 4K · АККАУНТ И КРЕДИТЫ</strong><span id="billing-mode-label">коммерческий контур</span></div>
+      <button id="billing-close" class="quick-preview-close" type="button" aria-label="Закрыть">×</button>
+    </header>
+    <div class="billing-body">
+      <div id="billing-login" class="billing-login">
+        <label>Email
+          <input id="billing-email" type="email" autocomplete="email" placeholder="name@example.com">
+        </label>
+        <button id="billing-login-button" class="btn primary" type="button">Получить ссылку для входа</button>
+        <div class="billing-note">После подтверждения нового аккаунта начисляются 2 бесплатных кредита. Банковские реквизиты MG 4K не хранит.</div>
+      </div>
+      <div id="billing-account-panel" hidden>
+        <div class="billing-account-card">
+          <div class="billing-balance">
+            <small>ДОСТУПНО</small>
+            <strong><span id="billing-balance">0</span> кр.</strong>
+            <div id="billing-email-masked" class="billing-email">—</div>
+          </div>
+          <button id="billing-refresh" class="btn ghost" type="button">Обновить</button>
+        </div>
+        <div class="section-head" style="margin-top:12px;border:1px solid #294054;border-radius:7px"><strong>ПОПОЛНИТЬ</strong><span>пакеты генераций</span></div>
+        <div id="billing-packs" class="billing-packs"></div>
+        <div class="billing-actions">
+          <span class="billing-note">1 генерация = 1 кредит · просмотр и скачивание RESULT бесплатно</span>
+          <button id="billing-logout" class="btn ghost" type="button">Выйти</button>
+        </div>
+      </div>
+      <div id="billing-status" class="billing-status">Платёжный контур загружается…</div>
+    </div>
+  </div>
+</dialog>
 
 <dialog id="quick-preview" class="quick-preview" data-preview-engine="native-image-v1">
   <div class="quick-preview-shell">
@@ -405,6 +468,8 @@ let currentFile=null,currentObjectUrl=null,currentJob=null,cloudSession=null,ses
 let resultObjectUrl=null;
 let sourceItems=[],currentSourceIndex=-1;
 let latestJobState=null,lastStatusSignature="";
+const BILLING_SESSION_KEY="mg4k.billingSession.v1";
+const billing={config:null,gatewayConfig:null,sessionToken:localStorage.getItem(BILLING_SESSION_KEY)||"",account:null,lastRefresh:0};
 const HISTORY_KEY="mg4k.sessionHistory.v1";
 const HISTORY_TTL_MS=10*60*1000;
 
@@ -424,7 +489,7 @@ function logExportText(){
   const item=currentSourceItem();
   const header=[
     "MG 4K / ARCH LOCK — PROCESS LOG",
-    "UI: CORE 8.8.1 R4 · CLOUD UI R9.7",
+    "UI: CORE 8.8.1 R4 · CLOUD UI R9.8",
     "Processor build: "+(latestJobState?.container_build_id||"—"),
     "Exported: "+new Date().toISOString(),
     "Job: "+(currentJob?.id||"—"),
@@ -439,6 +504,10 @@ function logExportText(){
     "Result sync warning: "+(latestJobState?.result_sync_warning||"—"),
     "Result bytes: "+(latestJobState?.result_bytes||0),
     "Result content type: "+(latestJobState?.result_content_type||"—"),
+    "OpenRouter cost USD: "+(latestJobState?.provider_cost_usd??"—"),
+    "OpenRouter requests: "+(latestJobState?.provider_request_count??0),
+    "Billing reservation: "+(latestJobState?.billing_reservation_id||"—"),
+    "Billing settlement: "+(latestJobState?.billing_settlement||"—"),
     "Locks: "+JSON.stringify(locks),
     "",
     "PROCESS LOG"
@@ -684,7 +753,7 @@ function flattenChecks(validation){
 function validationLabel(v){if(!v)return"WAIT";if(v.passed===true)return"PASSED";if(v.decision)return String(v.decision).toUpperCase();if((v.mandatory_failures||[]).length)return"FAILED";return"REVIEW"}
 function renderValidation(state){
   const v=state?.validation||null;$("analysis-panel").classList.add("visible");
-  $("analysis-job").textContent=currentJob?.id?.slice(0,8)||"—";$("analysis-status").textContent=String(state?.status||"—").toUpperCase();$("analysis-decision").textContent=String(state?.decision||v?.decision||"—").toUpperCase();$("analysis-validation").textContent=validationLabel(v);$("analysis-progress").textContent=Number(state?.progress||0)+"%";
+  $("analysis-job").textContent=currentJob?.id?.slice(0,8)||"—";$("analysis-status").textContent=String(state?.status||"—").toUpperCase();$("analysis-decision").textContent=String(state?.decision||v?.decision||"—").toUpperCase();$("analysis-validation").textContent=validationLabel(v);$("analysis-progress").textContent=Number(state?.progress||0)+"%";$("analysis-cost").textContent=state?.provider_cost_usd!=null?"$"+Number(state.provider_cost_usd).toFixed(4)+" · "+Number(state.provider_request_count||0)+" req":"—";
   $("analysis-caption").textContent=v?"полный отчёт текущего кандидата":"ожидает данных валидации";
   const checks=flattenChecks(v);
   $("check-list").innerHTML=checks.length?checks.map(x=>'<div class="check '+x.state+'"><i></i><span>'+escapeHtml(x.key)+'</span><code>'+escapeHtml(String(x.value))+'</code></div>').join(""):'<div class="check warn"><i></i><span>Детальные проверки ещё не получены</span><code>WAIT</code></div>';
@@ -720,6 +789,7 @@ function renderJobState(state){
   setProgress(p,p+"%");
   if(state.validation)renderValidation(state);
   updateQueueNavigation();
+  if(billing.config?.enabled&&["review","done","failed","skipped"].includes(String(state.status||"")))billingRefreshAccount().catch(()=>{});
 
   if(state.status==="review"){
     if(!state.result_available){
@@ -942,6 +1012,142 @@ async function replaceCurrentSource(file,source="Системный файлов
   return true;
 }
 
+// ----- Account / credits -----------------------------------------------------
+function billingSetStatus(text){const el=$("billing-status");if(el)el.textContent=text}
+function billingHeaders(extra={}){return billing.sessionToken?{...extra,Authorization:"Bearer "+billing.sessionToken}:extra}
+async function billingApi(path,options={}){
+  const base=String(billing.config?.gateway_url||"").replace(/\/$/,"");
+  if(!base)throw new Error("billing_gateway_unavailable");
+  const headers=billingHeaders(options.headers||{});
+  const response=await fetch(base+path,{...options,headers});
+  const data=await response.json().catch(()=>({}));
+  if(!response.ok){const error=new Error(data.error||("billing_http_"+response.status));error.status=response.status;throw error}
+  return data;
+}
+function renderBillingUi(){
+  const enabled=Boolean(billing.config?.enabled);
+  $("billing-chip").hidden=!enabled;
+  if(!enabled)return;
+  $("billing-mode-label").textContent=billing.config.mode==="sandbox"?"SANDBOX · БЕЗ РЕАЛЬНЫХ ДЕНЕГ":"LIVE · CLOUDPAYMENTS";
+  const logged=Boolean(billing.account&&billing.sessionToken);
+  $("billing-login").hidden=logged;
+  $("billing-account-panel").hidden=!logged;
+  $("billing-chip-balance").textContent=logged?String(billing.account.balance):"Войти";
+  if(logged){
+    $("billing-balance").textContent=String(billing.account.balance);
+    $("billing-email-masked").textContent=billing.account.email_masked||"аккаунт";
+  }
+}
+async function billingRefreshAccount(){
+  if(!billing.config?.enabled||!billing.sessionToken){billing.account=null;renderBillingUi();return null}
+  try{
+    billing.account=await billingApi("/api/account",{method:"GET"});
+    billing.lastRefresh=Date.now();renderBillingUi();return billing.account;
+  }catch(error){
+    if(error.status===401){billing.sessionToken="";billing.account=null;localStorage.removeItem(BILLING_SESSION_KEY)}
+    renderBillingUi();throw error;
+  }
+}
+async function billingLoadPacks(){
+  if(!billing.config?.enabled)return;
+  try{
+    billing.gatewayConfig=await billingApi("/api/config",{method:"GET",headers:{}});
+    const packs=Array.isArray(billing.gatewayConfig?.packs)?billing.gatewayConfig.packs:[];
+    $("billing-packs").innerHTML=packs.filter(p=>p.enabled!==false).map(p=>
+      '<button type="button" class="billing-pack" data-pack="'+escapeHtml(p.code)+'"><strong>'+escapeHtml(String(p.credits))+' кредитов</strong><span>'+escapeHtml(String(p.price_rub))+' ₽</span><small>'+Math.round(Number(p.price_rub)/Math.max(1,Number(p.credits)))+' ₽ / генерация</small></button>'
+    ).join("")||'<div class="billing-note">Пакеты пока недоступны.</div>';
+    document.querySelectorAll(".billing-pack[data-pack]").forEach(btn=>btn.addEventListener("click",()=>billingStartCheckout(btn.dataset.pack)));
+  }catch(error){billingSetStatus("Не удалось загрузить пакеты: "+error.message)}
+}
+async function billingOpen(){
+  if(!billing.config?.enabled)return;
+  $("billing-dialog").showModal();renderBillingUi();
+  await billingLoadPacks();
+  if(billing.sessionToken)billingRefreshAccount().catch(()=>{});
+}
+function billingClose(){if($("billing-dialog").open)$("billing-dialog").close()}
+async function billingRequestLogin(){
+  const email=$("billing-email").value.trim();
+  if(!email){billingSetStatus("Введите email.");return}
+  $("billing-login-button").disabled=true;
+  try{
+    const data=await billingApi("/api/auth/request-link",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({email,return_url:location.origin+location.pathname})});
+    if(data.sandbox&&data.sandbox_verify_token){
+      const verified=await billingApi("/api/auth/verify",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({token:data.sandbox_verify_token})});
+      billing.sessionToken=verified.session_token;localStorage.setItem(BILLING_SESSION_KEY,billing.sessionToken);
+      await billingRefreshAccount();billingSetStatus("Sandbox-аккаунт подтверждён. Бесплатные кредиты начислены.");
+    }else billingSetStatus("Ссылка отправлена. Откройте её на этом устройстве для входа.");
+  }catch(error){billingSetStatus("Вход: "+error.message)}
+  finally{$("billing-login-button").disabled=false}
+}
+async function billingConsumeHashSession(){
+  const hash=new URLSearchParams(location.hash.replace(/^#/,""));
+  const token=hash.get("billing_session");
+  if(!token)return;
+  billing.sessionToken=token;localStorage.setItem(BILLING_SESSION_KEY,token);
+  history.replaceState(null,"",location.pathname+location.search);
+}
+function loadCloudPaymentsWidget(){
+  if(window.cp?.CloudPayments)return Promise.resolve();
+  if(window.__mg4kCpPromise)return window.__mg4kCpPromise;
+  window.__mg4kCpPromise=new Promise((resolve,reject)=>{
+    const s=document.createElement("script");s.src="https://widget.cloudpayments.ru/bundles/cloudpayments.js";s.async=true;
+    s.onload=()=>resolve();s.onerror=()=>reject(new Error("cloudpayments_widget_load_failed"));document.head.appendChild(s);
+  });
+  return window.__mg4kCpPromise;
+}
+async function billingStartCheckout(packCode){
+  if(!billing.sessionToken){billingSetStatus("Сначала войдите.");return}
+  try{
+    const checkout=await billingApi("/api/billing/checkout",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({pack_code:packCode})});
+    if(checkout.sandbox){
+      if(!confirm("SANDBOX: тестово начислить пакет без реального платежа?"))return;
+      await billingApi("/api/billing/sandbox/complete",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({order_id:checkout.order_id})});
+      await billingRefreshAccount();billingSetStatus("Тестовое пополнение выполнено. Реальные деньги не списывались.");return;
+    }
+    await loadCloudPaymentsWidget();
+    billingSetStatus("Открываю защищённую форму CloudPayments…");
+    const widget=new window.cp.CloudPayments();
+    widget.start(checkout.intent,async()=>{
+      billingSetStatus("Платёж принят CloudPayments. Жду подтверждение webhook…");
+      setTimeout(()=>billingRefreshAccount().catch(()=>{}),1600);
+      setTimeout(()=>billingRefreshAccount().catch(()=>{}),4500);
+    },reason=>billingSetStatus("Платёж не завершён: "+String(reason||"отменён")));
+  }catch(error){billingSetStatus("Пополнение: "+error.message)}
+}
+async function billingAcquirePermit(){
+  if(!billing.config?.enabled)return null;
+  if(!billing.sessionToken){
+    await billingOpen();throw new Error("Войдите в аккаунт для запуска генерации.");
+  }
+  try{
+    const permit=await billingApi("/api/generation/permit",{method:"POST",headers:{"content-type":"application/json"},body:"{}"});
+    await billingRefreshAccount().catch(()=>{});
+    return permit.permit;
+  }catch(error){
+    if(error.status===402){await billingOpen();billingSetStatus("Недостаточно кредитов. Выберите пакет пополнения.")}
+    throw error;
+  }
+}
+async function initBillingUi(){
+  await billingConsumeHashSession();
+  try{
+    const r=await fetch("/api/billing/config",{cache:"no-store"});
+    billing.config=await r.json();
+  }catch{billing.config={enabled:false,mode:"off",gateway_url:null}}
+  renderBillingUi();
+  if(billing.config?.enabled){
+    billingSetStatus(billing.config.mode==="sandbox"?"Sandbox активен: можно проверить полный кредитный сценарий без оплаты.":"Коммерческий контур активен.");
+    if(billing.sessionToken)await billingRefreshAccount().catch(()=>{});
+  }
+}
+$("billing-chip").addEventListener("click",billingOpen);
+$("billing-close").addEventListener("click",billingClose);
+$("billing-dialog").addEventListener("cancel",event=>{event.preventDefault();billingClose()});
+$("billing-login-button").addEventListener("click",billingRequestLogin);
+$("billing-refresh").addEventListener("click",()=>billingRefreshAccount().catch(error=>billingSetStatus(error.message)));
+$("billing-logout").addEventListener("click",()=>{billing.sessionToken="";billing.account=null;localStorage.removeItem(BILLING_SESSION_KEY);renderBillingUi();billingSetStatus("Вы вышли из аккаунта.");});
+
 function safeResultBaseName(name){
   return String(name||"result")
     .replace(/\.[^.]+$/,"")
@@ -1010,6 +1216,9 @@ async function prepareJob(forceNew=false){
   if(forceNew&&!(await releaseReviewForRegeneration()))return;
   if(!confirmPaidGeneration())return;
 
+  let billingPermit=null;
+  try{billingPermit=await billingAcquirePermit()}catch(error){setStatus("Генерация не запущена: "+error.message,"warn");return}
+
   currentJob=null;latestJobState=null;resetResult();setReviewActions();
   $("action-process").disabled=true;$("mobile-process").disabled=true;$("action-process").textContent="Загрузка…";$("mobile-process").textContent="Загрузка…";
   setStatus("Передаю исходник и LOCK-профиль во временную очередь Cloudflare…");
@@ -1017,7 +1226,9 @@ async function prepareJob(forceNew=false){
   const form=new FormData();form.append("file",currentFile,currentFile.name);form.append("locks",JSON.stringify(locks));form.append("mode","generative");
   try{
     const session=await startCloudSession();
-    const r=await fetch("/api/jobs",{method:"POST",headers:{"X-Session-Id":session.id,"X-Session-Token":session.token},body:form});
+    const headers={"X-Session-Id":session.id,"X-Session-Token":session.token};
+    if(billingPermit)headers["X-MG4K-Entitlement"]=billingPermit;
+    const r=await fetch("/api/jobs",{method:"POST",headers,body:form});
     const d=await r.json().catch(()=>({}));
     if(!r.ok)throw new Error(d.error||"upload_failed");
     currentJob={id:d.id,token:d.token};
@@ -1025,6 +1236,7 @@ async function prepareJob(forceNew=false){
     persistSessionHistory();
     $("action-process").textContent="Обработка…";$("mobile-process").textContent="Обработка";
     setStatus("Задача "+d.id.slice(0,8)+" принята. Облачный processor запускается.","ok");setProgress(d.progress||5,(d.progress||5)+"%");
+    if(billing.config?.enabled)billingRefreshAccount().catch(()=>{});
     clearInterval(jobPollTimer);await pollCurrentJob();jobPollTimer=setInterval(pollCurrentJob,1800);
   }catch(e){
     $("action-process").disabled=false;$("mobile-process").disabled=false;$("action-process").textContent="Запустить / продолжить";$("mobile-process").textContent="Обработка";
@@ -1408,6 +1620,7 @@ document.addEventListener("keydown",event=>{
 
 async function initCloudUi(){
   renderLocks();resetResult();
+  await initBillingUi();
   const restored=await restoreSessionHistory();
   if(restored)return;
   try{
