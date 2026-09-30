@@ -48,3 +48,29 @@ The archive contains only examples/placeholders.
 ## Billing
 
 Customer billing is not enabled in this package yet. The recommended provider-independent architecture is documented in `PAYMENTS_ACCESS_ARCHITECTURE.md`.
+
+
+## Customer billing activation
+
+The archive contains a Russia-first billing gateway and PostgreSQL ledger.
+
+Recommended public topology:
+
+- `4k.kontrakevich.com` — image application / Cloudflare Worker.
+- `pay.kontrakevich.com` — billing gateway deployed on Russian-hosted infrastructure.
+- PostgreSQL for identity/payment/credits — physically hosted in Russia.
+
+Billing is intentionally **OFF by default** in `wrangler.kontrakevich.com.jsonc`.
+
+After the RU gateway, database, CloudPayments merchant and fiscalization are ready:
+
+1. Generate two independent long random secrets:
+   - `BILLING_PERMIT_HMAC_SECRET`
+   - `BILLING_WORKER_SHARED_SECRET`
+2. Configure the same values on the RU billing gateway.
+3. Add the Worker secrets with Wrangler.
+4. Change `BILLING_MODE` from `off` to `sandbox`.
+5. Deploy and test login → 2 free credits → reserve → generation → settlement.
+6. Only after sandbox acceptance and CloudPayments/CloudKassir setup change the gateway and Worker to `live`.
+
+Do not place CloudPayments API Secret, HMAC secrets or OpenRouter credentials in Wrangler vars or Git.

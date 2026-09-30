@@ -3,7 +3,9 @@
   "name": "4k-upscaler",
   "main": "../../src/worker.js",
   "compatibility_date": "2026-09-23",
-  "compatibility_flags": ["nodejs_compat"],
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
   "workers_dev": true,
   "routes": [
     {
@@ -20,7 +22,9 @@
     "run_worker_first": true
   },
   "triggers": {
-    "crons": ["17 * * * *"]
+    "crons": [
+      "17 * * * *"
+    ]
   },
   "containers": [
     {
@@ -41,7 +45,9 @@
   },
   "migrations": [
     {
-      "new_sqlite_classes": ["MG4KProcessor"],
+      "new_sqlite_classes": [
+        "MG4KProcessor"
+      ],
       "tag": "v1"
     }
   ],
@@ -57,5 +63,9 @@
       "bucket_name": "4k-upscaler-temp-buffer-r7"
     }
   ],
-  "upload_source_maps": true
+  "upload_source_maps": true,
+  "vars": {
+    "BILLING_MODE": "off",
+    "BILLING_GATEWAY_URL": "https://pay.kontrakevich.com"
+  }
 }
