@@ -300,3 +300,30 @@ Implemented:
 - OpenRouter usage records include the prompt SHA-256 and prompt character count.
 
 No generation is triggered by editing, saving, applying or deleting a preset.
+
+
+## Additive prompt layer / custom LOCK buttons — R10.0
+
+The prompt console now separates **LOCK constraints** from **creative additions**.
+
+Implemented:
+- dedicated **ADDITIONS** field for requested scene changes/additions;
+- custom user-created **LOCK buttons**: write a prompt fragment, save it as a named button, toggle it on/off;
+- custom button editor and overwrite action;
+- direct delete action on each user-created button;
+- multiple custom LOCK buttons can be active at the same time;
+- buttons persist in browser localStorage and active sets persist per source/session;
+- saved full-profile presets can also remember active custom buttons/additions;
+- visible **FINAL PROMPT** is rebuilt from:
+  1. base reconstruction prompt,
+  2. active custom/additive requests,
+  3. authoritative built-in LOCK profile,
+  4. canvas/safety contract;
+- prompt explicitly states that the built-in LOCK profile overrides conflicting additions;
+- final prompt remains manually editable and the exact visible text is what is forwarded to the generator;
+- no generation is triggered when creating, toggling, editing, overwriting or deleting buttons.
+
+Example:
+- create button “Люди на площади” with prompt fragment `add subtle pedestrians in the plaza`;
+- if PEOPLE / VEHICLES is FREE, the addition is allowed;
+- if PEOPLE / VEHICLES is HARD, the final prompt explicitly keeps the LOCK constraint authoritative.

@@ -2,7 +2,7 @@
 
 Status: **READY / PRODUCTION**
 
-CORE **8.8.1 R4** · CLOUD UI **R9.9** · processor **result-persist-r11b**
+CORE **8.8.1 R4** · CLOUD UI **R10.0** · processor **result-persist-r11b**
 
 Production: https://4k-upscaler.kontrakevich.workers.dev/
 
@@ -19,6 +19,8 @@ Ready scope:
 - editable exact generator prompt shown before launch;
 - LOCK buttons rebuild the prompt in sync mode;
 - user-created prompt presets can be saved, applied and deleted from the control panel;
+- user-created additive LOCK buttons can be built directly from prompt fragments, toggled on/off, edited, overwritten and deleted;
+- ADDITIONS are merged into the visible FINAL PROMPT, while the parameter LOCK profile remains higher priority on conflicts;
 - process diagnostics and regression protection.
 
 Project state: **core product done / production ready**.
