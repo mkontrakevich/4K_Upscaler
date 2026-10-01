@@ -83,6 +83,12 @@ body{overflow-x:hidden}
 .section-head strong{font-size:12px;letter-spacing:.1em}
 .section-head span{font-size:10px;color:var(--muted)}
 .lock-body{padding:10px}
+.scene-analysis-bar{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;margin-bottom:10px;padding:10px 11px;border:1px solid #294054;border-radius:8px;background:#071522}
+.scene-analysis-copy{min-width:0;display:grid;gap:3px}.scene-analysis-copy strong{font-size:10px;letter-spacing:.08em;color:#71dcff}.scene-analysis-copy span{font-size:10px;line-height:1.4;color:#9eb1c2;white-space:normal}
+.scene-analysis-actions{display:flex;align-items:center;gap:7px;flex-wrap:wrap;justify-content:flex-end}
+.scene-analysis-cost{font:9px Consolas,monospace;color:#738a9e}
+.scene-analysis-badge{display:inline-flex;align-items:center;gap:4px;margin-left:6px;padding:2px 5px;border:1px solid #2f647b;border-radius:4px;color:#68d9ff;font:8px Consolas,monospace;vertical-align:middle}
+.scene-analysis-badge.hard{border-color:#7c3540;color:#ffb3bd}.scene-analysis-badge.soft{border-color:#7d611f;color:#ffd171}.scene-analysis-badge.free{border-color:#455d70;color:#c4d5e3}
 .lock-list{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .lock-row{display:grid;grid-template-columns:minmax(120px,1fr) 176px;align-items:center;gap:8px;padding:8px 9px;border:1px solid #263e52;border-radius:7px;background:#091725}
 .lock-name strong{display:block;font-size:12px}
@@ -227,6 +233,7 @@ body{overflow-x:hidden}
   .upload-plus{width:58px;height:58px;margin-top:8px;font-size:31px}
   .meta-row{grid-template-columns:1fr 1fr}
   .lock-list{grid-template-columns:1fr}
+  .scene-analysis-bar{grid-template-columns:1fr}.scene-analysis-actions{justify-content:flex-start}
   .lock-row{grid-template-columns:minmax(0,1fr) 145px;padding:6px}
   .lock-name small{display:none}
   .actions-panel{display:block}
@@ -256,7 +263,7 @@ body{overflow-x:hidden}
     </div>
     <div class="top-actions">
       <button id="billing-chip" class="billing-chip" type="button" hidden>Кредиты: <strong id="billing-chip-balance">—</strong></button>
-      <div class="version">CORE 8.8.1 R4 · CLOUD UI R10.0</div>
+      <div class="version">CORE 8.8.1 R4 · CLOUD UI R10.1</div>
     </div>
   </header>
 
@@ -309,8 +316,19 @@ body{overflow-x:hidden}
   </section>
 
   <section class="lock-panel">
-    <div class="section-head"><strong>LOCK PROFILE</strong><span>настройки перед генерацией · каждый параметр независим</span></div>
+    <div class="section-head"><strong>LOCK PROFILE · AI SCENE ANALYSIS</strong><span>сначала анализ SOURCE → показываются только относящиеся к сцене параметры</span></div>
     <div class="lock-body">
+      <div class="scene-analysis-bar">
+        <div class="scene-analysis-copy">
+          <strong id="scene-analysis-type">AI · ОЖИДАЕТ SOURCE</strong>
+          <span id="scene-analysis-summary">После загрузки изображения ИИ определит тип сцены и предложит только релевантные LOCK-параметры.</span>
+        </div>
+        <div class="scene-analysis-actions">
+          <span id="scene-analysis-cost" class="scene-analysis-cost">—</span>
+          <button class="btn ghost" id="scene-analyze" type="button" disabled>AI-анализ</button>
+          <button class="btn ghost" id="scene-show-all" type="button">Все настройки</button>
+        </div>
+      </div>
       <div class="lock-list" id="lock-list"></div>
       <div class="lock-actions">
         <button class="btn ghost" id="reset-locks" type="button">По умолчанию</button>
@@ -512,19 +530,42 @@ const defaults=[
   {id:"camera",name:"Камера",hint:"ракурс · перспектива · фокус",level:"hard"},
   {id:"geometry",name:"Геометрия",hint:"объём · пропорции · силуэт",level:"hard"},
   {id:"architecture",name:"Архитектура",hint:"фасад · проёмы · конструкция",level:"hard"},
-  {id:"textures",name:"Текстуры",hint:"идентичность материалов",level:"hard"},
+  {id:"textures",name:"Материалы / текстуры",hint:"идентичность · отделка · масштаб",level:"hard"},
   {id:"vegetation",name:"Озеленение",hint:"деревья · кустарники · газон",level:"hard"},
-  {id:"people_vehicles",name:"Люди / транспорт",hint:"люди · машины · малые объекты",level:"hard"},
+  {id:"people_vehicles",name:"Люди / транспорт",hint:"люди · машины · положение",level:"hard"},
   {id:"lighting",name:"Освещение",hint:"экспозиция · световой рисунок",level:"soft"},
   {id:"sky",name:"Небо / облака",hint:"погода · облачность · атмосфера",level:"soft"},
-  {id:"water",name:"Вода / отражения",hint:"вода · стекло · отражения · тени",level:"soft"}
+  {id:"water",name:"Вода / отражения",hint:"вода · отражения · тени",level:"soft"}
 ];
+const extendedLocks=[
+  {id:"composition",name:"Композиция",hint:"кадр · баланс · положение объекта",level:"hard",subject:"composition, subject placement, framing balance, negative space and visual hierarchy"},
+  {id:"facade_details",name:"Детали фасада",hint:"карнизы · стыки · декор · ограждения",level:"hard",subject:"facade micro-elements, cornices, joints, railings and decorative details"},
+  {id:"text_signage",name:"Текст / вывески",hint:"буквы · цифры · логотипы · маркировка",level:"hard",subject:"visible letters, numerals, logos, signage, markings and readable symbols"},
+  {id:"weather",name:"Погода",hint:"дождь · снег · туман · дымка",level:"soft",subject:"weather state including rain, snow, fog, haze and atmospheric conditions"},
+  {id:"ground",name:"Покрытие / земля",hint:"асфальт · плитка · бордюры · грунт",level:"hard",subject:"ground surfaces, paving, asphalt, soil, curbs, paths and their boundaries"},
+  {id:"glass_reflections",name:"Стекло / отражения",hint:"остекление · прозрачность · рефлексы",level:"soft",subject:"glazing, transparent surfaces, reflections and interior/exterior visibility through glass"},
+  {id:"faces_identity",name:"Лица / идентичность",hint:"черты лица · возраст · выражение",level:"hard",subject:"recognizable face identity, facial geometry, age cues and expression"},
+  {id:"pose_body",name:"Поза / тело",hint:"анатомия · руки · жест · силуэт",level:"hard",subject:"body pose, anatomy, hands, gesture, silhouette and proportions"},
+  {id:"clothing",name:"Одежда",hint:"крой · цвет · логотипы · аксессуары",level:"hard",subject:"garments, colors, cut, logos, accessories and fabric identity"},
+  {id:"interior",name:"Интерьер",hint:"планировка · стены · потолок · встроенные элементы",level:"hard",subject:"room layout, walls, ceilings, floor, built-ins and spatial identity"},
+  {id:"furniture",name:"Мебель",hint:"количество · положение · форма · отделка",level:"hard",subject:"furniture count, placement, dimensions, model and finish"},
+  {id:"products",name:"Предмет / продукт",hint:"форма · упаковка · брендинг · отделка",level:"hard",subject:"hero product identity, packaging, geometry, branding and surface finish"},
+  {id:"small_objects",name:"Малые объекты",hint:"реквизит · светильники · МАФ · детали",level:"soft",subject:"secondary props, lamps, signs, street furniture and small scene objects"},
+  {id:"color_palette",name:"Цветовая палитра",hint:"основные цвета · ББ · фирменные оттенки",level:"soft",subject:"dominant colors, white balance and brand/product color identity"},
+  {id:"depth_of_field",name:"Глубина резкости",hint:"зона фокуса · размытие · боке",level:"soft",subject:"focus plane, blur distribution, bokeh and optical depth cues"}
+];
+const lockCatalog=[...defaults,...extendedLocks];
+const lockCatalogById=Object.fromEntries(lockCatalog.map(item=>[item.id,item]));
 const $=id=>document.getElementById(id);
-let locks=JSON.parse(localStorage.getItem("mg4k.lockProfile")||"null")||Object.fromEntries(defaults.map(x=>[x.id,x.level]));
+const storedLocks=JSON.parse(localStorage.getItem("mg4k.lockProfile")||"null")||{};
+let locks=Object.fromEntries(lockCatalog.map(item=>[item.id,storedLocks[item.id]||item.level]));
 let currentFile=null,currentObjectUrl=null,currentJob=null,cloudSession=null,sessionStartPromise=null,heartbeatTimer=null,jobPollTimer=null;
 let resultObjectUrl=null;
 let sourceItems=[],currentSourceIndex=-1;
 let latestJobState=null,lastStatusSignature="";
+let sceneAnalysis=null;
+let sceneAnalysisBusy=false;
+let showAllLocks=false;
 const PROMPT_PRESETS_KEY="mg4k.promptPresets.v1";
 const ACTIVE_PROMPT_PRESET_KEY="mg4k.activePromptPreset.v1";
 const CUSTOM_LOCK_BUTTONS_KEY="mg4k.customLockButtons.v1";
@@ -558,7 +599,7 @@ function logExportText(){
   const item=currentSourceItem();
   const header=[
     "MG 4K / ARCH LOCK — PROCESS LOG",
-    "UI: CORE 8.8.1 R4 · CLOUD UI R10.0",
+    "UI: CORE 8.8.1 R4 · CLOUD UI R10.1",
     "Processor build: "+(latestJobState?.container_build_id||"—"),
     "Exported: "+new Date().toISOString(),
     "Job: "+(currentJob?.id||"—"),
@@ -577,6 +618,10 @@ function logExportText(){
     "OpenRouter requests: "+(latestJobState?.provider_request_count??0),
     "Billing reservation: "+(latestJobState?.billing_reservation_id||"—"),
     "Billing settlement: "+(latestJobState?.billing_settlement||"—"),
+    "Scene analysis: "+(sceneAnalysis?.scene_type||"—"),
+    "Scene analysis model: "+(sceneAnalysis?.model||"—"),
+    "Scene analysis cost USD: "+(sceneAnalysis?.analysis_cost_usd??"—"),
+    "Scene relevant locks: "+JSON.stringify((sceneAnalysis?.relevant_locks||[]).map(x=>({id:x.id,level:x.recommended_level,confidence:x.confidence}))),
     "Locks: "+JSON.stringify(locks),
     "Prompt mode: "+promptMode,
     "Prompt preset: "+activePromptPresetId,
@@ -723,6 +768,26 @@ function activeCustomPromptFragments(){
     .map(item=>({name:item.name,prompt:String(item.prompt||"").trim()}))
     .filter(item=>item.prompt);
 }
+function relevantLockIds(){
+  const ids=(sceneAnalysis?.relevant_locks||[]).map(item=>item.id).filter(id=>lockCatalogById[id]);
+  return ids.length?ids:defaults.map(item=>item.id);
+}
+function visibleLockItems(){
+  if(showAllLocks)return lockCatalog;
+  const visible=new Set(relevantLockIds());
+  return lockCatalog.filter(item=>visible.has(item.id));
+}
+function promptLockItems(){
+  return visibleLockItems();
+}
+function lockRule(item,level){
+  const core=PROMPT_LOCK_RULES[item.id];
+  if(core)return {label:core.label,text:core[level]};
+  const subject=item.subject||item.hint||item.name;
+  if(level==="hard")return {label:item.name.toUpperCase(),text:"HARD_LOCK. Preserve "+subject+" exactly. Do not add, remove, replace, move, recolor or reinterpret these elements unless explicitly required by another higher-priority constraint."};
+  if(level==="soft")return {label:item.name.toUpperCase(),text:"SOFT_LOCK. Preserve the recognizable identity and overall structure of "+subject+" while allowing restrained local refinement that does not change factual content."};
+  return {label:item.name.toUpperCase(),text:"FREE. "+subject+" may be interpreted or adjusted for quality and the user's additions, while remaining physically plausible and consistent with all HARD/SOFT locks."};
+}
 function buildPromptFromLocks(){
   const lines=[PROMPT_BASE];
   const custom=activeCustomPromptFragments();
@@ -741,9 +806,10 @@ function buildPromptFromLocks(){
     "ACTIVE USER LOCK PROFILE — HIGHEST-PRIORITY PER-PARAMETER POLICY FOR THIS DONOR REQUEST.",
     "These levels are supplied by the user interface for this exact job. They supersede generic instructions and USER ADDITIONS when there is a conflict."
   );
-  defaults.forEach(item=>{
-    const rule=PROMPT_LOCK_RULES[item.id],level=locks[item.id]||item.level;
-    lines.push("- "+rule.label+" ["+String(level).toUpperCase()+"]: "+rule[level]);
+  promptLockItems().forEach(item=>{
+    const level=locks[item.id]||item.level;
+    const rule=lockRule(item,level);
+    lines.push("- "+rule.label+" ["+String(level).toUpperCase()+"]: "+rule.text);
   });
   lines.push(
     "",
@@ -810,7 +876,7 @@ function renderCustomLocks(){
 }
 function renderPromptPresets(){
   const root=$("prompt-presets");if(!root)return;
-  const all=[{id:"builtin-arch-lock",name:"ARCH LOCK",builtin:true,locks:Object.fromEntries(defaults.map(x=>[x.id,x.level]))},...promptPresets];
+  const all=[{id:"builtin-arch-lock",name:"ARCH LOCK",builtin:true,locks:Object.fromEntries(lockCatalog.map(x=>[x.id,x.level]))},...promptPresets];
   root.innerHTML=all.map(p=>
     '<button class="prompt-preset '+(activePromptPresetId===p.id?"active":"")+'" type="button" data-preset="'+escapeHtml(p.id)+'"><span>'+escapeHtml(p.name)+'</span>'+(p.builtin?'':'<span class="delete" data-delete-preset="'+escapeHtml(p.id)+'" title="Удалить">×</span>')+'</button>'
   ).join("");
@@ -868,7 +934,7 @@ function deleteCustomLock(id){
 
 function applyPromptPreset(id){
   if(id==="builtin-arch-lock"){
-    locks=Object.fromEntries(defaults.map(x=>[x.id,x.level]));localStorage.setItem("mg4k.lockProfile",JSON.stringify(locks));
+    locks=Object.fromEntries(lockCatalog.map(x=>[x.id,x.level]));localStorage.setItem("mg4k.lockProfile",JSON.stringify(locks));
     additionsText="";activeCustomLockIds=[];selectedCustomLockId=null;persistCustomLockButtons();
     const item=currentSourceItem();if(item)item.locks={...locks};
     $("additions-editor").value="";
@@ -901,8 +967,114 @@ function deletePromptPreset(id){
   toast("Пресет удалён.");
 }
 
+function sceneRecommendation(id){
+  return (sceneAnalysis?.relevant_locks||[]).find(item=>item.id===id)||null;
+}
+function renderSceneAnalysis(){
+  const type=$("scene-analysis-type"),summary=$("scene-analysis-summary"),cost=$("scene-analysis-cost");
+  if(!type||!summary||!cost)return;
+  $("scene-analyze").disabled=!currentFile||sceneAnalysisBusy;
+  $("scene-analyze").textContent=sceneAnalysisBusy?"Анализ…":"AI-анализ";
+  $("scene-show-all").textContent=showAllLocks?"Только релевантные":"Все настройки";
+  if(sceneAnalysisBusy){
+    type.textContent="AI · АНАЛИЗ SOURCE";
+    summary.textContent="Определяю тип сцены, важные объекты и релевантные LOCK-параметры…";
+    cost.textContent="OpenRouter vision";
+    return;
+  }
+  if(!sceneAnalysis){
+    type.textContent=currentFile?"AI · ЕЩЁ НЕ АНАЛИЗИРОВАНО":"AI · ОЖИДАЕТ SOURCE";
+    summary.textContent=currentFile?"Можно запустить анализ вручную; для нового SOURCE он запускается автоматически.":"После загрузки изображения ИИ определит тип сцены и предложит только релевантные LOCK-параметры.";
+    cost.textContent="—";
+    return;
+  }
+  type.textContent="AI · "+String(sceneAnalysis.scene_type||"SCENE").toUpperCase();
+  summary.textContent=sceneAnalysis.summary||"Релевантные LOCK-параметры подобраны по содержимому SOURCE.";
+  const costValue=sceneAnalysis.analysis_cost_usd;
+  cost.textContent=(sceneAnalysis.model?String(sceneAnalysis.model).split("/").pop():"vision")+(costValue!=null?" · $"+Number(costValue).toFixed(5):"");
+}
+function applySceneAnalysis(data,{fromCache=false}={}){
+  if(!data||!Array.isArray(data.relevant_locks))return;
+  sceneAnalysis=data;
+  const recommended=new Map(data.relevant_locks.filter(x=>lockCatalogById[x.id]).map(x=>[x.id,x]));
+  // Dynamic scene mode: legacy validator keys that are irrelevant become FREE.
+  // Relevant keys receive the AI conservative recommendation; operator may override.
+  for(const item of lockCatalog){
+    if(recommended.has(item.id))locks[item.id]=recommended.get(item.id).recommended_level||item.level;
+    else if(defaults.some(core=>core.id===item.id))locks[item.id]="free";
+    else locks[item.id]=item.level;
+  }
+  localStorage.setItem("mg4k.lockProfile",JSON.stringify(locks));
+  const current=currentSourceItem();
+  if(current){
+    current.sceneAnalysis=data;
+    current.locks={...locks};
+  }
+  showAllLocks=false;
+  renderSceneAnalysis();renderLocks();
+  if(promptMode==="sync")syncPromptFromLocks(true);else updatePromptMeta();
+  if(!fromCache){
+    const count=data.relevant_locks.length;
+    log("ok","AI-анализ SOURCE: "+(data.scene_type||"scene")+" · "+count+" релевантных LOCK · cost "+(data.analysis_cost_usd!=null?"$"+Number(data.analysis_cost_usd).toFixed(6):"unknown"));
+  }
+}
+async function makeSceneAnalysisFile(file){
+  // Downscale only for the vision-analysis call. The original SOURCE stays untouched.
+  try{
+    const bitmap=await createImageBitmap(file);
+    const maxSide=1600;
+    const scale=Math.min(1,maxSide/Math.max(bitmap.width,bitmap.height));
+    const width=Math.max(1,Math.round(bitmap.width*scale)),height=Math.max(1,Math.round(bitmap.height*scale));
+    const canvas=document.createElement("canvas");canvas.width=width;canvas.height=height;
+    const ctx=canvas.getContext("2d",{alpha:false});ctx.drawImage(bitmap,0,0,width,height);bitmap.close?.();
+    const blob=await new Promise(resolve=>canvas.toBlob(resolve,"image/jpeg",0.88));
+    if(blob)return new File([blob],"scene-analysis.jpg",{type:"image/jpeg",lastModified:Date.now()});
+  }catch{}
+  return file;
+}
+async function analyzeCurrentSource(force=false){
+  const item=currentSourceItem();
+  if(!item?.file||sceneAnalysisBusy)return;
+  if(item.sceneAnalysis&&!force){applySceneAnalysis(item.sceneAnalysis,{fromCache:true});return}
+  sceneAnalysisBusy=true;sceneAnalysis=null;renderSceneAnalysis();renderLocks();
+  const previousProcessDisabled=$("action-process").disabled;
+  $("action-process").disabled=true;$("mobile-process").disabled=true;
+  try{
+    const session=await startCloudSession();
+    const analysisFile=await makeSceneAnalysisFile(item.file);
+    const form=new FormData();form.append("file",analysisFile,analysisFile.name);
+    const response=await fetch("/api/scene-analysis",{
+      method:"POST",
+      headers:{"X-Session-Id":session.id,"X-Session-Token":session.token},
+      body:form,
+      cache:"no-store"
+    });
+    const data=await response.json().catch(()=>({}));
+    if(!response.ok)throw new Error(data.error||"scene_analysis_failed");
+    item.sceneAnalysis=data;
+    applySceneAnalysis(data);
+    setStatus("AI-анализ готов: показаны только настройки, относящиеся к текущему изображению.","ok");
+  }catch(error){
+    sceneAnalysis=null;showAllLocks=false;
+    renderSceneAnalysis();renderLocks();
+    if(promptMode==="sync")syncPromptFromLocks(true);
+    log("warn","AI-анализ SOURCE недоступен: "+(error?.message||error)+". Использован базовый LOCK.");
+    setStatus("AI-анализ не выполнен. Доступен базовый LOCK-профиль; генерацию можно продолжить.","warn");
+  }finally{
+    sceneAnalysisBusy=false;renderSceneAnalysis();
+    if(!currentJob){$("action-process").disabled=previousProcessDisabled;$("mobile-process").disabled=previousProcessDisabled}
+  }
+}
+
 function renderLocks(){
-  $("lock-list").innerHTML=defaults.map(item=>'<div class="lock-row"><div class="lock-name"><strong>'+item.name+'</strong><small>'+item.hint+'</small></div><div class="segmented" data-lock="'+item.id+'">'+["hard","soft","free"].map(level=>'<button type="button" data-level="'+level+'" class="'+(locks[item.id]===level?"active":"")+'">'+level.toUpperCase()+'</button>').join("")+'</div></div>').join("");
+  const items=visibleLockItems();
+  $("lock-list").innerHTML=items.map(item=>{
+    const rec=sceneRecommendation(item.id);
+    const confidence=rec?Math.round(Number(rec.confidence||0)*100):null;
+    const badge=rec?'<span class="scene-analysis-badge '+escapeHtml(rec.recommended_level||"soft")+'" title="'+escapeHtml(rec.reason||"")+'">AI '+confidence+'%</span>':"";
+    const hint=rec?(item.hint+" · "+rec.reason):item.hint;
+    return '<div class="lock-row"><div class="lock-name"><strong>'+escapeHtml(item.name)+badge+'</strong><small title="'+escapeHtml(rec?.reason||"")+'">'+escapeHtml(hint)+'</small></div><div class="segmented" data-lock="'+escapeHtml(item.id)+'">'+["hard","soft","free"].map(level=>'<button type="button" data-level="'+level+'" class="'+(locks[item.id]===level?"active":"")+'">'+level.toUpperCase()+'</button>').join("")+'</div></div>';
+  }).join("");
   document.querySelectorAll(".segmented button").forEach(btn=>btn.addEventListener("click",()=>{
     const id=btn.closest(".segmented").dataset.lock;locks[id]=btn.dataset.level;
     localStorage.setItem("mg4k.lockProfile",JSON.stringify(locks));
@@ -949,6 +1121,7 @@ function persistSessionHistory(){
     promptPresetId:item.promptPresetId||"builtin-arch-lock",
     additions:item.additions||"",
     activeCustomLockIds:item.activeCustomLockIds||[],
+    sceneAnalysis:item.sceneAnalysis||null,
     source:item.source||"Системный файловый менеджер",
     resolution:item.resolution||null,
     name:item.file?.name||item.job?.filename||"source-image",
@@ -969,7 +1142,7 @@ function persistSessionHistory(){
 function clearSessionHistory(){try{sessionStorage.removeItem(HISTORY_KEY)}catch{}}
 function rememberCurrentItem(state=null){
   const item=currentSourceItem();if(!item)return;
-  item.job=currentJob;item.locks={...locks};item.prompt=currentPrompt;item.promptMode=promptMode;item.promptPresetId=activePromptPresetId;item.additions=additionsText;item.activeCustomLockIds=[...activeCustomLockIds];if(state)item.lastState=state;
+  item.job=currentJob;item.locks={...locks};item.prompt=currentPrompt;item.promptMode=promptMode;item.promptPresetId=activePromptPresetId;item.additions=additionsText;item.activeCustomLockIds=[...activeCustomLockIds];item.sceneAnalysis=sceneAnalysis;if(state)item.lastState=state;
   persistSessionHistory();
 }
 async function selectSource(index){
@@ -979,14 +1152,15 @@ async function selectSource(index){
   currentSourceIndex=index;
   const item=sourceItems[index];
   currentFile=item.file;currentObjectUrl=item.objectUrl;currentJob=item.job||null;locks={...(item.locks||locks)};
+  sceneAnalysis=item.sceneAnalysis||null;showAllLocks=false;
   promptMode=item.promptMode||"sync";activePromptPresetId=item.promptPresetId||"builtin-arch-lock";currentPrompt=item.prompt||"";
   additionsText=String(item.additions||"");activeCustomLockIds=Array.isArray(item.activeCustomLockIds)?item.activeCustomLockIds.filter(id=>customLockButtons.some(x=>x.id===id)):[];
   $("additions-editor").value=additionsText;
-  renderLocks();renderCustomLocks();resetResult();
+  renderSceneAnalysis();renderLocks();renderCustomLocks();resetResult();
   $("upload-plus").classList.add("hidden");$("upload-plus").classList.remove("compact");
   $("upload-overlay").classList.add("hidden");$("source-badges").hidden=false;
   const img=$("source-image");
-  img.onload=()=>{const dim=img.naturalWidth+"×"+img.naturalHeight;item.resolution=dim;$("source-dimensions").textContent=dim;$("source-size").textContent=dim;$("meta-resolution").textContent=dim;if(promptMode==="sync")syncPromptFromLocks(true);else{setCurrentPrompt(currentPrompt,{mode:promptMode,presetId:activePromptPresetId})}};
+  img.onload=()=>{const dim=img.naturalWidth+"×"+img.naturalHeight;item.resolution=dim;$("source-dimensions").textContent=dim;$("source-size").textContent=dim;$("meta-resolution").textContent=dim;if(item.sceneAnalysis)applySceneAnalysis(item.sceneAnalysis,{fromCache:true});else{if(promptMode==="sync")syncPromptFromLocks(true);else setCurrentPrompt(currentPrompt,{mode:promptMode,presetId:activePromptPresetId});analyzeCurrentSource(false).catch(()=>{})}};
   img.src=currentObjectUrl;img.hidden=false;
   $("source-name").textContent=item.file.name;$("meta-name").textContent=item.file.name;$("meta-size").textContent=humanSize(item.file.size);$("meta-source").textContent=item.source||"Системный файловый менеджер";$("meta-resolution").textContent=item.resolution||"—";
   $("action-process").textContent="▶ Запустить / продолжить";$("mobile-process").textContent="Обработка";$("action-process").disabled=false;$("mobile-process").disabled=false;
@@ -1002,7 +1176,7 @@ async function selectSource(index){
 }
 function addSourceFile(file,source="Системный файловый менеджер"){
   if(!file||(!String(file.type||"").startsWith("image/")&&!/\.(heic|heif)$/i.test(file.name))){toast("Выберите файл изображения.");return}
-  const item={file,source,objectUrl:URL.createObjectURL(file),job:null,lastState:null,locks:{...locks},prompt:"",promptMode:"sync",promptPresetId:"builtin-arch-lock",additions:"",activeCustomLockIds:[],resolution:null};
+  const item={file,source,objectUrl:URL.createObjectURL(file),job:null,lastState:null,locks:Object.fromEntries(lockCatalog.map(x=>[x.id,x.level])),prompt:"",promptMode:"sync",promptPresetId:"builtin-arch-lock",additions:"",activeCustomLockIds:[],sceneAnalysis:null,resolution:null};
   sourceItems.push(item);
   $("upload-plus").classList.add("hidden");
   selectSource(sourceItems.length-1);
@@ -1023,8 +1197,10 @@ const stage=$("source-stage");
 stage.addEventListener("drop",e=>addSourceFile(e.dataTransfer?.files?.[0],"Drag & Drop"));
 $("action-prev").addEventListener("click",()=>selectSource(currentSourceIndex-1));
 $("action-next").addEventListener("click",()=>selectSource(currentSourceIndex+1));
-$("reset-locks").addEventListener("click",()=>{locks=Object.fromEntries(defaults.map(x=>[x.id,x.level]));localStorage.setItem("mg4k.lockProfile",JSON.stringify(locks));additionsText="";activeCustomLockIds=[];selectedCustomLockId=null;persistCustomLockButtons();$("additions-editor").value="";const item=currentSourceItem();if(item)item.locks={...locks};renderLocks();renderCustomLocks();syncPromptFromLocks(true);toast("Базовый ARCH LOCK восстановлен.")});
-$("copy-profile").addEventListener("click",async()=>{try{await navigator.clipboard.writeText(JSON.stringify({version:"cloud-ui-r10.0",locks,additions:additionsText,activeCustomLockIds,prompt:currentPrompt},null,2));toast("LOCK-профиль и prompt скопированы.")}catch{toast("Не удалось скопировать.")}});
+$("scene-analyze").addEventListener("click",()=>analyzeCurrentSource(true));
+$("scene-show-all").addEventListener("click",()=>{showAllLocks=!showAllLocks;renderSceneAnalysis();renderLocks();if(promptMode==="sync")syncPromptFromLocks(true)});
+$("reset-locks").addEventListener("click",()=>{locks=Object.fromEntries(lockCatalog.map(x=>[x.id,x.level]));if(sceneAnalysis)applySceneAnalysis(sceneAnalysis,{fromCache:true});localStorage.setItem("mg4k.lockProfile",JSON.stringify(locks));additionsText="";activeCustomLockIds=[];selectedCustomLockId=null;persistCustomLockButtons();$("additions-editor").value="";const item=currentSourceItem();if(item)item.locks={...locks};renderLocks();renderCustomLocks();syncPromptFromLocks(true);toast(sceneAnalysis?"Рекомендации AI LOCK восстановлены.":"Базовый ARCH LOCK восстановлен.")});
+$("copy-profile").addEventListener("click",async()=>{try{await navigator.clipboard.writeText(JSON.stringify({version:"cloud-ui-r10.1",sceneAnalysis,locks,additions:additionsText,activeCustomLockIds,prompt:currentPrompt},null,2));toast("LOCK-профиль и prompt скопированы.")}catch{toast("Не удалось скопировать.")}});
 $("prompt-editor").addEventListener("input",()=>{currentPrompt=$("prompt-editor").value.slice(0,30000);activePromptPresetId="custom";const item=currentSourceItem();if(item){item.prompt=currentPrompt;item.promptMode="manual";item.promptPresetId="custom"}setPromptMode("manual");renderPromptPresets();updatePromptMeta()});
 $("prompt-sync").addEventListener("click",()=>syncPromptFromLocks(true));
 $("prompt-copy").addEventListener("click",async()=>{try{await navigator.clipboard.writeText($("prompt-editor").value);toast("Промпт скопирован.")}catch{toast("Не удалось скопировать промпт.")}});
@@ -1087,6 +1263,7 @@ async function restoreSessionHistory(){
         promptPresetId:saved.promptPresetId||"builtin-arch-lock",
         additions:saved.additions||"",
         activeCustomLockIds:Array.isArray(saved.activeCustomLockIds)?saved.activeCustomLockIds:[],
+        sceneAnalysis:saved.sceneAnalysis||null,
         resolution:saved.resolution||null
       });
     }
@@ -2012,7 +2189,7 @@ document.addEventListener("keydown",event=>{
 });
 
 async function initCloudUi(){
-  loadPromptPresets();renderLocks();renderPromptPresets();renderCustomLocks();$("additions-editor").value=additionsText;resetResult();syncPromptFromLocks(true);
+  loadPromptPresets();renderSceneAnalysis();renderLocks();renderPromptPresets();renderCustomLocks();$("additions-editor").value=additionsText;resetResult();syncPromptFromLocks(true);
   await initBillingUi();
   const restored=await restoreSessionHistory();
   if(restored)return;
