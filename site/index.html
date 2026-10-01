@@ -114,6 +114,21 @@ body{overflow-x:hidden}
 .custom-lock.active{border-color:#d28a22;background:#3a280e;color:#ffd48a}
 .custom-lock .delete{display:inline-grid;place-items:center;width:17px;height:17px;border:0;border-radius:50%;background:#4a2026;color:#ff9aa7;font-size:11px;cursor:pointer}
 .custom-lock .edit{display:inline-grid;place-items:center;width:17px;height:17px;border:0;border-radius:50%;background:#17324a;color:#82d8ff;font-size:10px;cursor:pointer}
+.prompt-assistant{margin:10px 0 12px;padding:11px;border:1px solid #285a70;border-radius:9px;background:linear-gradient(180deg,#082133,#071724)}
+.prompt-assistant-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}
+.prompt-assistant-head strong{font-size:11px;letter-spacing:.08em;color:#73ddff}.prompt-assistant-head span{font:9px Consolas,monospace;color:#7393a8}
+.prompt-assistant-input{width:100%;min-height:84px;resize:vertical;border:1px solid #31556c;border-radius:7px;background:#04101a;color:#e5f1f8;padding:10px 11px;font:11px/1.5 Arial,sans-serif;outline:none}
+.prompt-assistant-input:focus{border-color:#16c5f4;box-shadow:0 0 0 1px rgba(22,197,244,.18)}
+.prompt-quick{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}
+.prompt-quick button{min-height:28px;padding:0 8px;border:1px solid #344f63;border-radius:6px;background:#0a1c2b;color:#a9bfd0;font-size:9px;cursor:pointer}
+.prompt-quick button:hover{border-color:#16c5f4;color:#e4f9ff}
+.prompt-assistant-actions{display:flex;gap:7px;justify-content:flex-end;flex-wrap:wrap}
+.prompt-assistant-result{margin-top:9px;padding:9px 10px;border:1px solid #284253;border-radius:7px;background:#050f18;font-size:10px;line-height:1.45;color:#a9bdcc}
+.prompt-assistant-result[hidden]{display:none!important}
+.prompt-assistant-result strong{color:#e7f3fa}.prompt-assistant-result code{font:9px Consolas,monospace;color:#7edcff}
+.prompt-assistant-result .lock-change{display:inline-flex;gap:4px;margin:3px 4px 3px 0;padding:3px 6px;border:1px solid #425a6b;border-radius:5px;background:#0b1a27;font:9px Consolas,monospace}
+.prompt-assistant-result .suggestion{margin-top:7px;padding-top:7px;border-top:1px solid #243b4d;white-space:pre-wrap}
+.prompt-assistant-apply{display:flex;gap:7px;flex-wrap:wrap;margin-top:8px}
 .additions-tools{display:flex;justify-content:flex-end;gap:7px;flex-wrap:wrap;margin:7px 0 12px}
 .prompt-editor:focus{border-color:#16c5f4;box-shadow:0 0 0 1px rgba(22,197,244,.18)}
 .prompt-tools{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px;flex-wrap:wrap}
@@ -263,7 +278,7 @@ body{overflow-x:hidden}
     </div>
     <div class="top-actions">
       <button id="billing-chip" class="billing-chip" type="button" hidden>Кредиты: <strong id="billing-chip-balance">—</strong></button>
-      <div class="version">CORE 8.8.1 R4 · CLOUD UI R10.1</div>
+      <div class="version">CORE 8.8.1 R4 · CLOUD UI R10.2</div>
     </div>
   </header>
 
@@ -348,6 +363,31 @@ body{overflow-x:hidden}
 
       <div class="prompt-subhead"><strong>ПОЛЬЗОВАТЕЛЬСКИЕ LOCK-КНОПКИ</strong><span>каждая кнопка = ваш prompt-фрагмент</span></div>
       <div id="custom-locks" class="custom-locks"></div>
+
+      <div class="prompt-assistant" id="prompt-assistant">
+        <div class="prompt-assistant-head">
+          <strong>PROMPT AI ASSISTANT</strong>
+          <span id="prompt-assistant-meta">учитывает SOURCE analysis + LOCK + текущий prompt</span>
+        </div>
+        <textarea id="prompt-assistant-input" class="prompt-assistant-input" spellcheck="false" placeholder="Опишите обычными словами, чего хотите добиться. Например: выровняй вертикали и горизонтали фасада, убери перспективный завал, но не меняй архитектуру и вывески."></textarea>
+        <div class="prompt-quick" id="prompt-quick"></div>
+        <div class="prompt-assistant-actions">
+          <button class="btn ghost" id="prompt-assistant-clear" type="button">Очистить</button>
+          <button class="btn primary" id="prompt-assistant-run" type="button">AI · Подобрать prompt</button>
+        </div>
+        <div class="prompt-assistant-result" id="prompt-assistant-result" hidden>
+          <div><strong id="prompt-assistant-interpretation">—</strong></div>
+          <div id="prompt-assistant-locks"></div>
+          <div class="suggestion"><strong>ADDITIONS</strong><div id="prompt-assistant-additions">—</div></div>
+          <div class="suggestion" id="prompt-assistant-notes-wrap"><strong>КОММЕНТАРИЙ</strong><div id="prompt-assistant-notes">—</div></div>
+          <div class="prompt-assistant-apply">
+            <button class="btn ghost" id="prompt-assistant-apply-locks" type="button">Применить LOCK</button>
+            <button class="btn ghost" id="prompt-assistant-apply-additions" type="button">В ADDITIONS</button>
+            <button class="btn approve" id="prompt-assistant-apply-all" type="button">Применить всё</button>
+            <button class="btn generate" id="prompt-assistant-apply-final" type="button">Заменить FINAL</button>
+          </div>
+        </div>
+      </div>
 
       <div class="prompt-subhead"><strong>ADDITIONS · ЧТО ДОБАВИТЬ / ИЗМЕНИТЬ</strong><span>LOCK имеет приоритет при конфликте</span></div>
       <textarea id="additions-editor" class="additions-editor" spellcheck="false" placeholder="Например: add subtle pedestrians, warm interior glow, premium evening atmosphere…"></textarea>
@@ -576,6 +616,8 @@ let customLockButtons=[];
 let activeCustomLockIds=[];
 let selectedCustomLockId=null;
 let additionsText="";
+let promptAssistantBusy=false;
+let promptAssistantResult=null;
 let activePromptPresetId=localStorage.getItem(ACTIVE_PROMPT_PRESET_KEY)||"builtin-arch-lock";
 let promptMode="sync";
 let currentPrompt="";
@@ -600,7 +642,7 @@ function logExportText(){
   const item=currentSourceItem();
   const header=[
     "MG 4K / ARCH LOCK — PROCESS LOG",
-    "UI: CORE 8.8.1 R4 · CLOUD UI R10.1",
+    "UI: CORE 8.8.1 R4 · CLOUD UI R10.2",
     "Processor build: "+(latestJobState?.container_build_id||"—"),
     "Exported: "+new Date().toISOString(),
     "Job: "+(currentJob?.id||"—"),
@@ -969,6 +1011,106 @@ function deletePromptPreset(id){
   toast("Пресет удалён.");
 }
 
+const PROMPT_QUICK_COMMANDS=[
+  {id:"straighten-architecture",label:"Выровнять архитектуру",request:"Исправь перспективу архитектурного кадра: выровняй вертикали и основные горизонтали, убери keystone distortion и camera roll. Не меняй архитектуру, геометрию здания, количество и положение проёмов, этажность, вывески и важное кадрирование."},
+  {id:"fix-verticals",label:"Вертикали",request:"Убери завал вертикалей. Все фасадные углы, колонны, оконные откосы и вертикальные элементы должны стать строго вертикальными, без изменения самого здания."},
+  {id:"level-horizontals",label:"Горизонтали",request:"Выровняй основные горизонтали: карнизы, парапеты, этажные пояса, оконные линии и линию горизонта. Убери camera roll, не меняя архитектуру."},
+  {id:"preserve-facade",label:"Сохранить фасад",request:"Максимально сохрани фасад: архитектуру, геометрию, проёмы, этажность, кровлю, декор, материалы и пропорции. Разреши только повышение реализма и детализации."},
+  {id:"preserve-signage",label:"Сохранить вывески",request:"Сохрани весь существующий текст, логотипы, буквы, цифры и вывески без переписывания, замены символов и изменения положения."},
+  {id:"add-people",label:"Добавить людей",request:"Добавь небольшое реалистичное количество людей в сцену, если это уместно, не перекрывая важную архитектуру и вывески."},
+  {id:"enhance-sky",label:"Улучшить небо",request:"Сделай небо более выразительным и реалистичным, сохранив физически правдоподобное освещение и не меняя архитектуру."},
+  {id:"evening-light",label:"Вечерний свет",request:"Сделай естественное вечернее освещение с тёплым интерьерным свечением, сохранив геометрию, архитектуру и материалы."},
+  {id:"premium-hotel",label:"Premium hotel",request:"Придай изображению премиальное отельное ощущение за счёт света, чистоты материалов и атмосферы, без редизайна архитектуры и без изменения брендинга."}
+];
+function renderPromptQuickCommands(){
+  const root=$("prompt-quick");if(!root)return;
+  root.innerHTML=PROMPT_QUICK_COMMANDS.map(item=>'<button type="button" data-prompt-quick="'+escapeHtml(item.id)+'">'+escapeHtml(item.label)+'</button>').join("");
+  root.querySelectorAll("[data-prompt-quick]").forEach(btn=>btn.addEventListener("click",()=>{
+    const item=PROMPT_QUICK_COMMANDS.find(x=>x.id===btn.dataset.promptQuick);if(!item)return;
+    $("prompt-assistant-input").value=item.request;
+    runPromptAssistantUi().catch(()=>{});
+  }));
+}
+function renderPromptAssistantResult(){
+  const box=$("prompt-assistant-result");
+  if(!box)return;
+  box.hidden=!promptAssistantResult;
+  $("prompt-assistant-run").disabled=promptAssistantBusy;
+  $("prompt-assistant-run").textContent=promptAssistantBusy?"AI · Думаю…":"AI · Подобрать prompt";
+  if(!promptAssistantResult)return;
+  const r=promptAssistantResult;
+  $("prompt-assistant-interpretation").textContent=r.task_interpretation||"Предложение готово.";
+  $("prompt-assistant-locks").innerHTML=(r.recommended_lock_changes||[]).length
+    ? (r.recommended_lock_changes||[]).map(x=>'<span class="lock-change">'+escapeHtml(x.id.toUpperCase())+' '+escapeHtml(String(x.from||"—").toUpperCase())+' → '+escapeHtml(String(x.to||"—").toUpperCase())+'</span>').join("")
+    : '<span class="prompt-meta">Изменение LOCK не требуется.</span>';
+  $("prompt-assistant-additions").textContent=r.suggested_additions||"—";
+  $("prompt-assistant-notes").textContent=(r.notes||[]).join(" · ")||"—";
+  const meta=[r.model?String(r.model).split("/").pop():"AI",r.assistant_cost_usd!=null?"$"+Number(r.assistant_cost_usd).toFixed(6):null].filter(Boolean).join(" · ");
+  $("prompt-assistant-meta").textContent=meta||"AI prompt engineer";
+}
+async function runPromptAssistantUi(){
+  const request=String($("prompt-assistant-input").value||"").trim();
+  if(!request){toast("Опишите задачу для AI Assistant.");return}
+  if(promptAssistantBusy)return;
+  promptAssistantBusy=true;promptAssistantResult=null;renderPromptAssistantResult();
+  try{
+    const session=await startCloudSession();
+    const response=await fetch("/api/prompt-assistant",{
+      method:"POST",
+      headers:{"content-type":"application/json","X-Session-Id":session.id,"X-Session-Token":session.token},
+      body:JSON.stringify({request,scene_analysis:sceneAnalysis,locks,additions:additionsText,final_prompt:currentPrompt}),
+      cache:"no-store"
+    });
+    const data=await response.json().catch(()=>({}));
+    if(!response.ok)throw new Error(data.error||"prompt_assistant_failed");
+    promptAssistantResult=data;
+    renderPromptAssistantResult();
+    log("ok","Prompt AI Assistant: "+(data.task_interpretation||request)+" · cost "+(data.assistant_cost_usd!=null?"$"+Number(data.assistant_cost_usd).toFixed(6):"unknown"));
+  }catch(error){
+    promptAssistantResult=null;renderPromptAssistantResult();toast("AI Assistant: "+(error?.message||error));
+    log("warn","Prompt AI Assistant недоступен: "+(error?.message||error));
+  }finally{
+    promptAssistantBusy=false;renderPromptAssistantResult();
+  }
+}
+function applyAssistantLocks(){
+  const changes=promptAssistantResult?.recommended_lock_changes||[];
+  if(!changes.length){toast("AI не предложил менять LOCK.");return}
+  changes.forEach(change=>{
+    if(lockCatalogById[change.id]&&["hard","soft","free"].includes(change.to)){
+      locks[change.id]=change.to;manualLockIds.add(change.id);
+    }
+  });
+  localStorage.setItem("mg4k.lockProfile",JSON.stringify(locks));
+  const item=currentSourceItem();if(item){item.locks={...locks};item.manualLockIds=[...manualLockIds]}
+  renderLocks();if(promptMode==="sync")syncPromptFromLocks(true);else updatePromptMeta();
+  toast("Рекомендованные LOCK применены.");
+}
+function applyAssistantAdditions(){
+  const text=String(promptAssistantResult?.suggested_additions||"").trim();
+  if(!text){toast("AI не предложил ADDITIONS.");return}
+  additionsText=text;$("additions-editor").value=text;
+  const item=currentSourceItem();if(item)item.additions=text;
+  syncPromptFromLocks(true);toast("AI ADDITIONS применены.");
+}
+function applyAssistantAll(){
+  applyAssistantLocks();
+  const text=String(promptAssistantResult?.suggested_additions||"").trim();
+  if(text){additionsText=text;$("additions-editor").value=text;const item=currentSourceItem();if(item)item.additions=text}
+  syncPromptFromLocks(true);toast("AI-рекомендации применены: LOCK + ADDITIONS + FINAL.");
+}
+function applyAssistantFinal(){
+  const text=String(promptAssistantResult?.suggested_final_prompt||"").trim();
+  if(!text){toast("AI не вернул FINAL PROMPT.");return}
+  setCurrentPrompt(text,{mode:"manual",presetId:"custom"});toast("FINAL PROMPT заменён предложением AI.");
+}
+$("prompt-assistant-run").addEventListener("click",()=>runPromptAssistantUi());
+$("prompt-assistant-clear").addEventListener("click",()=>{$("prompt-assistant-input").value="";promptAssistantResult=null;$("prompt-assistant-meta").textContent="учитывает SOURCE analysis + LOCK + текущий prompt";renderPromptAssistantResult()});
+$("prompt-assistant-apply-locks").addEventListener("click",applyAssistantLocks);
+$("prompt-assistant-apply-additions").addEventListener("click",applyAssistantAdditions);
+$("prompt-assistant-apply-all").addEventListener("click",applyAssistantAll);
+$("prompt-assistant-apply-final").addEventListener("click",applyAssistantFinal);
+
 function sceneRecommendation(id){
   return (sceneAnalysis?.relevant_locks||[]).find(item=>item.id===id)||null;
 }
@@ -1204,7 +1346,7 @@ $("action-next").addEventListener("click",()=>selectSource(currentSourceIndex+1)
 $("scene-analyze").addEventListener("click",()=>analyzeCurrentSource(true));
 $("scene-show-all").addEventListener("click",()=>{showAllLocks=!showAllLocks;renderSceneAnalysis();renderLocks();updatePromptMeta()});
 $("reset-locks").addEventListener("click",()=>{manualLockIds=new Set();locks=Object.fromEntries(lockCatalog.map(x=>[x.id,x.level]));if(sceneAnalysis)applySceneAnalysis(sceneAnalysis,{fromCache:true});localStorage.setItem("mg4k.lockProfile",JSON.stringify(locks));additionsText="";activeCustomLockIds=[];selectedCustomLockId=null;persistCustomLockButtons();$("additions-editor").value="";const item=currentSourceItem();if(item)item.locks={...locks};renderLocks();renderCustomLocks();syncPromptFromLocks(true);toast(sceneAnalysis?"Рекомендации AI LOCK восстановлены.":"Базовый ARCH LOCK восстановлен.")});
-$("copy-profile").addEventListener("click",async()=>{try{await navigator.clipboard.writeText(JSON.stringify({version:"cloud-ui-r10.1",sceneAnalysis,locks,manualLockIds:[...manualLockIds],additions:additionsText,activeCustomLockIds,prompt:currentPrompt},null,2));toast("LOCK-профиль и prompt скопированы.")}catch{toast("Не удалось скопировать.")}});
+$("copy-profile").addEventListener("click",async()=>{try{await navigator.clipboard.writeText(JSON.stringify({version:"cloud-ui-r10.2",sceneAnalysis,locks,manualLockIds:[...manualLockIds],additions:additionsText,activeCustomLockIds,prompt:currentPrompt},null,2));toast("LOCK-профиль и prompt скопированы.")}catch{toast("Не удалось скопировать.")}});
 $("prompt-editor").addEventListener("input",()=>{currentPrompt=$("prompt-editor").value.slice(0,30000);activePromptPresetId="custom";const item=currentSourceItem();if(item){item.prompt=currentPrompt;item.promptMode="manual";item.promptPresetId="custom"}setPromptMode("manual");renderPromptPresets();updatePromptMeta()});
 $("prompt-sync").addEventListener("click",()=>syncPromptFromLocks(true));
 $("prompt-copy").addEventListener("click",async()=>{try{await navigator.clipboard.writeText($("prompt-editor").value);toast("Промпт скопирован.")}catch{toast("Не удалось скопировать промпт.")}});
