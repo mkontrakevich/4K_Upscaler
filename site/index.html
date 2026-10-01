@@ -566,6 +566,7 @@ let latestJobState=null,lastStatusSignature="";
 let sceneAnalysis=null;
 let sceneAnalysisBusy=false;
 let showAllLocks=false;
+let manualLockIds=new Set();
 const PROMPT_PRESETS_KEY="mg4k.promptPresets.v1";
 const ACTIVE_PROMPT_PRESET_KEY="mg4k.activePromptPreset.v1";
 const CUSTOM_LOCK_BUTTONS_KEY="mg4k.customLockButtons.v1";
@@ -778,7 +779,8 @@ function visibleLockItems(){
   return lockCatalog.filter(item=>visible.has(item.id));
 }
 function promptLockItems(){
-  return visibleLockItems();
+  const ids=new Set([...relevantLockIds(),...manualLockIds]);
+  return lockCatalog.filter(item=>ids.has(item.id));
 }
 function lockRule(item,level){
   const core=PROMPT_LOCK_RULES[item.id];
@@ -996,6 +998,7 @@ function renderSceneAnalysis(){
 function applySceneAnalysis(data,{fromCache=false}={}){
   if(!data||!Array.isArray(data.relevant_locks))return;
   sceneAnalysis=data;
+  manualLockIds=new Set();
   const recommended=new Map(data.relevant_locks.filter(x=>lockCatalogById[x.id]).map(x=>[x.id,x]));
   // Dynamic scene mode: legacy validator keys that are irrelevant become FREE.
   // Relevant keys receive the AI conservative recommendation; operator may override.
@@ -1076,7 +1079,7 @@ function renderLocks(){
     return '<div class="lock-row"><div class="lock-name"><strong>'+escapeHtml(item.name)+badge+'</strong><small title="'+escapeHtml(rec?.reason||"")+'">'+escapeHtml(hint)+'</small></div><div class="segmented" data-lock="'+escapeHtml(item.id)+'">'+["hard","soft","free"].map(level=>'<button type="button" data-level="'+level+'" class="'+(locks[item.id]===level?"active":"")+'">'+level.toUpperCase()+'</button>').join("")+'</div></div>';
   }).join("");
   document.querySelectorAll(".segmented button").forEach(btn=>btn.addEventListener("click",()=>{
-    const id=btn.closest(".segmented").dataset.lock;locks[id]=btn.dataset.level;
+    const id=btn.closest(".segmented").dataset.lock;locks[id]=btn.dataset.level;manualLockIds.add(id);
     localStorage.setItem("mg4k.lockProfile",JSON.stringify(locks));
     const item=currentSourceItem();if(item)item.locks={...locks};
     renderLocks();
@@ -1122,6 +1125,7 @@ function persistSessionHistory(){
     additions:item.additions||"",
     activeCustomLockIds:item.activeCustomLockIds||[],
     sceneAnalysis:item.sceneAnalysis||null,
+    manualLockIds:Array.isArray(item.manualLockIds)?item.manualLockIds:[],
     source:item.source||"Системный файловый менеджер",
     resolution:item.resolution||null,
     name:item.file?.name||item.job?.filename||"source-image",
@@ -1142,7 +1146,7 @@ function persistSessionHistory(){
 function clearSessionHistory(){try{sessionStorage.removeItem(HISTORY_KEY)}catch{}}
 function rememberCurrentItem(state=null){
   const item=currentSourceItem();if(!item)return;
-  item.job=currentJob;item.locks={...locks};item.prompt=currentPrompt;item.promptMode=promptMode;item.promptPresetId=activePromptPresetId;item.additions=additionsText;item.activeCustomLockIds=[...activeCustomLockIds];item.sceneAnalysis=sceneAnalysis;if(state)item.lastState=state;
+  item.job=currentJob;item.locks={...locks};item.prompt=currentPrompt;item.promptMode=promptMode;item.promptPresetId=activePromptPresetId;item.additions=additionsText;item.activeCustomLockIds=[...activeCustomLockIds];item.sceneAnalysis=sceneAnalysis;item.manualLockIds=[...manualLockIds];if(state)item.lastState=state;
   persistSessionHistory();
 }
 async function selectSource(index){
@@ -1152,7 +1156,7 @@ async function selectSource(index){
   currentSourceIndex=index;
   const item=sourceItems[index];
   currentFile=item.file;currentObjectUrl=item.objectUrl;currentJob=item.job||null;locks={...(item.locks||locks)};
-  sceneAnalysis=item.sceneAnalysis||null;showAllLocks=false;
+  sceneAnalysis=item.sceneAnalysis||null;showAllLocks=false;manualLockIds=new Set(Array.isArray(item.manualLockIds)?item.manualLockIds:[]);
   promptMode=item.promptMode||"sync";activePromptPresetId=item.promptPresetId||"builtin-arch-lock";currentPrompt=item.prompt||"";
   additionsText=String(item.additions||"");activeCustomLockIds=Array.isArray(item.activeCustomLockIds)?item.activeCustomLockIds.filter(id=>customLockButtons.some(x=>x.id===id)):[];
   $("additions-editor").value=additionsText;
@@ -1176,7 +1180,7 @@ async function selectSource(index){
 }
 function addSourceFile(file,source="Системный файловый менеджер"){
   if(!file||(!String(file.type||"").startsWith("image/")&&!/\.(heic|heif)$/i.test(file.name))){toast("Выберите файл изображения.");return}
-  const item={file,source,objectUrl:URL.createObjectURL(file),job:null,lastState:null,locks:Object.fromEntries(lockCatalog.map(x=>[x.id,x.level])),prompt:"",promptMode:"sync",promptPresetId:"builtin-arch-lock",additions:"",activeCustomLockIds:[],sceneAnalysis:null,resolution:null};
+  const item={file,source,objectUrl:URL.createObjectURL(file),job:null,lastState:null,locks:Object.fromEntries(lockCatalog.map(x=>[x.id,x.level])),prompt:"",promptMode:"sync",promptPresetId:"builtin-arch-lock",additions:"",activeCustomLockIds:[],sceneAnalysis:null,manualLockIds:[],resolution:null};
   sourceItems.push(item);
   $("upload-plus").classList.add("hidden");
   selectSource(sourceItems.length-1);
@@ -1198,9 +1202,9 @@ stage.addEventListener("drop",e=>addSourceFile(e.dataTransfer?.files?.[0],"Drag 
 $("action-prev").addEventListener("click",()=>selectSource(currentSourceIndex-1));
 $("action-next").addEventListener("click",()=>selectSource(currentSourceIndex+1));
 $("scene-analyze").addEventListener("click",()=>analyzeCurrentSource(true));
-$("scene-show-all").addEventListener("click",()=>{showAllLocks=!showAllLocks;renderSceneAnalysis();renderLocks();if(promptMode==="sync")syncPromptFromLocks(true)});
-$("reset-locks").addEventListener("click",()=>{locks=Object.fromEntries(lockCatalog.map(x=>[x.id,x.level]));if(sceneAnalysis)applySceneAnalysis(sceneAnalysis,{fromCache:true});localStorage.setItem("mg4k.lockProfile",JSON.stringify(locks));additionsText="";activeCustomLockIds=[];selectedCustomLockId=null;persistCustomLockButtons();$("additions-editor").value="";const item=currentSourceItem();if(item)item.locks={...locks};renderLocks();renderCustomLocks();syncPromptFromLocks(true);toast(sceneAnalysis?"Рекомендации AI LOCK восстановлены.":"Базовый ARCH LOCK восстановлен.")});
-$("copy-profile").addEventListener("click",async()=>{try{await navigator.clipboard.writeText(JSON.stringify({version:"cloud-ui-r10.1",sceneAnalysis,locks,additions:additionsText,activeCustomLockIds,prompt:currentPrompt},null,2));toast("LOCK-профиль и prompt скопированы.")}catch{toast("Не удалось скопировать.")}});
+$("scene-show-all").addEventListener("click",()=>{showAllLocks=!showAllLocks;renderSceneAnalysis();renderLocks();updatePromptMeta()});
+$("reset-locks").addEventListener("click",()=>{manualLockIds=new Set();locks=Object.fromEntries(lockCatalog.map(x=>[x.id,x.level]));if(sceneAnalysis)applySceneAnalysis(sceneAnalysis,{fromCache:true});localStorage.setItem("mg4k.lockProfile",JSON.stringify(locks));additionsText="";activeCustomLockIds=[];selectedCustomLockId=null;persistCustomLockButtons();$("additions-editor").value="";const item=currentSourceItem();if(item)item.locks={...locks};renderLocks();renderCustomLocks();syncPromptFromLocks(true);toast(sceneAnalysis?"Рекомендации AI LOCK восстановлены.":"Базовый ARCH LOCK восстановлен.")});
+$("copy-profile").addEventListener("click",async()=>{try{await navigator.clipboard.writeText(JSON.stringify({version:"cloud-ui-r10.1",sceneAnalysis,locks,manualLockIds:[...manualLockIds],additions:additionsText,activeCustomLockIds,prompt:currentPrompt},null,2));toast("LOCK-профиль и prompt скопированы.")}catch{toast("Не удалось скопировать.")}});
 $("prompt-editor").addEventListener("input",()=>{currentPrompt=$("prompt-editor").value.slice(0,30000);activePromptPresetId="custom";const item=currentSourceItem();if(item){item.prompt=currentPrompt;item.promptMode="manual";item.promptPresetId="custom"}setPromptMode("manual");renderPromptPresets();updatePromptMeta()});
 $("prompt-sync").addEventListener("click",()=>syncPromptFromLocks(true));
 $("prompt-copy").addEventListener("click",async()=>{try{await navigator.clipboard.writeText($("prompt-editor").value);toast("Промпт скопирован.")}catch{toast("Не удалось скопировать промпт.")}});
@@ -1264,6 +1268,7 @@ async function restoreSessionHistory(){
         additions:saved.additions||"",
         activeCustomLockIds:Array.isArray(saved.activeCustomLockIds)?saved.activeCustomLockIds:[],
         sceneAnalysis:saved.sceneAnalysis||null,
+        manualLockIds:Array.isArray(saved.manualLockIds)?saved.manualLockIds:[],
         resolution:saved.resolution||null
       });
     }
