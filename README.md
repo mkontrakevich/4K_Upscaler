@@ -2,7 +2,7 @@
 
 Status: **READY / PRODUCTION**
 
-CORE **8.8.1 R4** · CLOUD UI **R10.1** · processor **result-persist-r11b**
+CORE **8.8.1 R4** · CLOUD UI **R10.2** · processor **result-persist-r11b**
 
 Production: https://4k-upscaler.kontrakevich.workers.dev/
 
@@ -22,6 +22,8 @@ Ready scope:
 - user-created additive LOCK buttons can be built directly from prompt fragments, toggled on/off, edited, overwritten and deleted;
 - AI scene analysis inspects each newly loaded SOURCE and proposes only the relevant LOCK controls with conservative HARD/SOFT/FREE defaults;
 - the full universal LOCK library remains available behind «Все настройки», but hidden irrelevant controls do not enter FINAL PROMPT unless the operator changes them;
+- **Prompt AI Assistant** accepts the operator's natural-language goal, uses current scene analysis + LOCK + ADDITIONS + FINAL PROMPT, and returns precise prompt wording plus recommended LOCK changes;
+- architecture quick commands include vertical/horizontal straightening, facade preservation, signage preservation, people, sky, evening light and premium-hotel styling;
 - ADDITIONS are merged into the visible FINAL PROMPT, while the parameter LOCK profile remains higher priority on conflicts;
 - process diagnostics and regression protection.
 
