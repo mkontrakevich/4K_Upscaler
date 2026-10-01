@@ -2,7 +2,7 @@
 
 Status: **READY / PRODUCTION**
 
-CORE **8.8.1 R4** · CLOUD UI **R10.0** · processor **result-persist-r11b**
+CORE **8.8.1 R4** · CLOUD UI **R10.1** · processor **result-persist-r11b**
 
 Production: https://4k-upscaler.kontrakevich.workers.dev/
 
@@ -20,6 +20,8 @@ Ready scope:
 - LOCK buttons rebuild the prompt in sync mode;
 - user-created prompt presets can be saved, applied and deleted from the control panel;
 - user-created additive LOCK buttons can be built directly from prompt fragments, toggled on/off, edited, overwritten and deleted;
+- AI scene analysis inspects each newly loaded SOURCE and proposes only the relevant LOCK controls with conservative HARD/SOFT/FREE defaults;
+- the full universal LOCK library remains available behind «Все настройки», but hidden irrelevant controls do not enter FINAL PROMPT unless the operator changes them;
 - ADDITIONS are merged into the visible FINAL PROMPT, while the parameter LOCK profile remains higher priority on conflicts;
 - process diagnostics and regression protection.
 

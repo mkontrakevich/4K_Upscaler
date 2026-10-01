@@ -132,7 +132,7 @@ jobs:
           from pathlib import Path
           html = Path("site/index.html").read_text(encoding="utf-8")
           required = [
-              "CORE 8.8.1 R4 · CLOUD UI R10.0",
+              "CORE 8.8.1 R4 · CLOUD UI R10.1",
               'class="comparison"',
               'id="source-image"',
               'id="result-image"',
@@ -245,7 +245,7 @@ jobs:
           from pathlib import Path
           html = Path("site/index.html").read_text(encoding="utf-8")
           required = [
-              "CORE 8.8.1 R4 · CLOUD UI R10.0",
+              "CORE 8.8.1 R4 · CLOUD UI R10.1",
               'id="quick-preview"',
               'data-preview-engine="native-image-v1"',
               'id="quick-preview-image"',
@@ -264,6 +264,53 @@ jobs:
           print("Cloud double-click image preview contract: PASSED")
           PY
 
+      - name: Cloud AI scene analysis / dynamic LOCK contract
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          ui=Path("site/index.html").read_text(encoding="utf-8")
+          worker=Path("src/worker.js").read_text(encoding="utf-8")
+
+          for token in [
+              'CLOUD UI R10.1',
+              'id="scene-analyze"',
+              'id="scene-show-all"',
+              'const extendedLocks=[',
+              'async function analyzeCurrentSource(force=false)',
+              'fetch("/api/scene-analysis"',
+              'function applySceneAnalysis(data',
+              'function visibleLockItems()',
+              'function promptLockItems()',
+              'let manualLockIds=new Set();',
+          ]:
+              assert token in ui, token
+
+          for token in [
+              'const SCENE_LOCK_CATALOG = [',
+              'google/gemini-3.8-flash',
+              'function sceneAnalysisPrompt()',
+              'async function analyzeSceneWithOpenRouter(env, file)',
+              'path === "/api/scene-analysis"',
+              'response_format:{type:"json_schema"',
+              'scene_analysis_enabled',
+          ]:
+              assert token in worker, token
+
+          # Show-all is display-only: hidden irrelevant controls do not silently
+          # enter the provider prompt until the operator actually changes one.
+          show_all=ui[ui.index('$("scene-show-all").addEventListener'):ui.index('$("reset-locks").addEventListener')]
+          assert "syncPromptFromLocks" not in show_all, show_all
+          assert "manualLockIds.add(id)" in ui
+
+          # Scene analysis is a vision call only; it must never create /api/jobs.
+          block=ui[ui.index("async function analyzeCurrentSource"):ui.index("function renderLocks()", ui.index("async function analyzeCurrentSource"))]
+          assert 'fetch("/api/jobs"' not in block
+          assert "prepareJob(" not in block
+
+          # CI never performs the paid OpenRouter analysis request.
+          print("AI scene analysis / dynamic LOCK contract: PASSED")
+          PY
+
       - name: Cloud editable prompt and presets contract
         run: |
           python - <<'PY'
@@ -275,7 +322,7 @@ jobs:
           pipeline=Path("v8_safe_appearance.py").read_text(encoding="utf-8")
 
           for token in [
-              'CLOUD UI R10.0',
+              'CLOUD UI R10.1',
               'id="prompt-editor"',
               'id="prompt-presets"',
               'id="additions-editor"',
@@ -326,7 +373,7 @@ jobs:
               'id="billing-dialog"',
               'async function billingAcquirePermit()',
               'X-MG4K-Entitlement',
-              'CLOUD UI R10.0',
+              'CLOUD UI R10.1',
           ]:
               assert token in ui, token
 
@@ -365,7 +412,7 @@ jobs:
           from pathlib import Path
           html = Path("site/index.html").read_text(encoding="utf-8")
           required = [
-              "CORE 8.8.1 R4 · CLOUD UI R10.0",
+              "CORE 8.8.1 R4 · CLOUD UI R10.1",
               'id="action-save-result"',
               'function saveCurrentResult()',
               'fetch(resultUrl(currentJob,true),{cache:"no-store"})',
@@ -391,7 +438,7 @@ jobs:
           html = Path("site/index.html").read_text(encoding="utf-8")
 
           required = [
-              "CORE 8.8.1 R4 · CLOUD UI R10.0",
+              "CORE 8.8.1 R4 · CLOUD UI R10.1",
               'data-inspection-engine="local-v8.8.1"',
               'id="viewer-canvas"',
               'data-view-mode="side"',
@@ -423,7 +470,7 @@ jobs:
           assert "result.naturalWidth,result.naturalHeight" in draw, "SIDE RESULT must use native dimensions"
           assert "drawNormalized(ctx,source" in draw and "drawNormalized(ctx,result" in draw, "SPLIT must normalize SOURCE and RESULT on one reference canvas"
           assert 'inspection.mode==="diff"' in draw and 'inspection.mode==="blink"' in draw
-          assert "viewer-fallback" not in html, "R10.0 must use the proven local canvas engine, not the R9.4 fallback renderer"
+          assert "viewer-fallback" not in html, "R10.1 must use the proven local canvas engine, not the R9.4 fallback renderer"
           print("Cloud local V8.8.1 inspection parity: PASSED")
           PY
 
@@ -986,7 +1033,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
-      - name: Verify deployed R10.0 / R11b contract without generation
+      - name: Verify deployed R10.1 / R11b contract without generation
         env:
           BASE_URL: https://4k-upscaler.kontrakevich.workers.dev
         run: |
@@ -1000,13 +1047,15 @@ jobs:
             curl -fsS --retry 2 --retry-delay 2 "$BASE_URL/api/health?preflight=$GITHUB_SHA-$attempt" > "$TMP/health.json"
             curl -fsS --retry 2 --retry-delay 2 "$BASE_URL/api/billing/config?preflight=$GITHUB_SHA-$attempt" > "$TMP/billing.json"
 
-            if grep -q 'CLOUD UI R10.0' "$TMP/root.html"               && grep -q 'id="action-replace-source"' "$TMP/root.html"               && grep -q 'data-inspection-engine="local-v8.8.1"' "$TMP/root.html"               && grep -q 'id="action-save-result"' "$TMP/root.html"               && grep -q 'data-preview-engine="native-image-v1"' "$TMP/root.html"               && python - "$TMP/health.json" "$TMP/billing.json" <<'PY'
+            if grep -q 'CLOUD UI R10.1' "$TMP/root.html"               && grep -q 'id="action-replace-source"' "$TMP/root.html"               && grep -q 'data-inspection-engine="local-v8.8.1"' "$TMP/root.html"               && grep -q 'id="action-save-result"' "$TMP/root.html"               && grep -q 'data-preview-engine="native-image-v1"' "$TMP/root.html"               && python - "$TMP/health.json" "$TMP/billing.json" <<'PY'
           import json, sys
           d=json.load(open(sys.argv[1]))
           assert d.get("worker_build_id") == "pid1-tini-r11b", d
           assert d.get("processor_build_expected") == "result-persist-r11b", d
           assert d.get("processor_instance_expected") == "primary-result-persist-r11b", d
           assert d.get("processor_lifecycle") == "tini-pid1-group-forwarding", d
+          assert "scene_analysis_enabled" in d, d
+          assert "scene_analysis_model" in d, d
           billing=json.load(open(sys.argv[2]))
           assert billing.get("mode") == "off", billing
           assert billing.get("enabled") is False, billing
@@ -1014,7 +1063,7 @@ jobs:
             then
               STABLE=$((STABLE+1))
               if [[ "$STABLE" -ge 3 ]]; then
-                echo "Production preflight PASSED: UI R10.0 · editable prompt/custom LOCK buttons · billing safely OFF · double-click preview · local V8.8.1 inspection · save-result · replace-source · Worker pid1-tini-r11b · expected processor result-persist-r11b"
+                echo "Production preflight PASSED: UI R10.1 · AI scene LOCK analysis · editable prompt/custom LOCK buttons · billing safely OFF · double-click preview · local V8.8.1 inspection · save-result · replace-source · Worker pid1-tini-r11b · expected processor result-persist-r11b"
                 exit 0
               fi
             else
@@ -1024,7 +1073,7 @@ jobs:
             sleep 10
           done
 
-          echo "Production did not converge to the expected R10.0/R11b contract." >&2
+          echo "Production did not converge to the expected R10.1/R11b contract." >&2
           cat "$TMP/health.json" >&2 || true
           exit 1
 
@@ -1051,16 +1100,16 @@ jobs:
           # No paid work is allowed until the public Worker serves the intended UI.
           for attempt in $(seq 1 18); do
             curl -fsS --retry 2 --retry-delay 2 "$BASE_URL/?smoke=$GITHUB_SHA-$attempt" > "$TMP/root.html"
-            if grep -q 'CLOUD UI R10.0' "$TMP/root.html" && grep -q 'id="action-replace-source"' "$TMP/root.html" && grep -q 'data-inspection-engine="local-v8.8.1"' "$TMP/root.html" && grep -q 'id="action-save-result"' "$TMP/root.html" && grep -q 'data-preview-engine="native-image-v1"' "$TMP/root.html"; then
+            if grep -q 'CLOUD UI R10.1' "$TMP/root.html" && grep -q 'id="action-replace-source"' "$TMP/root.html" && grep -q 'data-inspection-engine="local-v8.8.1"' "$TMP/root.html" && grep -q 'id="action-save-result"' "$TMP/root.html" && grep -q 'data-preview-engine="native-image-v1"' "$TMP/root.html"; then
               break
             fi
             if [[ "$attempt" == "18" ]]; then
-              echo "Production UI is not R10.0 / replace-source yet; aborting before paid generation." >&2
+              echo "Production UI is not R10.1 / replace-source yet; aborting before paid generation." >&2
               exit 20
             fi
             sleep 10
           done
-          echo "Production UI R10.0 + double-click preview + local V8.8.1 inspection + save-result + replace-source: PASSED"
+          echo "Production UI R10.1 + double-click preview + local V8.8.1 inspection + save-result + replace-source: PASSED"
 
           # Wait for the Worker durability fix itself before any paid generation.
           WORKER_BUILD=""

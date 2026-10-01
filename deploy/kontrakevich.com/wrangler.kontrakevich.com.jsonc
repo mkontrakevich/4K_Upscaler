@@ -66,6 +66,9 @@
   "upload_source_maps": true,
   "vars": {
     "BILLING_MODE": "off",
-    "BILLING_GATEWAY_URL": "https://pay.kontrakevich.com"
+    "BILLING_GATEWAY_URL": "https://pay.kontrakevich.com",
+    "SCENE_ANALYSIS_ENABLED": "true",
+    "SCENE_ANALYSIS_MODEL": "google/gemini-3.8-flash",
+    "SCENE_ANALYSIS_MAX_PER_HOUR": "120"
   }
 }

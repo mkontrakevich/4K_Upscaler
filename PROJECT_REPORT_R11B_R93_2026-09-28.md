@@ -327,3 +327,34 @@ Example:
 - create button “Люди на площади” with prompt fragment `add subtle pedestrians in the plaza`;
 - if PEOPLE / VEHICLES is FREE, the addition is allowed;
 - if PEOPLE / VEHICLES is HARD, the final prompt explicitly keeps the LOCK constraint authoritative.
+
+
+## AI Scene Analysis / Dynamic LOCK — R10.1
+
+The LOCK panel is now image-aware.
+
+Flow:
+1. SOURCE is loaded locally.
+2. A separate low-cost vision analysis is sent through OpenRouter.
+3. The analyzer classifies the scene and selects only relevant LOCK parameters from a fixed universal catalog.
+4. It proposes conservative HARD / SOFT / FREE starting values with a reason and confidence score.
+5. The UI hides irrelevant controls by default.
+6. **Все настройки** reveals the full catalog without silently adding those controls to FINAL PROMPT.
+7. If the operator manually changes a hidden/full-catalog parameter, it becomes active for FINAL PROMPT.
+
+Universal catalog currently covers:
+camera, composition, geometry, architecture, facade details, materials/textures, text/signage,
+lighting, sky, weather, vegetation, ground/paving, water/reflections, glass/reflections,
+people/vehicles, face identity, pose/body, clothing, interior, furniture, products,
+small objects, color palette and depth of field.
+
+Important:
+- SOURCE itself is not changed by analysis.
+- AI recommendations remain editable by the operator.
+- generation is never started by analysis;
+- analysis cost is recorded separately from generation cost;
+- source analysis is downscaled in the browser to at most 1600 px on the long side before the vision call;
+- current analyzer model is configurable; deployment default is `google/gemini-3.8-flash`;
+- session and hourly analysis-call limits protect the OpenRouter account from accidental loops/abuse.
+
+The standard parameter library is fixed and auditable; the AI chooses which controls to surface rather than inventing arbitrary backend parameters.
