@@ -12,6 +12,7 @@ on:
       - 'cloudflare_bridge.py'
       - 'cloud_processor_service.py'
       - 'src/worker.js'
+      - 'src/prompt_assistant.js'
       - '.github/workflows/package-portable.yml'
       - '.github/workflows/regression-guard.yml'
 
@@ -31,20 +32,21 @@ jobs:
           set -euo pipefail
           test -f site/index.html
           test -f src/worker.js
+          test -f src/prompt_assistant.js
           test -f Dockerfile
           test -f deploy/kontrakevich.com/wrangler.kontrakevich.com.jsonc
           test -f deploy/kontrakevich.com/PAYMENTS_ACCESS_ARCHITECTURE.md
           test -f billing-gateway/server.mjs
           test -f deploy/kontrakevich.com/docker-compose.billing.yml
           grep -q '4k.kontrakevich.com' deploy/kontrakevich.com/wrangler.kontrakevich.com.jsonc
-          grep -q 'CORE 8.8.1 R4 · CLOUD UI R10.1' site/index.html
+          grep -q 'CORE 8.8.1 R4 · CLOUD UI R10.2' site/index.html
 
       - name: Build archive
         shell: bash
         run: |
           set -euo pipefail
           short_sha="${GITHUB_SHA::8}"
-          archive="MG4K_ARCH_LOCK_R10_1_KONTRAKEVICH_COM_${short_sha}.zip"
+          archive="MG4K_ARCH_LOCK_R10_2_KONTRAKEVICH_COM_${short_sha}.zip"
           {
             echo "MG 4K / ARCH LOCK portable deployment archive"
             echo "Source commit: ${GITHUB_SHA}"
