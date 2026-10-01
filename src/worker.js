@@ -78,6 +78,217 @@ function sceneAnalysisModel(env) {
   return String(env.SCENE_ANALYSIS_MODEL || "google/gemini-3.8-flash").trim();
 }
 
+
+function promptAssistantEnabled(env) {
+  const raw = String(env.PROMPT_ASSISTANT_ENABLED ?? "true").trim().toLowerCase();
+  return !["0","false","off","no"].includes(raw) && Boolean(String(env.OPENROUTER_API_KEY || "").trim());
+}
+
+function promptAssistantModel(env) {
+  return String(env.PROMPT_ASSISTANT_MODEL || env.SCENE_ANALYSIS_MODEL || "google/gemini-3.8-flash").trim();
+}
+
+function promptAssistantSystemPrompt() {
+  const catalog = SCENE_LOCK_CATALOG.map(item => `- ${item.id}: ${item.name} — ${item.description}`).join("\n");
+  return `You are MG 4K Prompt AI Assistant, an expert prompt engineer for source-faithful image reconstruction and controlled image-to-image generation.
+
+You receive:
+- an operator request written in ordinary language;
+- AI scene analysis for the current SOURCE;
+- current LOCK levels;
+- current ADDITIONS;
+- current FINAL PROMPT.
+
+Your job:
+1. interpret the operator intent precisely;
+2. identify only LOCK changes that are truly needed;
+3. write a concise production-ready ADDITIONS prompt in English;
+4. write a complete production-ready FINAL PROMPT in English;
+5. explain conflicts and important caveats in Russian.
+
+LOCK semantics:
+- HARD = preserve that parameter; do not change it.
+- SOFT = allow controlled correction/refinement while preserving identity.
+- FREE = substantial variation of that parameter is allowed.
+- Never silently override a HARD lock. If the request conflicts with one, recommend an explicit lock change and explain why.
+
+ARCHITECTURAL PERSPECTIVE RULE:
+If the operator wants to correct converging/slanted verticals, camera roll, keystone distortion, or level horizontals:
+- normally recommend camera -> soft, not free;
+- keep composition hard unless a crop/reframe is explicitly requested;
+- keep geometry hard;
+- keep architecture hard;
+- keep text_signage hard when text/signage is relevant;
+- describe correction as optical/perspective rectification, not architectural redesign;
+- require vertical architectural edges to be plumb/parallel and major horizontal bands to be level;
+- preserve facade element count, position, proportions, signage content, materials and scene identity.
+
+Do not invent scene objects unless the operator explicitly asks.
+Do not weaken unrelated identity locks.
+Do not recommend FREE merely to make a requested correction easier if SOFT is sufficient.
+Suggested additions must be directly usable by the image generator, without commentary.
+Suggested final prompt must be a coherent full prompt, not notes or an outline.
+
+LOCK CATALOG:
+${catalog}
+
+Return JSON matching the supplied schema only.`;
+}
+
+function sanitizePromptAssistantInput(raw) {
+  const allowedIds = new Set(SCENE_LOCK_CATALOG.map(item => item.id));
+  const locks = {};
+  for (const [id, level] of Object.entries(raw?.locks && typeof raw.locks === "object" ? raw.locks : {})) {
+    if (!allowedIds.has(id)) continue;
+    const normalized = String(level || "").toLowerCase();
+    if (["hard","soft","free"].includes(normalized)) locks[id] = normalized;
+  }
+  const scene = raw?.scene_analysis && typeof raw.scene_analysis === "object"
+    ? sanitizeSceneAnalysis(raw.scene_analysis)
+    : null;
+  return {
+    user_request: String(raw?.user_request || "").trim().slice(0, 5000),
+    scene_analysis: scene,
+    locks,
+    additions: String(raw?.additions || "").slice(0, 12000),
+    current_prompt: String(raw?.current_prompt || "").slice(0, 30000),
+    active_custom_locks: (Array.isArray(raw?.active_custom_locks) ? raw.active_custom_locks : [])
+      .map(item => ({
+        name: String(item?.name || "").slice(0, 80),
+        prompt: String(item?.prompt || "").slice(0, 2000),
+      }))
+      .filter(item => item.name && item.prompt)
+      .slice(0, 20),
+  };
+}
+
+function sanitizePromptAssistantResult(raw, currentLocks) {
+  const allowedIds = new Set(SCENE_LOCK_CATALOG.map(item => item.id));
+  const changes = [];
+  const seen = new Set();
+  for (const item of Array.isArray(raw?.recommended_lock_changes) ? raw.recommended_lock_changes : []) {
+    const id = String(item?.id || "");
+    if (!allowedIds.has(id) || seen.has(id)) continue;
+    const from = ["hard","soft","free"].includes(String(item?.from || "").toLowerCase())
+      ? String(item.from).toLowerCase()
+      : String(currentLocks?.[id] || "soft");
+    const to = ["hard","soft","free"].includes(String(item?.to || "").toLowerCase())
+      ? String(item.to).toLowerCase()
+      : from;
+    if (from === to) continue;
+    seen.add(id);
+    changes.push({
+      id,
+      from,
+      to,
+      reason: String(item?.reason || "").slice(0, 500),
+    });
+    if (changes.length >= 14) break;
+  }
+  return {
+    task_interpretation: String(raw?.task_interpretation || "").slice(0, 1200),
+    recommended_lock_changes: changes,
+    suggested_additions: String(raw?.suggested_additions || "").slice(0, 12000),
+    suggested_final_prompt: String(raw?.suggested_final_prompt || "").slice(0, 30000),
+    notes: (Array.isArray(raw?.notes) ? raw.notes : []).map(x => String(x).slice(0, 600)).slice(0, 8),
+  };
+}
+
+async function consumePromptAssistantBudget(env, sessionId) {
+  const sessionKey = `prompt-assistant:session:${sessionId}`;
+  const current = Number(await env.SESSION_STATE_R7.get(sessionKey) || 0);
+  const perSession = Math.max(5, Math.min(100, Number(env.PROMPT_ASSISTANT_MAX_PER_SESSION || 30)));
+  if (current >= perSession) return { ok:false, error:"prompt_assistant_session_limit" };
+  await env.SESSION_STATE_R7.put(sessionKey, String(current + 1), { expirationTtl: SESSION_TTL });
+
+  const hour = new Date().toISOString().slice(0, 13);
+  const globalKey = `prompt-assistant:hour:${hour}`;
+  const globalCurrent = Number(await env.SESSION_STATE_R7.get(globalKey) || 0);
+  const globalMax = Math.max(20, Math.min(2000, Number(env.PROMPT_ASSISTANT_MAX_PER_HOUR || 300)));
+  if (globalCurrent >= globalMax) return { ok:false, error:"prompt_assistant_hourly_budget" };
+  await env.SESSION_STATE_R7.put(globalKey, String(globalCurrent + 1), { expirationTtl: 7200 });
+  return { ok:true };
+}
+
+async function runPromptAssistant(env, rawInput) {
+  const key = String(env.OPENROUTER_API_KEY || "").trim();
+  if (!key) throw new Error("prompt_assistant_openrouter_key_missing");
+  const input = sanitizePromptAssistantInput(rawInput);
+  if (!input.user_request) throw new Error("prompt_assistant_request_required");
+
+  const schema = {
+    type:"object",
+    additionalProperties:false,
+    required:["task_interpretation","recommended_lock_changes","suggested_additions","suggested_final_prompt","notes"],
+    properties:{
+      task_interpretation:{type:"string"},
+      recommended_lock_changes:{
+        type:"array",
+        maxItems:14,
+        items:{
+          type:"object",
+          additionalProperties:false,
+          required:["id","from","to","reason"],
+          properties:{
+            id:{type:"string",enum:SCENE_LOCK_CATALOG.map(item=>item.id)},
+            from:{type:"string",enum:["hard","soft","free"]},
+            to:{type:"string",enum:["hard","soft","free"]},
+            reason:{type:"string"},
+          },
+        },
+      },
+      suggested_additions:{type:"string"},
+      suggested_final_prompt:{type:"string"},
+      notes:{type:"array",items:{type:"string"},maxItems:8},
+    },
+  };
+
+  const context = {
+    operator_request: input.user_request,
+    scene_analysis: input.scene_analysis,
+    current_locks: input.locks,
+    current_additions: input.additions,
+    active_custom_lock_buttons: input.active_custom_locks,
+    current_final_prompt: input.current_prompt,
+  };
+
+  const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    method:"POST",
+    headers:{
+      authorization:`Bearer ${key}`,
+      "content-type":"application/json",
+      "HTTP-Referer":"https://4k-upscaler.kontrakevich.workers.dev/",
+      "X-Title":"MG 4K Prompt AI Assistant",
+    },
+    body:JSON.stringify({
+      model:promptAssistantModel(env),
+      temperature:0.15,
+      max_tokens:5200,
+      response_format:{type:"json_schema",json_schema:{name:"mg4k_prompt_assistant",strict:true,schema}},
+      messages:[
+        {role:"system",content:promptAssistantSystemPrompt()},
+        {role:"user",content:"Create the best safe generation prompt strategy for this job context:\n"+JSON.stringify(context)},
+      ],
+    }),
+  });
+  const payload = await response.json().catch(()=>({}));
+  if (!response.ok) {
+    const detail = String(payload?.error?.message || payload?.error || `openrouter_http_${response.status}`).slice(0,300);
+    throw new Error("prompt_assistant_failed:"+detail);
+  }
+  const text = openRouterMessageText(payload?.choices?.[0]?.message);
+  let parsed;
+  try { parsed = JSON.parse(text); } catch { throw new Error("prompt_assistant_invalid_json"); }
+  const result = sanitizePromptAssistantResult(parsed, input.locks);
+  const rawCost = payload?.usage?.cost;
+  const cost = rawCost === null || rawCost === undefined ? null : Number(rawCost);
+  return {
+    ...result,
+    model:String(payload?.model || promptAssistantModel(env)),
+    assistant_cost_usd:Number.isFinite(cost) && cost >= 0 ? cost : null,
+  };
+}
+
 function sceneAnalysisPrompt() {
   const catalog = SCENE_LOCK_CATALOG.map(item => `- ${item.id}: ${item.name} — ${item.description}`).join("\n");
   return `You are the MG 4K visual scene analyzer. Inspect the SOURCE image and select only LOCK parameters that are materially relevant to this exact image.
@@ -1092,6 +1303,8 @@ async function handleApi(request, env, ctx, url) {
       scene_analysis_model: sceneAnalysisEnabled(env) ? sceneAnalysisModel(env) : null,
       prompt_assistant_enabled: promptAssistantEnabled(env),
       prompt_assistant_model: promptAssistantEnabled(env) ? promptAssistantModel(env) : null,
+      prompt_assistant_enabled: promptAssistantEnabled(env),
+      prompt_assistant_model: promptAssistantEnabled(env) ? promptAssistantModel(env) : null,
     });
   }
 
@@ -1141,6 +1354,32 @@ async function handleApi(request, env, ctx, url) {
     if (!context.request) return json({ error:"prompt_assistant_request_required" }, 400);
     try {
       return json({ ok:true, ...(await runPromptAssistant(env, context)), generated_at:now() });
+    } catch (error) {
+      console.warn("MG4K_PROMPT_ASSISTANT_ERROR", error?.message || String(error));
+      return json({ error:String(error?.message || "prompt_assistant_failed").slice(0,400) }, 502);
+    }
+  }
+
+  if (path === "/api/prompt-assistant" && method === "POST") {
+    if (!promptAssistantEnabled(env)) return json({ error:"prompt_assistant_disabled" }, 503);
+    const session = await authorizeSession(request, url, env);
+    if (!session) return json({ error:"session_required" }, 403);
+
+    const budget = await consumePromptAssistantBudget(env, session.id);
+    if (!budget.ok) return json({ error:budget.error }, 429);
+
+    let body = {};
+    try { body = await request.json(); } catch { return json({ error:"invalid_json" }, 400); }
+    if (!String(body?.user_request || "").trim()) return json({ error:"prompt_assistant_request_required" }, 400);
+
+    try {
+      const result = await runPromptAssistant(env, body);
+      return json({
+        ok:true,
+        ...result,
+        assistant_version:"prompt-assistant-v1",
+        created_at:now(),
+      });
     } catch (error) {
       console.warn("MG4K_PROMPT_ASSISTANT_ERROR", error?.message || String(error));
       return json({ error:String(error?.message || "prompt_assistant_failed").slice(0,400) }, 502);
