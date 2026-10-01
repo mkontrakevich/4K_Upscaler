@@ -41,6 +41,211 @@ const LEGACY_CONTAINER_INSTANCE_NAMES = [
   "primary-result-persist-r10b",
 ];
 
+const SCENE_LOCK_CATALOG = [
+  { id:"camera", name:"Камера", description:"viewpoint, perspective, focal length, crop and horizon" },
+  { id:"composition", name:"Композиция", description:"subject placement, framing balance, negative space and visual hierarchy" },
+  { id:"geometry", name:"Геометрия", description:"object contours, proportions, massing, terrain and spatial relationships" },
+  { id:"architecture", name:"Архитектура", description:"building identity, floors, openings, rooflines and design language" },
+  { id:"facade_details", name:"Детали фасада", description:"mouldings, joints, cornices, railings, decorative and facade micro-elements" },
+  { id:"textures", name:"Материалы / текстуры", description:"material category, finish, joints, texture direction, roughness and scale" },
+  { id:"text_signage", name:"Текст / вывески", description:"letters, numerals, logos, signage, road markings and readable symbols" },
+  { id:"lighting", name:"Освещение", description:"time of day, exposure, light direction, shadows, contrast and mood" },
+  { id:"sky", name:"Небо / облака", description:"sky structure, clouds, atmosphere and horizon tone" },
+  { id:"weather", name:"Погода", description:"rain, snow, fog, haze and atmospheric weather state" },
+  { id:"vegetation", name:"Озеленение", description:"trees, shrubs, grass, planting positions, mass and character" },
+  { id:"ground", name:"Земля / покрытие", description:"paving, asphalt, soil, curbs, paths and ground boundaries" },
+  { id:"water", name:"Вода / отражения", description:"water bodies, reflections, puddles, shadow/reflection causal logic" },
+  { id:"glass_reflections", name:"Стекло / отражения", description:"glazing, transparent surfaces, reflections and interior/exterior visibility" },
+  { id:"people_vehicles", name:"Люди / транспорт", description:"count, position, scale, orientation and identity of people and vehicles" },
+  { id:"faces_identity", name:"Лица / идентичность", description:"recognizable face identity, facial geometry, age cues and expression" },
+  { id:"pose_body", name:"Поза / тело", description:"body pose, anatomy, hands, gesture, silhouette and proportions" },
+  { id:"clothing", name:"Одежда", description:"garments, colors, cut, logos, accessories and fabric identity" },
+  { id:"interior", name:"Интерьер", description:"room layout, walls, ceilings, floor, built-ins and spatial identity" },
+  { id:"furniture", name:"Мебель", description:"furniture count, placement, dimensions, model and finish" },
+  { id:"products", name:"Предмет / продукт", description:"hero product identity, packaging, geometry, branding and surface finish" },
+  { id:"small_objects", name:"Малые объекты", description:"props, lamps, signs, street furniture and secondary scene objects" },
+  { id:"color_palette", name:"Цветовая палитра", description:"dominant colors, white balance and brand/product color identity" },
+  { id:"depth_of_field", name:"Глубина резкости", description:"focus plane, blur distribution, bokeh and optical depth cues" },
+];
+
+function sceneAnalysisEnabled(env) {
+  const raw = String(env.SCENE_ANALYSIS_ENABLED ?? "true").trim().toLowerCase();
+  return !["0","false","off","no"].includes(raw) && Boolean(String(env.OPENROUTER_API_KEY || "").trim());
+}
+
+function sceneAnalysisModel(env) {
+  return String(env.SCENE_ANALYSIS_MODEL || "google/gemini-3.8-flash").trim();
+}
+
+function sceneAnalysisPrompt() {
+  const catalog = SCENE_LOCK_CATALOG.map(item => `- ${item.id}: ${item.name} — ${item.description}`).join("\n");
+  return `You are the MG 4K visual scene analyzer. Inspect the SOURCE image and select only LOCK parameters that are materially relevant to this exact image.
+
+GOAL:
+- hide irrelevant controls from the operator;
+- recommend conservative HARD / SOFT / FREE defaults for relevant controls;
+- protect identity-critical content;
+- do not invent objects that are not visibly present.
+
+RULES:
+1. Return between 2 and 14 relevant locks.
+2. CAMERA and COMPOSITION are normally relevant to every image.
+3. If a building/exterior is visible, include GEOMETRY and ARCHITECTURE.
+4. Include TEXT_SIGNAGE only when visible text, logos, signs, numbers or markings matter.
+5. Include FACES_IDENTITY only when one or more recognizable human faces are visible.
+6. Include POSE_BODY / CLOTHING only when people are visually important enough that drift would matter.
+7. Include PRODUCTS only when a product/object is the primary subject.
+8. Use HARD for identity, geometry, text/logo, recognizable faces, hero products, or other elements whose change would make the image factually wrong.
+9. Use SOFT where controlled refinement is useful.
+10. Use FREE only where creative variation is safe.
+11. Give a concise Russian reason for every suggested lock.
+12. Confidence is 0.0 to 1.0.
+13. Do not return any id outside this catalog.
+
+LOCK CATALOG:
+${catalog}
+
+Return JSON matching the supplied schema only.`;
+}
+
+function arrayBufferToBase64(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, Math.min(bytes.length, i + chunk)));
+  }
+  return btoa(binary);
+}
+
+function openRouterMessageText(message) {
+  const content = message?.content;
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    return content.map(part => typeof part?.text === "string" ? part.text : "").join("").trim();
+  }
+  return "";
+}
+
+function sanitizeSceneAnalysis(raw) {
+  const allowed = new Set(SCENE_LOCK_CATALOG.map(item => item.id));
+  const seen = new Set();
+  const relevant = [];
+  for (const item of Array.isArray(raw?.relevant_locks) ? raw.relevant_locks : []) {
+    const id = String(item?.id || "");
+    if (!allowed.has(id) || seen.has(id)) continue;
+    seen.add(id);
+    const recommended = ["hard","soft","free"].includes(String(item?.recommended_level || "").toLowerCase())
+      ? String(item.recommended_level).toLowerCase()
+      : "soft";
+    relevant.push({
+      id,
+      recommended_level: recommended,
+      confidence: Math.max(0, Math.min(1, Number(item?.confidence || 0))),
+      reason: String(item?.reason || "").slice(0, 300),
+    });
+    if (relevant.length >= 14) break;
+  }
+  if (!seen.has("camera")) relevant.unshift({id:"camera",recommended_level:"hard",confidence:1,reason:"Ракурс и перспектива определяют соответствие исходнику."});
+  if (!relevant.some(item => item.id === "composition")) relevant.splice(1,0,{id:"composition",recommended_level:"hard",confidence:1,reason:"Композицию и положение главного объекта следует сохранить."});
+  return {
+    scene_type: String(raw?.scene_type || "unknown").slice(0, 120),
+    summary: String(raw?.summary || "").slice(0, 700),
+    relevant_locks: relevant.slice(0, 14),
+    detected_features: (Array.isArray(raw?.detected_features) ? raw.detected_features : []).map(x=>String(x).slice(0,120)).slice(0,16),
+  };
+}
+
+async function consumeSceneAnalysisBudget(env, sessionId) {
+  const sessionKey = `scene-analysis:session:${sessionId}`;
+  const current = Number(await env.SESSION_STATE_R7.get(sessionKey) || 0);
+  if (current >= 20) return { ok:false, error:"scene_analysis_session_limit" };
+  await env.SESSION_STATE_R7.put(sessionKey, String(current + 1), { expirationTtl: SESSION_TTL });
+
+  const hour = new Date().toISOString().slice(0, 13);
+  const globalKey = `scene-analysis:hour:${hour}`;
+  const globalCurrent = Number(await env.SESSION_STATE_R7.get(globalKey) || 0);
+  const globalMax = Math.max(10, Math.min(1000, Number(env.SCENE_ANALYSIS_MAX_PER_HOUR || 120)));
+  if (globalCurrent >= globalMax) return { ok:false, error:"scene_analysis_hourly_budget" };
+  await env.SESSION_STATE_R7.put(globalKey, String(globalCurrent + 1), { expirationTtl: 7200 });
+  return { ok:true };
+}
+
+async function analyzeSceneWithOpenRouter(env, file) {
+  const key = String(env.OPENROUTER_API_KEY || "").trim();
+  if (!key) throw new Error("scene_analysis_openrouter_key_missing");
+  const bytes = await file.arrayBuffer();
+  if (bytes.byteLength > 8 * 1024 * 1024) throw new Error("scene_analysis_file_too_large");
+  const mime = String(file.type || "image/jpeg");
+  const dataUrl = `data:${mime};base64,${arrayBufferToBase64(bytes)}`;
+
+  const schema = {
+    type:"object",
+    additionalProperties:false,
+    required:["scene_type","summary","relevant_locks","detected_features"],
+    properties:{
+      scene_type:{type:"string"},
+      summary:{type:"string"},
+      detected_features:{type:"array",items:{type:"string"},maxItems:16},
+      relevant_locks:{
+        type:"array",
+        minItems:2,
+        maxItems:14,
+        items:{
+          type:"object",
+          additionalProperties:false,
+          required:["id","recommended_level","confidence","reason"],
+          properties:{
+            id:{type:"string",enum:SCENE_LOCK_CATALOG.map(item=>item.id)},
+            recommended_level:{type:"string",enum:["hard","soft","free"]},
+            confidence:{type:"number",minimum:0,maximum:1},
+            reason:{type:"string"},
+          },
+        },
+      },
+    },
+  };
+
+  const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    method:"POST",
+    headers:{
+      authorization:`Bearer ${key}`,
+      "content-type":"application/json",
+      "HTTP-Referer":"https://4k-upscaler.kontrakevich.workers.dev/",
+      "X-Title":"MG 4K Scene LOCK Analyzer",
+    },
+    body:JSON.stringify({
+      model:sceneAnalysisModel(env),
+      temperature:0.1,
+      max_tokens:1800,
+      response_format:{type:"json_schema",json_schema:{name:"mg4k_scene_lock_analysis",strict:true,schema}},
+      messages:[
+        {role:"system",content:sceneAnalysisPrompt()},
+        {role:"user",content:[
+          {type:"text",text:"Analyze this SOURCE image and propose only the relevant LOCK controls and their initial levels."},
+          {type:"image_url",image_url:{url:dataUrl}},
+        ]},
+      ],
+    }),
+  });
+  const payload = await response.json().catch(()=>({}));
+  if (!response.ok) {
+    const detail = String(payload?.error?.message || payload?.error || `openrouter_http_${response.status}`).slice(0,300);
+    throw new Error("scene_analysis_failed:"+detail);
+  }
+  const text = openRouterMessageText(payload?.choices?.[0]?.message);
+  let parsed;
+  try { parsed = JSON.parse(text); } catch { throw new Error("scene_analysis_invalid_json"); }
+  const result = sanitizeSceneAnalysis(parsed);
+  const rawCost = payload?.usage?.cost;
+  const cost = rawCost === null || rawCost === undefined ? null : Number(rawCost);
+  return {
+    ...result,
+    model: String(payload?.model || sceneAnalysisModel(env)),
+    analysis_cost_usd: Number.isFinite(cost) && cost >= 0 ? cost : null,
+  };
+}
+
 function processorContainer(env) {
   return getContainer(env.MG4K_PROCESSOR, CONTAINER_INSTANCE_NAME);
 }
@@ -868,7 +1073,43 @@ async function handleApi(request, env, ctx, url) {
       image_buffer: "private Cloudflare R2, session-scoped",
       billing_mode: billingMode(env),
       billing_enabled: billingEnabled(env),
+      scene_analysis_enabled: sceneAnalysisEnabled(env),
+      scene_analysis_model: sceneAnalysisEnabled(env) ? sceneAnalysisModel(env) : null,
     });
+  }
+
+  if (path === "/api/scene-analysis" && method === "POST") {
+    if (!sceneAnalysisEnabled(env)) return json({ error:"scene_analysis_disabled" }, 503);
+    const session = await authorizeSession(request, url, env);
+    if (!session) return json({ error:"session_required" }, 403);
+
+    const budget = await consumeSceneAnalysisBudget(env, session.id);
+    if (!budget.ok) return json({ error:budget.error }, 429);
+
+    let form;
+    try { form = await request.formData(); } catch { return json({ error:"invalid_form_data" }, 400); }
+    const file = form.get("file");
+    if (!file || typeof file !== "object" || typeof file.arrayBuffer !== "function") {
+      return json({ error:"image_file_required" }, 400);
+    }
+    if (Number(file.size || 0) > 8 * 1024 * 1024) {
+      return json({ error:"scene_analysis_file_too_large", max_bytes:8*1024*1024 }, 413);
+    }
+    const type = String(file.type || "");
+    if (!type.startsWith("image/")) return json({ error:"unsupported_scene_analysis_type" }, 415);
+
+    try {
+      const analysis = await analyzeSceneWithOpenRouter(env, file);
+      return json({
+        ok:true,
+        ...analysis,
+        catalog_version:"scene-locks-v1",
+        analyzed_at:now(),
+      });
+    } catch (error) {
+      console.warn("MG4K_SCENE_ANALYSIS_ERROR", error?.message || String(error));
+      return json({ error:String(error?.message || "scene_analysis_failed").slice(0,400) }, 502);
+    }
   }
 
   if (path === "/api/billing/config" && method === "GET") {
