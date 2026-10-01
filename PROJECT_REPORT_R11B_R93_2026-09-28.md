@@ -358,3 +358,49 @@ Important:
 - session and hourly analysis-call limits protect the OpenRouter account from accidental loops/abuse.
 
 The standard parameter library is fixed and auditable; the AI chooses which controls to surface rather than inventing arbitrary backend parameters.
+
+
+## Prompt AI Assistant — R10.2
+
+The prompt console now contains a context-aware **PROMPT AI ASSISTANT**.
+
+Inputs used by the assistant:
+- operator's natural-language request;
+- current AI scene analysis;
+- current LOCK values;
+- current ADDITIONS;
+- current visible FINAL PROMPT.
+
+Structured output:
+- Russian task interpretation;
+- only necessary LOCK changes;
+- production-ready English ADDITIONS;
+- a complete suggested FINAL PROMPT;
+- short operator notes;
+- OpenRouter assistant-call cost.
+
+Operator controls:
+- **Применить LOCK** — applies only recommended LOCK changes;
+- **В ADDITIONS** — puts AI wording into the additions layer;
+- **Применить всё** — applies recommended LOCK + ADDITIONS and rebuilds the authoritative FINAL PROMPT;
+- **Заменить FINAL** — uses the assistant's complete final prompt in manual mode.
+
+Built-in quick tasks:
+- straighten architecture;
+- fix verticals;
+- level horizontals;
+- preserve facade;
+- preserve signage;
+- add people;
+- enhance sky;
+- evening light;
+- premium hotel look.
+
+Architectural perspective rule:
+when the goal is to remove falling verticals / keystone distortion / camera roll, the assistant treats this primarily as a camera/perspective correction rather than redesigning object geometry. It normally proposes CAMERA=SOFT while keeping GEOMETRY and ARCHITECTURE HARD, plus TEXT/SIGNAGE HARD when relevant.
+
+The assistant is advisory only:
+- it never starts a generation;
+- it never changes LOCK until the operator presses an apply action;
+- its OpenRouter API key remains server-side;
+- session/hourly call limits prevent accidental loops and abuse.
