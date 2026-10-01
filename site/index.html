@@ -95,11 +95,20 @@ body{overflow-x:hidden}
 .segmented button.active[data-level="free"]{background:#223344;color:#d1dfeb}
 .lock-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:9px}
 .prompt-body{padding:10px}
+.prompt-subhead{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:2px 0 7px;color:#91a8bb;font-size:9px;letter-spacing:.08em}
 .prompt-presets{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:9px}
 .prompt-preset{display:inline-flex;align-items:center;gap:6px;min-height:32px;padding:0 9px;border:1px solid #35536b;border-radius:7px;background:#091a28;color:#bcd0df;font-size:10px;font-weight:800;cursor:pointer}
 .prompt-preset.active{border-color:#16c5f4;color:#5fe0ff;background:#0b2a3d}
 .prompt-preset .delete{display:inline-grid;place-items:center;width:17px;height:17px;border:0;border-radius:50%;background:#40212b;color:#ff9aa7;font-size:11px;cursor:pointer}
 .prompt-editor{width:100%;min-height:280px;resize:vertical;border:1px solid #294054;border-radius:7px;background:#030a10;color:#dce9f3;padding:11px 12px;font:10px/1.55 Consolas,monospace;outline:none}
+.additions-editor{width:100%;min-height:92px;resize:vertical;border:1px solid #35536b;border-radius:7px;background:#07111b;color:#dce9f3;padding:10px 11px;font:10px/1.5 Consolas,monospace;outline:none}
+.additions-editor:focus{border-color:#b98124;box-shadow:0 0 0 1px rgba(185,129,36,.18)}
+.custom-locks{display:flex;gap:7px;flex-wrap:wrap;margin:0 0 9px}
+.custom-lock{display:inline-flex;align-items:center;gap:6px;min-height:32px;padding:0 9px;border:1px solid #4d5964;border-radius:7px;background:#111a22;color:#aebfcd;font-size:10px;font-weight:800;cursor:pointer}
+.custom-lock.active{border-color:#d28a22;background:#3a280e;color:#ffd48a}
+.custom-lock .delete{display:inline-grid;place-items:center;width:17px;height:17px;border:0;border-radius:50%;background:#4a2026;color:#ff9aa7;font-size:11px;cursor:pointer}
+.custom-lock .edit{display:inline-grid;place-items:center;width:17px;height:17px;border:0;border-radius:50%;background:#17324a;color:#82d8ff;font-size:10px;cursor:pointer}
+.additions-tools{display:flex;justify-content:flex-end;gap:7px;flex-wrap:wrap;margin:7px 0 12px}
 .prompt-editor:focus{border-color:#16c5f4;box-shadow:0 0 0 1px rgba(22,197,244,.18)}
 .prompt-tools{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px;flex-wrap:wrap}
 .prompt-tools-left,.prompt-tools-right{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
@@ -247,7 +256,7 @@ body{overflow-x:hidden}
     </div>
     <div class="top-actions">
       <button id="billing-chip" class="billing-chip" type="button" hidden>Кредиты: <strong id="billing-chip-balance">—</strong></button>
-      <div class="version">CORE 8.8.1 R4 · CLOUD UI R9.9</div>
+      <div class="version">CORE 8.8.1 R4 · CLOUD UI R10.0</div>
     </div>
   </header>
 
@@ -312,21 +321,35 @@ body{overflow-x:hidden}
 
   <section class="prompt-panel" id="prompt-panel">
     <div class="section-head">
-      <strong>PROMPT / PRESETS</strong>
-      <span>точный prompt, который будет отправлен генератору</span>
+      <strong>PROMPT / LOCK BUTTONS</strong>
+      <span>LOCK ограничивает · ADDITIONS добавляет · FINAL PROMPT уходит генератору</span>
     </div>
     <div class="prompt-body">
+      <div class="prompt-subhead"><strong>ПРОФИЛИ LOCK</strong><span>сохраняют LOCK + полный prompt</span></div>
       <div id="prompt-presets" class="prompt-presets"></div>
-      <textarea id="prompt-editor" class="prompt-editor" spellcheck="false" aria-label="Промпт генерации"></textarea>
+
+      <div class="prompt-subhead"><strong>ПОЛЬЗОВАТЕЛЬСКИЕ LOCK-КНОПКИ</strong><span>каждая кнопка = ваш prompt-фрагмент</span></div>
+      <div id="custom-locks" class="custom-locks"></div>
+
+      <div class="prompt-subhead"><strong>ADDITIONS · ЧТО ДОБАВИТЬ / ИЗМЕНИТЬ</strong><span>LOCK имеет приоритет при конфликте</span></div>
+      <textarea id="additions-editor" class="additions-editor" spellcheck="false" placeholder="Например: add subtle pedestrians, warm interior glow, premium evening atmosphere…"></textarea>
+      <div class="additions-tools">
+        <button class="btn ghost" id="additions-clear" type="button">Очистить</button>
+        <button class="btn ghost" id="custom-lock-overwrite" type="button" disabled>Перезаписать выбранную</button>
+        <button class="btn primary" id="custom-lock-save" type="button">＋ Сохранить как LOCK-кнопку</button>
+      </div>
+
+      <div class="prompt-subhead"><strong>FINAL PROMPT</strong><span>точный текст OpenRouter · можно редактировать вручную</span></div>
+      <textarea id="prompt-editor" class="prompt-editor" spellcheck="false" aria-label="Финальный промпт генерации"></textarea>
       <div class="prompt-tools">
         <div class="prompt-tools-left">
           <span id="prompt-mode" class="prompt-mode sync">SYNC WITH LOCK</span>
           <span id="prompt-meta" class="prompt-meta">—</span>
         </div>
         <div class="prompt-tools-right">
-          <button class="btn ghost" id="prompt-sync" type="button">Собрать из LOCK</button>
-          <button class="btn ghost" id="prompt-copy" type="button">Копировать</button>
-          <button class="btn primary" id="prompt-save-preset" type="button">＋ Сохранить пресет</button>
+          <button class="btn ghost" id="prompt-sync" type="button">Собрать FINAL</button>
+          <button class="btn ghost" id="prompt-copy" type="button">Копировать FINAL</button>
+          <button class="btn primary" id="prompt-save-preset" type="button">＋ Сохранить профиль</button>
         </div>
       </div>
     </div>
@@ -504,7 +527,13 @@ let sourceItems=[],currentSourceIndex=-1;
 let latestJobState=null,lastStatusSignature="";
 const PROMPT_PRESETS_KEY="mg4k.promptPresets.v1";
 const ACTIVE_PROMPT_PRESET_KEY="mg4k.activePromptPreset.v1";
+const CUSTOM_LOCK_BUTTONS_KEY="mg4k.customLockButtons.v1";
+const ACTIVE_CUSTOM_LOCKS_KEY="mg4k.activeCustomLocks.v1";
 let promptPresets=[];
+let customLockButtons=[];
+let activeCustomLockIds=[];
+let selectedCustomLockId=null;
+let additionsText="";
 let activePromptPresetId=localStorage.getItem(ACTIVE_PROMPT_PRESET_KEY)||"builtin-arch-lock";
 let promptMode="sync";
 let currentPrompt="";
@@ -529,7 +558,7 @@ function logExportText(){
   const item=currentSourceItem();
   const header=[
     "MG 4K / ARCH LOCK — PROCESS LOG",
-    "UI: CORE 8.8.1 R4 · CLOUD UI R9.9",
+    "UI: CORE 8.8.1 R4 · CLOUD UI R10.0",
     "Processor build: "+(latestJobState?.container_build_id||"—"),
     "Exported: "+new Date().toISOString(),
     "Job: "+(currentJob?.id||"—"),
@@ -551,6 +580,8 @@ function logExportText(){
     "Locks: "+JSON.stringify(locks),
     "Prompt mode: "+promptMode,
     "Prompt preset: "+activePromptPresetId,
+    "Active custom LOCK buttons: "+JSON.stringify(activeCustomLockIds),
+    "Additions: "+(additionsText||"—"),
     "Prompt chars: "+currentPrompt.length,
     "",
     "PROMPT SENT TO GENERATOR",
@@ -685,12 +716,31 @@ function currentProviderAspect(){
   }
   return best[0];
 }
+function activeCustomPromptFragments(){
+  return activeCustomLockIds
+    .map(id=>customLockButtons.find(item=>item.id===id))
+    .filter(Boolean)
+    .map(item=>({name:item.name,prompt:String(item.prompt||"").trim()}))
+    .filter(item=>item.prompt);
+}
 function buildPromptFromLocks(){
-  const lines=[
-    PROMPT_BASE,
+  const lines=[PROMPT_BASE];
+  const custom=activeCustomPromptFragments();
+  const freeAdditions=String(additionsText||"").trim();
+  if(custom.length||freeAdditions){
+    lines.push(
+      "",
+      "USER ADDITIONS — REQUESTED CREATIVE CHANGES.",
+      "Apply these additions only where they do not conflict with the ACTIVE USER LOCK PROFILE below. The LOCK PROFILE has higher priority."
+    );
+    custom.forEach(item=>lines.push("- "+item.name+": "+item.prompt));
+    if(freeAdditions)lines.push("- ADDITIONAL REQUEST: "+freeAdditions);
+  }
+  lines.push(
+    "",
     "ACTIVE USER LOCK PROFILE — HIGHEST-PRIORITY PER-PARAMETER POLICY FOR THIS DONOR REQUEST.",
-    "These levels are supplied by the user interface for this exact job. They supersede any generic default lock labels."
-  ];
+    "These levels are supplied by the user interface for this exact job. They supersede generic instructions and USER ADDITIONS when there is a conflict."
+  );
   defaults.forEach(item=>{
     const rule=PROMPT_LOCK_RULES[item.id],level=locks[item.id]||item.level;
     lines.push("- "+rule.label+" ["+String(level).toUpperCase()+"]: "+rule[level]);
@@ -710,8 +760,18 @@ function loadPromptPresets(){
   try{promptPresets=JSON.parse(localStorage.getItem(PROMPT_PRESETS_KEY)||"[]")}catch{promptPresets=[]}
   if(!Array.isArray(promptPresets))promptPresets=[];
   promptPresets=promptPresets.filter(p=>p&&p.id&&p.name&&p.prompt&&p.locks).slice(0,40);
+  try{customLockButtons=JSON.parse(localStorage.getItem(CUSTOM_LOCK_BUTTONS_KEY)||"[]")}catch{customLockButtons=[]}
+  if(!Array.isArray(customLockButtons))customLockButtons=[];
+  customLockButtons=customLockButtons.filter(p=>p&&p.id&&p.name&&p.prompt).slice(0,60);
+  try{activeCustomLockIds=JSON.parse(localStorage.getItem(ACTIVE_CUSTOM_LOCKS_KEY)||"[]")}catch{activeCustomLockIds=[]}
+  if(!Array.isArray(activeCustomLockIds))activeCustomLockIds=[];
+  activeCustomLockIds=activeCustomLockIds.filter(id=>customLockButtons.some(p=>p.id===id));
 }
 function persistPromptPresets(){localStorage.setItem(PROMPT_PRESETS_KEY,JSON.stringify(promptPresets))}
+function persistCustomLockButtons(){
+  localStorage.setItem(CUSTOM_LOCK_BUTTONS_KEY,JSON.stringify(customLockButtons));
+  localStorage.setItem(ACTIVE_CUSTOM_LOCKS_KEY,JSON.stringify(activeCustomLockIds));
+}
 function setPromptMode(mode){
   promptMode=mode==="manual"?"manual":"sync";
   const el=$("prompt-mode");if(!el)return;
@@ -720,7 +780,8 @@ function setPromptMode(mode){
 }
 function updatePromptMeta(){
   const text=$("prompt-editor")?.value||currentPrompt||"";
-  $("prompt-meta").textContent=text.length+" chars · "+currentProviderAspect()+" · "+(activePromptPresetId==="builtin-arch-lock"?"ARCH LOCK":(promptPresets.find(p=>p.id===activePromptPresetId)?.name||"CUSTOM"));
+  const activeCustom=activeCustomPromptFragments().length;
+  $("prompt-meta").textContent=text.length+" chars · "+currentProviderAspect()+" · "+activeCustom+" custom LOCK · "+(activePromptPresetId==="builtin-arch-lock"?"ARCH LOCK":(promptPresets.find(p=>p.id===activePromptPresetId)?.name||"CUSTOM"));
 }
 function setCurrentPrompt(text,{mode=promptMode,presetId=activePromptPresetId}={}){
   currentPrompt=String(text||"").slice(0,30000);
@@ -733,6 +794,19 @@ function setCurrentPrompt(text,{mode=promptMode,presetId=activePromptPresetId}={
 function syncPromptFromLocks(force=false){
   if(!force&&promptMode!=="sync")return;
   setCurrentPrompt(buildPromptFromLocks(),{mode:"sync",presetId:"builtin-arch-lock"});
+}
+function renderCustomLocks(){
+  const root=$("custom-locks");if(!root)return;
+  root.innerHTML=customLockButtons.map(item=>
+    '<button class="custom-lock '+(activeCustomLockIds.includes(item.id)?"active":"")+'" type="button" data-custom-lock="'+escapeHtml(item.id)+'"><span>'+escapeHtml(item.name)+'</span><span class="edit" data-edit-custom="'+escapeHtml(item.id)+'" title="Редактировать">✎</span><span class="delete" data-delete-custom="'+escapeHtml(item.id)+'" title="Удалить">×</span></button>'
+  ).join("")||'<span class="prompt-meta">Нет пользовательских LOCK-кнопок. Напишите ADDITIONS и сохраните их в кнопку.</span>';
+  root.querySelectorAll("[data-custom-lock]").forEach(btn=>btn.addEventListener("click",event=>{
+    if(event.target.closest("[data-delete-custom]")||event.target.closest("[data-edit-custom]"))return;
+    toggleCustomLock(btn.dataset.customLock);
+  }));
+  root.querySelectorAll("[data-delete-custom]").forEach(btn=>btn.addEventListener("click",event=>{event.stopPropagation();deleteCustomLock(btn.dataset.deleteCustom)}));
+  root.querySelectorAll("[data-edit-custom]").forEach(btn=>btn.addEventListener("click",event=>{event.stopPropagation();editCustomLock(btn.dataset.editCustom)}));
+  $("custom-lock-overwrite").disabled=!selectedCustomLockId;
 }
 function renderPromptPresets(){
   const root=$("prompt-presets");if(!root)return;
@@ -747,25 +821,75 @@ function renderPromptPresets(){
   root.querySelectorAll("[data-delete-preset]").forEach(btn=>btn.addEventListener("click",event=>{
     event.stopPropagation();deletePromptPreset(btn.dataset.deletePreset);
   }));
+  renderCustomLocks();
 }
+function toggleCustomLock(id){
+  if(!customLockButtons.some(item=>item.id===id))return;
+  activeCustomLockIds=activeCustomLockIds.includes(id)?activeCustomLockIds.filter(x=>x!==id):[...activeCustomLockIds,id];
+  persistCustomLockButtons();
+  if(promptMode!=="sync")toast("LOCK-кнопка изменила сценарий: FINAL PROMPT пересобран.");
+  syncPromptFromLocks(true);renderCustomLocks();
+}
+function saveCustomLock(){
+  const prompt=String($("additions-editor").value||"").trim();
+  if(!prompt){toast("Сначала напишите ADDITIONS для новой LOCK-кнопки.");return}
+  const name=String(window.prompt("Название новой LOCK-кнопки:","")||"").trim().slice(0,42);if(!name)return;
+  const id="lock-"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,7);
+  customLockButtons.push({id,name,prompt,created_at:new Date().toISOString()});
+  activeCustomLockIds=[...activeCustomLockIds,id];
+  selectedCustomLockId=id;
+  additionsText="";$("additions-editor").value="";
+  persistCustomLockButtons();syncPromptFromLocks(true);renderCustomLocks();
+  toast("LOCK-кнопка создана: "+name);
+}
+function editCustomLock(id){
+  const item=customLockButtons.find(x=>x.id===id);if(!item)return;
+  selectedCustomLockId=id;additionsText=item.prompt;$("additions-editor").value=item.prompt;
+  renderCustomLocks();updatePromptMeta();toast("LOCK-кнопка выбрана для редактирования: "+item.name);
+}
+function overwriteCustomLock(){
+  if(!selectedCustomLockId)return;
+  const item=customLockButtons.find(x=>x.id===selectedCustomLockId);if(!item)return;
+  const prompt=String($("additions-editor").value||"").trim();if(!prompt){toast("ADDITIONS пуст.");return}
+  const rename=String(window.prompt("Название LOCK-кнопки:",item.name)||item.name).trim().slice(0,42)||item.name;
+  item.name=rename;item.prompt=prompt;item.updated_at=new Date().toISOString();
+  if(!activeCustomLockIds.includes(item.id))activeCustomLockIds.push(item.id);
+  additionsText="";$("additions-editor").value="";
+  persistCustomLockButtons();syncPromptFromLocks(true);renderCustomLocks();toast("LOCK-кнопка обновлена: "+item.name);
+}
+function deleteCustomLock(id){
+  const item=customLockButtons.find(x=>x.id===id);if(!item)return;
+  if(!confirm("Удалить LOCK-кнопку «"+item.name+"»?"))return;
+  customLockButtons=customLockButtons.filter(x=>x.id!==id);
+  activeCustomLockIds=activeCustomLockIds.filter(x=>x!==id);
+  if(selectedCustomLockId===id)selectedCustomLockId=null;
+  persistCustomLockButtons();syncPromptFromLocks(true);renderCustomLocks();toast("LOCK-кнопка удалена.");
+}
+
 function applyPromptPreset(id){
   if(id==="builtin-arch-lock"){
     locks=Object.fromEntries(defaults.map(x=>[x.id,x.level]));localStorage.setItem("mg4k.lockProfile",JSON.stringify(locks));
+    additionsText="";activeCustomLockIds=[];selectedCustomLockId=null;persistCustomLockButtons();
     const item=currentSourceItem();if(item)item.locks={...locks};
-    renderLocks();setCurrentPrompt(buildPromptFromLocks(),{mode:"sync",presetId:id});
+    $("additions-editor").value="";
+    renderLocks();renderCustomLocks();setCurrentPrompt(buildPromptFromLocks(),{mode:"sync",presetId:id});
     toast("Пресет ARCH LOCK применён.");return;
   }
   const preset=promptPresets.find(p=>p.id===id);if(!preset)return;
   locks={...preset.locks};localStorage.setItem("mg4k.lockProfile",JSON.stringify(locks));
+  additionsText=String(preset.additions||"");
+  activeCustomLockIds=Array.isArray(preset.activeCustomLockIds)?preset.activeCustomLockIds.filter(x=>customLockButtons.some(c=>c.id===x)):[];
+  persistCustomLockButtons();
   const item=currentSourceItem();if(item)item.locks={...locks};
-  renderLocks();setCurrentPrompt(preset.prompt,{mode:"manual",presetId:id});
+  $("additions-editor").value=additionsText;
+  renderLocks();renderCustomLocks();setCurrentPrompt(preset.prompt,{mode:"manual",presetId:id});
   toast("Пресет применён: "+preset.name);
 }
 function savePromptPreset(){
   const name=String(prompt("Название пресета:","")||"").trim().slice(0,48);if(!name)return;
   const promptText=String($("prompt-editor").value||"").trim();if(!promptText){toast("Промпт пуст.");return}
   const id="user-"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,7);
-  promptPresets.push({id,name,locks:{...locks},prompt:promptText,created_at:new Date().toISOString()});
+  promptPresets.push({id,name,locks:{...locks},prompt:promptText,additions:additionsText,activeCustomLockIds:[...activeCustomLockIds],created_at:new Date().toISOString()});
   persistPromptPresets();setCurrentPrompt(promptText,{mode:"manual",presetId:id});toast("Пресет сохранён: "+name);
 }
 function deletePromptPreset(id){
@@ -823,6 +947,8 @@ function persistSessionHistory(){
     prompt:item.prompt||"",
     promptMode:item.promptMode||"sync",
     promptPresetId:item.promptPresetId||"builtin-arch-lock",
+    additions:item.additions||"",
+    activeCustomLockIds:item.activeCustomLockIds||[],
     source:item.source||"Системный файловый менеджер",
     resolution:item.resolution||null,
     name:item.file?.name||item.job?.filename||"source-image",
@@ -843,7 +969,7 @@ function persistSessionHistory(){
 function clearSessionHistory(){try{sessionStorage.removeItem(HISTORY_KEY)}catch{}}
 function rememberCurrentItem(state=null){
   const item=currentSourceItem();if(!item)return;
-  item.job=currentJob;item.locks={...locks};item.prompt=currentPrompt;item.promptMode=promptMode;item.promptPresetId=activePromptPresetId;if(state)item.lastState=state;
+  item.job=currentJob;item.locks={...locks};item.prompt=currentPrompt;item.promptMode=promptMode;item.promptPresetId=activePromptPresetId;item.additions=additionsText;item.activeCustomLockIds=[...activeCustomLockIds];if(state)item.lastState=state;
   persistSessionHistory();
 }
 async function selectSource(index){
@@ -854,7 +980,9 @@ async function selectSource(index){
   const item=sourceItems[index];
   currentFile=item.file;currentObjectUrl=item.objectUrl;currentJob=item.job||null;locks={...(item.locks||locks)};
   promptMode=item.promptMode||"sync";activePromptPresetId=item.promptPresetId||"builtin-arch-lock";currentPrompt=item.prompt||"";
-  renderLocks();resetResult();
+  additionsText=String(item.additions||"");activeCustomLockIds=Array.isArray(item.activeCustomLockIds)?item.activeCustomLockIds.filter(id=>customLockButtons.some(x=>x.id===id)):[];
+  $("additions-editor").value=additionsText;
+  renderLocks();renderCustomLocks();resetResult();
   $("upload-plus").classList.add("hidden");$("upload-plus").classList.remove("compact");
   $("upload-overlay").classList.add("hidden");$("source-badges").hidden=false;
   const img=$("source-image");
@@ -874,7 +1002,7 @@ async function selectSource(index){
 }
 function addSourceFile(file,source="Системный файловый менеджер"){
   if(!file||(!String(file.type||"").startsWith("image/")&&!/\.(heic|heif)$/i.test(file.name))){toast("Выберите файл изображения.");return}
-  const item={file,source,objectUrl:URL.createObjectURL(file),job:null,lastState:null,locks:{...locks},prompt:"",promptMode:"sync",promptPresetId:"builtin-arch-lock",resolution:null};
+  const item={file,source,objectUrl:URL.createObjectURL(file),job:null,lastState:null,locks:{...locks},prompt:"",promptMode:"sync",promptPresetId:"builtin-arch-lock",additions:"",activeCustomLockIds:[],resolution:null};
   sourceItems.push(item);
   $("upload-plus").classList.add("hidden");
   selectSource(sourceItems.length-1);
@@ -895,12 +1023,16 @@ const stage=$("source-stage");
 stage.addEventListener("drop",e=>addSourceFile(e.dataTransfer?.files?.[0],"Drag & Drop"));
 $("action-prev").addEventListener("click",()=>selectSource(currentSourceIndex-1));
 $("action-next").addEventListener("click",()=>selectSource(currentSourceIndex+1));
-$("reset-locks").addEventListener("click",()=>{locks=Object.fromEntries(defaults.map(x=>[x.id,x.level]));localStorage.setItem("mg4k.lockProfile",JSON.stringify(locks));const item=currentSourceItem();if(item)item.locks={...locks};renderLocks();syncPromptFromLocks(true);toast("Базовый ARCH LOCK восстановлен.")});
-$("copy-profile").addEventListener("click",async()=>{try{await navigator.clipboard.writeText(JSON.stringify({version:"cloud-ui-r9.9",locks,prompt:currentPrompt},null,2));toast("LOCK-профиль и prompt скопированы.")}catch{toast("Не удалось скопировать.")}});
+$("reset-locks").addEventListener("click",()=>{locks=Object.fromEntries(defaults.map(x=>[x.id,x.level]));localStorage.setItem("mg4k.lockProfile",JSON.stringify(locks));additionsText="";activeCustomLockIds=[];selectedCustomLockId=null;persistCustomLockButtons();$("additions-editor").value="";const item=currentSourceItem();if(item)item.locks={...locks};renderLocks();renderCustomLocks();syncPromptFromLocks(true);toast("Базовый ARCH LOCK восстановлен.")});
+$("copy-profile").addEventListener("click",async()=>{try{await navigator.clipboard.writeText(JSON.stringify({version:"cloud-ui-r10.0",locks,additions:additionsText,activeCustomLockIds,prompt:currentPrompt},null,2));toast("LOCK-профиль и prompt скопированы.")}catch{toast("Не удалось скопировать.")}});
 $("prompt-editor").addEventListener("input",()=>{currentPrompt=$("prompt-editor").value.slice(0,30000);activePromptPresetId="custom";const item=currentSourceItem();if(item){item.prompt=currentPrompt;item.promptMode="manual";item.promptPresetId="custom"}setPromptMode("manual");renderPromptPresets();updatePromptMeta()});
 $("prompt-sync").addEventListener("click",()=>syncPromptFromLocks(true));
 $("prompt-copy").addEventListener("click",async()=>{try{await navigator.clipboard.writeText($("prompt-editor").value);toast("Промпт скопирован.")}catch{toast("Не удалось скопировать промпт.")}});
 $("prompt-save-preset").addEventListener("click",savePromptPreset);
+$("additions-editor").addEventListener("input",()=>{additionsText=$("additions-editor").value.slice(0,12000);const item=currentSourceItem();if(item)item.additions=additionsText;if(promptMode==="sync")syncPromptFromLocks(true);else updatePromptMeta()});
+$("additions-clear").addEventListener("click",()=>{additionsText="";selectedCustomLockId=null;$("additions-editor").value="";renderCustomLocks();if(promptMode==="sync")syncPromptFromLocks(true);else updatePromptMeta()});
+$("custom-lock-save").addEventListener("click",saveCustomLock);
+$("custom-lock-overwrite").addEventListener("click",overwriteCustomLock);
 
 async function startCloudSession(){
   if(cloudSession)return cloudSession;if(sessionStartPromise)return sessionStartPromise;
@@ -953,6 +1085,8 @@ async function restoreSessionHistory(){
         prompt:saved.prompt||"",
         promptMode:saved.promptMode||"sync",
         promptPresetId:saved.promptPresetId||"builtin-arch-lock",
+        additions:saved.additions||"",
+        activeCustomLockIds:Array.isArray(saved.activeCustomLockIds)?saved.activeCustomLockIds:[],
         resolution:saved.resolution||null
       });
     }
@@ -1878,7 +2012,7 @@ document.addEventListener("keydown",event=>{
 });
 
 async function initCloudUi(){
-  loadPromptPresets();renderLocks();renderPromptPresets();resetResult();syncPromptFromLocks(true);
+  loadPromptPresets();renderLocks();renderPromptPresets();renderCustomLocks();$("additions-editor").value=additionsText;resetResult();syncPromptFromLocks(true);
   await initBillingUi();
   const restored=await restoreSessionHistory();
   if(restored)return;
