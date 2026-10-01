@@ -1,4 +1,5 @@
 import { Container, ContainerProxy, getContainer } from "@cloudflare/containers";
+import { promptAssistantEnabled, promptAssistantModel, sanitizeAssistantContext, runPromptAssistant } from "./prompt_assistant.js";
 
 export { ContainerProxy };
 
@@ -169,6 +170,20 @@ async function consumeSceneAnalysisBudget(env, sessionId) {
   if (globalCurrent >= globalMax) return { ok:false, error:"scene_analysis_hourly_budget" };
   await env.SESSION_STATE_R7.put(globalKey, String(globalCurrent + 1), { expirationTtl: 7200 });
   return { ok:true };
+}
+
+async function consumePromptAssistantBudget(env, sessionId) {
+  const sessionKey=`prompt-assistant:session:${sessionId}`;
+  const current=Number(await env.SESSION_STATE_R7.get(sessionKey)||0);
+  if(current>=60)return {ok:false,error:"prompt_assistant_session_limit"};
+  await env.SESSION_STATE_R7.put(sessionKey,String(current+1),{expirationTtl:SESSION_TTL});
+  const hour=new Date().toISOString().slice(0,13);
+  const globalKey=`prompt-assistant:hour:${hour}`;
+  const globalCurrent=Number(await env.SESSION_STATE_R7.get(globalKey)||0);
+  const globalMax=Math.max(20,Math.min(2000,Number(env.PROMPT_ASSISTANT_MAX_PER_HOUR||300)));
+  if(globalCurrent>=globalMax)return {ok:false,error:"prompt_assistant_hourly_budget"};
+  await env.SESSION_STATE_R7.put(globalKey,String(globalCurrent+1),{expirationTtl:7200});
+  return {ok:true};
 }
 
 async function analyzeSceneWithOpenRouter(env, file) {
@@ -1075,6 +1090,8 @@ async function handleApi(request, env, ctx, url) {
       billing_enabled: billingEnabled(env),
       scene_analysis_enabled: sceneAnalysisEnabled(env),
       scene_analysis_model: sceneAnalysisEnabled(env) ? sceneAnalysisModel(env) : null,
+      prompt_assistant_enabled: promptAssistantEnabled(env),
+      prompt_assistant_model: promptAssistantEnabled(env) ? promptAssistantModel(env) : null,
     });
   }
 
@@ -1109,6 +1126,24 @@ async function handleApi(request, env, ctx, url) {
     } catch (error) {
       console.warn("MG4K_SCENE_ANALYSIS_ERROR", error?.message || String(error));
       return json({ error:String(error?.message || "scene_analysis_failed").slice(0,400) }, 502);
+    }
+  }
+
+  if (path === "/api/prompt-assistant" && method === "POST") {
+    if (!promptAssistantEnabled(env)) return json({ error:"prompt_assistant_disabled" }, 503);
+    const session = await authorizeSession(request, url, env);
+    if (!session) return json({ error:"session_required" }, 403);
+    const budget = await consumePromptAssistantBudget(env, session.id);
+    if (!budget.ok) return json({ error:budget.error }, 429);
+    let body = {};
+    try { body = await request.json(); } catch { return json({ error:"invalid_json" }, 400); }
+    const context = sanitizeAssistantContext(body);
+    if (!context.request) return json({ error:"prompt_assistant_request_required" }, 400);
+    try {
+      return json({ ok:true, ...(await runPromptAssistant(env, context)), generated_at:now() });
+    } catch (error) {
+      console.warn("MG4K_PROMPT_ASSISTANT_ERROR", error?.message || String(error));
+      return json({ error:String(error?.message || "prompt_assistant_failed").slice(0,400) }, 502);
     }
   }
 
