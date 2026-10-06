@@ -1210,12 +1210,22 @@ function applySceneAnalysis(data,{fromCache=false}={}){
   sceneAnalysis=data;
   manualLockIds=new Set();
   const recommended=new Map(data.relevant_locks.filter(x=>lockCatalogById[x.id]).map(x=>[x.id,x]));
-  // Dynamic scene mode: legacy validator keys that are irrelevant become FREE.
-  // Relevant keys receive the AI conservative recommendation; operator may override.
+  // SOURCE identity must never be weakened automatically by scene analysis.
+  // These are the desktop V8.8.1 consistency locks: AI may surface them, but
+  // only the operator may relax them from HARD.
+  const immutableCore=new Set(["camera","geometry","architecture","textures","vegetation","people_vehicles"]);
   for(const item of lockCatalog){
-    if(recommended.has(item.id))locks[item.id]=recommended.get(item.id).recommended_level||item.level;
-    else if(defaults.some(core=>core.id===item.id))locks[item.id]="free";
-    else locks[item.id]=item.level;
+    const suggestion=recommended.get(item.id)?.recommended_level||null;
+    if(immutableCore.has(item.id)){
+      locks[item.id]="hard";
+    }else if(suggestion){
+      locks[item.id]=suggestion;
+    }else if(defaults.some(core=>core.id===item.id)){
+      // Only non-identity atmospheric core controls may become irrelevant/free.
+      locks[item.id]="free";
+    }else{
+      locks[item.id]=item.level;
+    }
   }
   localStorage.setItem("mg4k.lockProfile",JSON.stringify(locks));
   const current=currentSourceItem();
