@@ -927,8 +927,17 @@ def _post_json(endpoint: str, key: str, payload: dict[str, Any], trace_name: str
             )
             elapsed = round(time.monotonic() - started, 3)
             if response.status_code >= 400:
-                _write_trace(trace_name, payload, {"status_code": response.status_code, "elapsed_seconds": elapsed, "body_excerpt": response.text[:1200], "retry": retry})
-                raise ApiFailure(f"{trace_name} HTTP {response.status_code}: {response.text[:700]}", response.status_code)
+                body_excerpt = response.text[:1200]
+                _write_trace(trace_name, payload, {"status_code": response.status_code, "elapsed_seconds": elapsed, "body_excerpt": body_excerpt, "retry": retry})
+                geo_restricted = (
+                    response.status_code == 403
+                    and (
+                        "not available in your region" in response.text.lower()
+                        or "Gate Endpoints with Geo Restrictions" in response.text
+                    )
+                )
+                prefix = "GEO_RESTRICTED | " if geo_restricted else ""
+                raise ApiFailure(f"{prefix}{trace_name} HTTP {response.status_code}: {response.text[:700]}", response.status_code)
             body = response.json()
             _write_trace(trace_name, payload, {"status_code": response.status_code, "elapsed_seconds": elapsed, "usage": body.get("usage", {}), "retry": retry})
             return body
@@ -985,11 +994,22 @@ def generate_image(key: str, reference: Path, trace_name: str, seed: int) -> tup
         "output_format": "png",
         "n": 1,
         "seed": int(seed),
+        "provider": {
+            "order": list(CFG.get("provider_order", ["google-ai-studio", "google-vertex"])),
+            "allow_fallbacks": bool(CFG.get("provider_allow_fallbacks", True)),
+            "require_parameters": bool(CFG.get("provider_require_parameters", True)),
+        },
     }
     logging.info(
         "NATIVE ASPECT REQUEST | source=%sx%s | source_ratio=%.8f | provider_ratio=%s",
         aspect["source_size"][0], aspect["source_size"][1],
         aspect["source_aspect_ratio"], aspect["aspect_ratio"],
+    )
+    logging.info(
+        "OPENROUTER PROVIDER ROUTING | order=%s | allow_fallbacks=%s | require_parameters=%s",
+        ",".join(payload["provider"]["order"]),
+        payload["provider"]["allow_fallbacks"],
+        payload["provider"]["require_parameters"],
     )
     body = _post_json("https://openrouter.ai/api/v1/images", key, payload, trace_name, int(CFG["generation_timeout_seconds"]))
     provider_model = body.get("model")
