@@ -404,7 +404,7 @@ jobs:
           print("Cloud Prompt AI Assistant contract: PASSED")
           PY
 
-      - name: Cloud debugger / normalized diagnostics contract
+      - name: Cloud backend diagnostics / clean user UI contract
         run: |
           python - <<'PY'
           from pathlib import Path
@@ -412,13 +412,22 @@ jobs:
           worker=Path("src/worker.js").read_text(encoding="utf-8")
           service=Path("cloud_processor_service.py").read_text(encoding="utf-8")
 
+          for forbidden in [
+              'id="debug-panel"',
+              'function runDebuggerHealth(',
+              'id="debug-health"',
+              'id="debug-copy"',
+              'id="debug-save"',
+              'MG4K_DEBUG_',
+          ]:
+              assert forbidden not in ui, forbidden
+
           for token in [
               'CLOUD UI R10.3',
-              'id="debug-panel"',
               'function diagnosticPayload(',
-              'function runDebuggerHealth(',
               'PROVIDER_REGION_BLOCKED',
-              'MG4K_DEBUG_',
+              'Diagnostic code:',
+              'PROCESS LOG',
           ]:
               assert token in ui, token
 
@@ -438,7 +447,7 @@ jobs:
               assert token in worker, token
 
           assert 'OPENROUTER_KEY_REDACTED' in service
-          print("Cloud debugger / normalized diagnostics contract: PASSED")
+          print("Cloud backend diagnostics / clean user UI contract: PASSED")
           PY
 
       - name: Cloud commercial credit gate contract
