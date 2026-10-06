@@ -1,0 +1,104 @@
+name: Deploy MG4K Cloudflare Production
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'Dockerfile'
+      - 'config.json'
+      - 'VERSION.json'
+      - 'v8_safe_appearance.py'
+      - 'cloud_processor_service.py'
+      - 'cloudflare_bridge.py'
+      - 'site/**'
+      - 'src/**'
+      - 'wrangler.jsonc'
+      - 'deploy/kontrakevich.com/wrangler.kontrakevich.com.jsonc'
+      - '.github/workflows/deploy-cloudflare-production.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mg4k-cloudflare-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify deployment credentials are configured
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${CLOUDFLARE_API_TOKEN:-}" ]]; then
+            echo "::error::CLOUDFLARE_API_TOKEN is not configured in GitHub Actions secrets."
+            exit 2
+          fi
+          if [[ -z "${CLOUDFLARE_ACCOUNT_ID:-}" ]]; then
+            echo "::error::CLOUDFLARE_ACCOUNT_ID is not configured in GitHub Actions secrets."
+            exit 3
+          fi
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Python syntax guard
+        run: |
+          python -m py_compile v8_safe_appearance.py
+          python -m py_compile cloud_processor_service.py
+          python -m py_compile cloudflare_bridge.py
+
+      - name: Confirm Nano Banana Pro routing contract
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          cfg=json.loads(Path("config.json").read_text(encoding="utf-8"))
+          assert cfg["model"] == "google/gemini-3-pro-image", cfg["model"]
+          assert cfg["generator_display_name"] == "Nano Banana Pro", cfg["generator_display_name"]
+          assert cfg["provider_order"] == ["google-ai-studio","google-vertex"], cfg["provider_order"]
+          assert cfg["provider_allow_fallbacks"] is True
+          p=Path("v8_safe_appearance.py").read_text(encoding="utf-8")
+          assert '"provider": {' in p
+          assert "OPENROUTER PROVIDER ROUTING" in p
+          assert "GEO_RESTRICTED" in p
+          print("Nano Banana Pro provider routing contract: PASSED")
+          PY
+
+      - name: Deploy Worker and Container
+        run: npx wrangler deploy --config deploy/kontrakevich.com/wrangler.kontrakevich.com.jsonc
+
+      - name: Verify public health
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 24); do
+            if curl -fsS --retry 2 --retry-delay 2 "https://4k-upscaler.kontrakevich.workers.dev/api/health?deploy=${GITHUB_SHA}-${attempt}" > /tmp/health.json; then
+              python - <<'PY'
+          import json
+          d=json.load(open("/tmp/health.json"))
+          assert d.get("worker_build_id"), d
+          assert d.get("processor_build_expected"), d
+          print(json.dumps(d, ensure_ascii=False))
+          PY
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "::error::Public health did not recover after deployment."
+          exit 4
