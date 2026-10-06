@@ -78,7 +78,7 @@ body{overflow-x:hidden}
 .result-state strong{display:block;color:#d4e0ea;margin-bottom:6px;font-size:14px}
 .result-state span{font-size:12px;line-height:1.45}
 .result-stage.ready .result-state{display:none}
-.lock-panel,.prompt-panel,.analysis-panel,.actions-panel,.log-panel{margin-top:12px;border:1px solid var(--line);border-radius:9px;overflow:hidden;background:linear-gradient(180deg,#0b1b2a,#081521)}
+.lock-panel,.prompt-panel,.analysis-panel,.debug-panel,.actions-panel,.log-panel{margin-top:12px;border:1px solid var(--line);border-radius:9px;overflow:hidden;background:linear-gradient(180deg,#0b1b2a,#081521)}
 .section-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 13px;border-bottom:1px solid var(--line);background:#0b1c2c}
 .section-head strong{font-size:12px;letter-spacing:.1em}
 .section-head span{font-size:10px;color:var(--muted)}
@@ -278,7 +278,7 @@ body{overflow-x:hidden}
     </div>
     <div class="top-actions">
       <button id="billing-chip" class="billing-chip" type="button" hidden>Кредиты: <strong id="billing-chip-balance">—</strong></button>
-      <div class="version">CORE 8.8.1 R4 · CLOUD UI R10.2</div>
+      <div class="version">CORE 8.8.1 R4 · CLOUD UI R10.3</div>
     </div>
   </header>
 
@@ -450,6 +450,38 @@ body{overflow-x:hidden}
       <div class="raw-analysis">
         <div class="subhead">ДЕТАЛИ ВАЛИДАЦИИ</div>
         <pre id="raw-validation">—</pre>
+      </div>
+    </div>
+  </section>
+
+  <section class="debug-panel" id="debug-panel" hidden>
+    <div class="section-head">
+      <strong>DEBUGGER / ДИАГНОСТИКА</strong>
+      <div class="debug-tools">
+        <span id="debug-caption">автоматическая классификация ошибки</span>
+        <button class="btn ghost" id="debug-health" type="button">Проверить контур</button>
+        <button class="btn ghost" id="debug-copy" type="button">Копировать JSON</button>
+        <button class="btn ghost" id="debug-save" type="button">Сохранить .json</button>
+      </div>
+    </div>
+    <div class="debug-summary">
+      <div class="debug-card" id="debug-code-card"><small>КОД</small><strong id="debug-code">—</strong></div>
+      <div class="debug-card"><small>СЛОЙ</small><strong id="debug-layer">—</strong></div>
+      <div class="debug-card"><small>HTTP</small><strong id="debug-http">—</strong></div>
+      <div class="debug-card"><small>MODEL / ROUTE</small><strong id="debug-model">—</strong></div>
+    </div>
+    <div class="debug-explain">
+      <div><b id="debug-summary">Диагностика появится при ошибке или по запросу.</b></div>
+      <div class="action" id="debug-action">—</div>
+    </div>
+    <div class="debug-grid">
+      <div>
+        <div class="subhead">САНИТИЗИРОВАННЫЙ STATE</div>
+        <pre id="debug-state">—</pre>
+      </div>
+      <div>
+        <div class="subhead">PIPELINE EXCERPT</div>
+        <pre id="debug-raw">—</pre>
       </div>
     </div>
   </section>
@@ -634,6 +666,117 @@ function log(level,text){
   $("log-lines").appendChild(row);$("log-lines").scrollTop=$("log-lines").scrollHeight;
 }
 function toast(text){const el=$("toast");el.textContent=text;el.classList.add("show");clearTimeout(window.__toast);window.__toast=setTimeout(()=>el.classList.remove("show"),2300)}
+function classifyClientFailure(state){
+  const text=[state?.error,state?.diagnostic_excerpt].filter(Boolean).join("\n");
+  const lower=text.toLowerCase();
+  const http=state?.diagnostic_http_status??Number((text.match(/HTTP\s+(\d{3})/i)||[])[1]||0)||null;
+  if(state?.diagnostic_code)return {
+    code:state.diagnostic_code,layer:state.diagnostic_layer||"—",summary:state.diagnostic_summary||"—",
+    action:state.diagnostic_action||"—",retryable:state.diagnostic_retryable,http,
+    model:state.diagnostic_provider_model||null,route:state.diagnostic_routing_step||null
+  };
+  if(lower.includes("this model is not available in your region")||lower.includes("geo restrictions"))return {
+    code:"PROVIDER_REGION_BLOCKED",layer:"openrouter_routing",
+    summary:"OpenRouter заблокировал модель для региона, из которого выполняется генеративный запрос.",
+    action:"Повтор с тем же endpoint/model route не исправит ошибку. Нужно изменить доступный маршрут/модель или регион генеративного backend.",
+    retryable:false,http:http||403,model:(text.match(/\b(?:google|openai|anthropic)\/[a-z0-9._-]+/i)||[])[0]||null,
+    route:(text.match(/"failed_routing_step"\s*:\s*"([^"]+)"/)||[])[1]||null
+  };
+  if(http===429||lower.includes("rate limit"))return {code:"PROVIDER_RATE_LIMIT",layer:"provider",summary:"Провайдер ограничил частоту запросов.",action:"Подождать и выполнить ограниченный повтор.",retryable:true,http,model:null,route:null};
+  if(lower.includes("timeout")||lower.includes("timed out"))return {code:"PROVIDER_TIMEOUT",layer:"provider_network",summary:"Истёк таймаут API.",action:"Проверить сеть/провайдера и выполнить ограниченный повтор.",retryable:true,http,model:null,route:null};
+  return {code:state?.status==="failed"?"PIPELINE_RUNTIME_ERROR":"OK",layer:state?.status==="failed"?"pipeline":"runtime",summary:state?.status==="failed"?"Сбой обработки.":"Активной ошибки нет.",action:state?.status==="failed"?"Сохраните диагностический JSON и изучите pipeline excerpt.":"Контур работает.",retryable:false,http,model:null,route:null};
+}
+function diagnosticPayload(state=latestJobState){
+  const d=classifyClientFailure(state||{});
+  return {
+    exported_at:new Date().toISOString(),
+    ui_version:"CORE 8.8.1 R4 · CLOUD UI R10.3",
+    job_id:currentJob?.id||state?.id||null,
+    source_name:currentSourceItem()?.file?.name||currentFile?.name||null,
+    status:state?.status||null,
+    stage:state?.stage||null,
+    progress:Number(state?.progress||0),
+    diagnosis:d,
+    worker_container:{
+      container_build_id:state?.container_build_id||null,
+      container_instance_name:state?.container_instance_name||null,
+      result_sync_attempts:Number(state?.result_sync_attempts||0),
+      result_sync_warning:state?.result_sync_warning||null
+    },
+    provider:{
+      provider:state?.provider_cost_provider||"openrouter",
+      request_count:Number(state?.provider_request_count||0),
+      cost_usd:state?.provider_cost_usd??null,
+      cost_complete:Boolean(state?.provider_cost_complete)
+    },
+    prompt:{
+      sha256:state?.prompt_sha256||null,
+      chars:currentPrompt.length,
+      mode:promptMode,
+      active_preset:activePromptPresetId
+    },
+    locks:{...locks},
+    billing:{
+      reservation_id:state?.billing_reservation_id||null,
+      settlement:state?.billing_settlement||null,
+      warning:state?.billing_settlement_warning||null
+    },
+    error:state?.error||null,
+    diagnostic_excerpt:state?.diagnostic_excerpt||null,
+    secret_policy:"API credentials and embedded image payloads are not included."
+  };
+}
+function renderDebugger(state=latestJobState,{force=false}={}){
+  const panel=$("debug-panel");if(!panel)return;
+  const shouldShow=Boolean(force||state?.status==="failed"||state?.diagnostic_code||state?.diagnostic_excerpt||state?.error);
+  panel.hidden=!shouldShow;
+  if(!shouldShow)return;
+  const d=classifyClientFailure(state||{});
+  $("debug-code").textContent=d.code||"—";
+  $("debug-layer").textContent=d.layer||"—";
+  $("debug-http").textContent=d.http?String(d.http):"—";
+  $("debug-model").textContent=[d.model,d.route].filter(Boolean).join(" · ")||"—";
+  $("debug-summary").textContent=d.summary||"—";
+  $("debug-action").textContent="Действие: "+(d.action||"—");
+  $("debug-state").textContent=JSON.stringify(diagnosticPayload(state),null,2);
+  $("debug-raw").textContent=state?.diagnostic_excerpt||state?.error||"—";
+  const card=$("debug-code-card");card.classList.remove("error","warn","ok");
+  card.classList.add(d.code==="OK"?"ok":d.retryable?"warn":"error");
+  $("debug-caption").textContent=d.retryable?"ошибка допускает ограниченный retry":"авторетрай запрещён или не нужен";
+}
+async function runDebuggerHealth(){
+  const btn=$("debug-health"),prev=btn.textContent;btn.disabled=true;btn.textContent="Проверяю…";
+  try{
+    const [health,state]=await Promise.all([
+      fetch("/api/health",{cache:"no-store"}).then(r=>r.json()),
+      currentJob?jobStatus(currentJob).catch(()=>null):Promise.resolve(null)
+    ]);
+    const payload=diagnosticPayload(state||latestJobState);
+    payload.health=health;
+    $("debug-state").textContent=JSON.stringify(payload,null,2);
+    $("debug-caption").textContent="health проверен · генерация не запускалась";
+    toast("Контур диагностики проверен без платной генерации.");
+  }catch(error){
+    $("debug-caption").textContent="health check failed: "+error.message;
+  }finally{btn.disabled=false;btn.textContent=prev}
+}
+async function copyDebuggerJson(){
+  const text=JSON.stringify(diagnosticPayload(),null,2);
+  try{await navigator.clipboard.writeText(text);toast("Диагностика скопирована.");}
+  catch{toast("Не удалось скопировать диагностику.")}
+}
+function saveDebuggerJson(){
+  const text=JSON.stringify(diagnosticPayload(),null,2);
+  const blob=new Blob([text],{type:"application/json;charset=utf-8"});
+  const url=URL.createObjectURL(blob),a=document.createElement("a");
+  a.href=url;a.download="MG4K_DEBUG_"+String(currentJob?.id||"session").slice(0,8)+"_"+new Date().toISOString().replace(/[:.]/g,"-")+".json";
+  document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+  toast("Диагностический JSON сохранён.");
+}
+$("debug-health").addEventListener("click",runDebuggerHealth);
+$("debug-copy").addEventListener("click",copyDebuggerJson);
+$("debug-save").addEventListener("click",saveDebuggerJson);
+
 function logExportText(){
   const rows=Array.from($("log-lines").querySelectorAll(".log-line")).map(row=>{
     const cols=Array.from(row.children).map(el=>el.textContent.trim());
@@ -642,7 +785,7 @@ function logExportText(){
   const item=currentSourceItem();
   const header=[
     "MG 4K / ARCH LOCK — PROCESS LOG",
-    "UI: CORE 8.8.1 R4 · CLOUD UI R10.2",
+    "UI: CORE 8.8.1 R4 · CLOUD UI R10.3",
     "Processor build: "+(latestJobState?.container_build_id||"—"),
     "Exported: "+new Date().toISOString(),
     "Job: "+(currentJob?.id||"—"),
@@ -652,6 +795,12 @@ function logExportText(){
     "Stage: "+(latestJobState?.stage||"—"),
     "Progress: "+(latestJobState?.progress!=null?latestJobState.progress+"%":($("analysis-progress")?.textContent||$("progress-label")?.textContent||"—")),
     "ARCH LOCK: "+(latestJobState?.validation?.decision||$("analysis-validation")?.textContent||"—"),
+    "Diagnostic code: "+(latestJobState?.diagnostic_code||classifyClientFailure(latestJobState||{}).code||"—"),
+    "Diagnostic layer: "+(latestJobState?.diagnostic_layer||"—"),
+    "Diagnostic summary: "+(latestJobState?.diagnostic_summary||"—"),
+    "Diagnostic action: "+(latestJobState?.diagnostic_action||"—"),
+    "Diagnostic HTTP: "+(latestJobState?.diagnostic_http_status??"—"),
+    "Diagnostic route: "+(latestJobState?.diagnostic_routing_step||"—"),
     "Diagnostic: "+(latestJobState?.diagnostic_excerpt||"—"),
     "Result sync attempts: "+(latestJobState?.result_sync_attempts??0),
     "Result sync warning: "+(latestJobState?.result_sync_warning||"—"),
@@ -1483,6 +1632,7 @@ function showResult(state,mode="review"){
 function renderJobState(state){
   if(!state)return null;
   latestJobState=state;
+  renderDebugger(state);
   rememberCurrentItem(state);
   updateRecoveryActions(state);
   const p=Number(state.progress||0),stage=state.stage||state.status||"queued";
@@ -1546,7 +1696,8 @@ function renderJobState(state){
     }else if(manualRetry){
       setStatus("Обработка прервана после потери состояния Container. Автоповтор заблокирован, чтобы не выполнить повторный платный запрос.","warn");
     }else{
-      setStatus("Ошибка: "+(state.error||stage),"err");
+      const d=classifyClientFailure(state);
+      setStatus("Ошибка ["+d.code+"]: "+(d.summary||state.error||stage),"err");
     }
     if(state.diagnostic_excerpt)log("err","Диагностика pipeline: "+state.diagnostic_excerpt);
     return state;

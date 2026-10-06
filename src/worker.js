@@ -582,6 +582,14 @@ function publicJob(job) {
     billing_settlement_warning: job.billing_settlement_warning || null,
     prompt_override: job.prompt_override || null,
     prompt_sha256: job.prompt_sha256 || null,
+    diagnostic_code: job.diagnostic_code || null,
+    diagnostic_layer: job.diagnostic_layer || null,
+    diagnostic_summary: job.diagnostic_summary || null,
+    diagnostic_action: job.diagnostic_action || null,
+    diagnostic_retryable: job.diagnostic_retryable ?? null,
+    diagnostic_http_status: job.diagnostic_http_status ?? null,
+    diagnostic_provider_model: job.diagnostic_provider_model || null,
+    diagnostic_routing_step: job.diagnostic_routing_step || null,
   };
 }
 
@@ -833,6 +841,14 @@ function applyContainerState(job, state) {
   if (state.provider_request_count !== undefined) job.provider_request_count = Math.max(0, Number(state.provider_request_count || 0));
   if (state.provider_cost_complete !== undefined) job.provider_cost_complete = Boolean(state.provider_cost_complete);
   if (state.provider_cost_provider !== undefined) job.provider_cost_provider = state.provider_cost_provider || null;
+  if (state.diagnostic_code !== undefined) job.diagnostic_code = state.diagnostic_code || null;
+  if (state.diagnostic_layer !== undefined) job.diagnostic_layer = state.diagnostic_layer || null;
+  if (state.diagnostic_summary !== undefined) job.diagnostic_summary = state.diagnostic_summary || null;
+  if (state.diagnostic_action !== undefined) job.diagnostic_action = state.diagnostic_action || null;
+  if (state.diagnostic_retryable !== undefined) job.diagnostic_retryable = state.diagnostic_retryable;
+  if (state.diagnostic_http_status !== undefined) job.diagnostic_http_status = state.diagnostic_http_status ?? null;
+  if (state.diagnostic_provider_model !== undefined) job.diagnostic_provider_model = state.diagnostic_provider_model || null;
+  if (state.diagnostic_routing_step !== undefined) job.diagnostic_routing_step = state.diagnostic_routing_step || null;
   job.container_result_available = Boolean(state.result_available);
   if (state.build_id) job.container_build_id = String(state.build_id);
   job.container_synced_at = now();

@@ -65,6 +65,7 @@ def _public_state(job_id: str) -> dict[str, Any] | None:
         state = _JOBS.get(job_id)
         if not state:
             return None
+        classified = _classify_failure(state.get("error"), state.get("diagnostic_excerpt")) if (state.get("error") or state.get("diagnostic_excerpt")) else {}
         return {
             "id": job_id,
             "build_id": CONTAINER_BUILD_ID,
@@ -83,7 +84,110 @@ def _public_state(job_id: str) -> dict[str, Any] | None:
             "provider_request_count": int(state.get("provider_request_count", 0) or 0),
             "provider_cost_complete": bool(state.get("provider_cost_complete")),
             "provider_cost_provider": state.get("provider_cost_provider"),
+            "diagnostic_code": classified.get("code"),
+            "diagnostic_layer": classified.get("layer"),
+            "diagnostic_summary": classified.get("summary"),
+            "diagnostic_action": classified.get("action"),
+            "diagnostic_retryable": classified.get("retryable"),
+            "diagnostic_http_status": classified.get("http_status"),
+            "diagnostic_provider_model": classified.get("provider_model"),
+            "diagnostic_routing_step": classified.get("routing_step"),
         }
+
+
+def _classify_failure(error_text: str | None, diagnostic_excerpt: str | None = None) -> dict[str, Any]:
+    text = "\n".join(part for part in [str(error_text or ""), str(diagnostic_excerpt or "")] if part).strip()
+    lowered = text.casefold()
+
+    http_status = None
+    match = re.search(r"HTTP\s+(\d{3})", text, flags=re.I)
+    if match:
+        try:
+            http_status = int(match.group(1))
+        except ValueError:
+            http_status = None
+
+    model = None
+    model_match = re.search(r"\b(google/[a-z0-9._-]+|openai/[a-z0-9._-]+|anthropic/[a-z0-9._-]+|[a-z0-9._-]+/[a-z0-9._-]+)\b", text, flags=re.I)
+    if model_match:
+        model = model_match.group(1)
+
+    routing_step = None
+    route_match = re.search(r'"failed_routing_step"\s*:\s*"([^"]+)"', text)
+    if route_match:
+        routing_step = route_match.group(1)
+
+    result = {
+        "code": "PIPELINE_RUNTIME_ERROR",
+        "layer": "pipeline",
+        "summary": "Сбой внутри контура обработки.",
+        "action": "Откройте DEBUGGER и сохраните диагностический пакет. Повтор запуска допустим только после проверки причины.",
+        "retryable": False,
+        "http_status": http_status,
+        "provider_model": model,
+        "routing_step": routing_step,
+    }
+
+    if "this model is not available in your region" in lowered or "geo restrictions" in lowered:
+        result.update({
+            "code": "PROVIDER_REGION_BLOCKED",
+            "layer": "openrouter_routing",
+            "summary": "OpenRouter отклонил модель из-за регионального ограничения точки выполнения.",
+            "action": "Повтор с тем же маршрутом бессмыслен. Нужен другой доступный endpoint/model route либо перенос генеративного вызова в разрешённый регион.",
+            "retryable": False,
+            "http_status": http_status or 403,
+        })
+    elif http_status == 429 or "rate limit" in lowered or "too many requests" in lowered:
+        result.update({
+            "code": "PROVIDER_RATE_LIMIT",
+            "layer": "provider",
+            "summary": "Провайдер ограничил частоту запросов.",
+            "action": "Подождите и повторите позже. Автоматический бесконечный retry запрещён.",
+            "retryable": True,
+            "http_status": http_status or 429,
+        })
+    elif http_status in {401, 403} and ("key" in lowered or "auth" in lowered or "unauthorized" in lowered):
+        result.update({
+            "code": "PROVIDER_AUTH_FAILED",
+            "layer": "provider_auth",
+            "summary": "Провайдер отклонил авторизацию API.",
+            "action": "Проверьте серверный OpenRouter credential и его права. Ключ в UI не выводится.",
+            "retryable": False,
+        })
+    elif http_status == 402 or "insufficient" in lowered and ("credit" in lowered or "balance" in lowered):
+        result.update({
+            "code": "PROVIDER_CREDITS_EXHAUSTED",
+            "layer": "provider_billing",
+            "summary": "Недостаточно кредитов у API-провайдера.",
+            "action": "Проверьте баланс OpenRouter перед новым платным запуском.",
+            "retryable": False,
+        })
+    elif "timeout" in lowered or "timed out" in lowered:
+        result.update({
+            "code": "PROVIDER_TIMEOUT",
+            "layer": "provider_network",
+            "summary": "API-провайдер не ответил в установленный таймаут.",
+            "action": "Проверьте сеть и состояние провайдера. Допустим ограниченный повтор.",
+            "retryable": True,
+        })
+    elif http_status is not None and 500 <= http_status <= 599:
+        result.update({
+            "code": "PROVIDER_UPSTREAM_ERROR",
+            "layer": "provider",
+            "summary": f"Провайдер вернул HTTP {http_status}.",
+            "action": "Это внешний upstream-сбой. Сохраните диагностику и повторите позднее.",
+            "retryable": True,
+        })
+    elif "container" in lowered and ("restart" in lowered or "destroy" in lowered or "lost" in lowered):
+        result.update({
+            "code": "CONTAINER_STATE_LOST",
+            "layer": "cloudflare_container",
+            "summary": "Потеряно состояние временного Cloudflare Container.",
+            "action": "Проверьте наличие сохранённого RESULT. Не запускайте платную регенерацию автоматически.",
+            "retryable": False,
+        })
+
+    return result
 
 
 def _safe_pipeline_tail(path: Path, max_chars: int = 5000) -> str:
