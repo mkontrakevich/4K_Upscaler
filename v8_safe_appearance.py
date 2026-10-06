@@ -997,7 +997,6 @@ def generate_image(key: str, reference: Path, trace_name: str, seed: int) -> tup
         "provider": {
             "order": list(CFG.get("provider_order", ["google-ai-studio", "google-vertex"])),
             "allow_fallbacks": bool(CFG.get("provider_allow_fallbacks", True)),
-            "require_parameters": bool(CFG.get("provider_require_parameters", True)),
         },
     }
     logging.info(
@@ -1006,10 +1005,9 @@ def generate_image(key: str, reference: Path, trace_name: str, seed: int) -> tup
         aspect["source_aspect_ratio"], aspect["aspect_ratio"],
     )
     logging.info(
-        "OPENROUTER PROVIDER ROUTING | order=%s | allow_fallbacks=%s | require_parameters=%s",
+        "OPENROUTER PROVIDER ROUTING | order=%s | allow_fallbacks=%s",
         ",".join(payload["provider"]["order"]),
         payload["provider"]["allow_fallbacks"],
-        payload["provider"]["require_parameters"],
     )
     body = _post_json("https://openrouter.ai/api/v1/images", key, payload, trace_name, int(CFG["generation_timeout_seconds"]))
     provider_model = body.get("model")
