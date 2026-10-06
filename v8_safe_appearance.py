@@ -284,6 +284,8 @@ Do not redesign, simplify, regularize, randomize, substitute or hallucinate tile
 screens, lattice, facade relief, cladding joints, paving, textile motifs, decorative panels, railings or ornamental graphics.
 Where SOURCE detail is unresolved, enhance only evidence already present; never invent a plausible replacement pattern.
 A sharper but different pattern is a FAILURE. A cleaner version of the same source pattern is the only acceptable result.
+PATTERNED SURFACES ARE SOURCE-OWNED. Do not synthesize a replacement motif even when it appears visually plausible.
+If exact pattern detail cannot be recovered confidently, preserve the SOURCE pattern structure rather than reinterpret it.
 """
 
 def donor_generation_prompt() -> str:
@@ -2897,6 +2899,9 @@ def whole_scene_quality_gate(reference: Image.Image, donor: Image.Image) -> tupl
             source_pattern_rms = 0.0
             donor_pattern_rms = 0.0
             pattern_correlation = 1.0
+            pattern_source_edge_fraction = 0.0
+            pattern_source_edge_preservation = 1.0
+            pattern_donor_edge_agreement = 1.0
             pattern_identity_substitution = False
             if (
                 bool(CFG.get("material_identity_lock_enabled", True))
@@ -2963,13 +2968,50 @@ def whole_scene_quality_gate(reference: Image.Image, donor: Image.Image) -> tupl
                     source_pattern_rms = float(np.sqrt(np.mean(source_values * source_values)))
                     donor_pattern_rms = float(np.sqrt(np.mean(donor_values * donor_values)))
                     if source_pattern_rms >= float(CFG.get("pattern_identity_source_rms_min", 3.0)):
-                        pattern_cells_evaluated += 1
-                        denom = max(1e-6, source_pattern_rms * donor_pattern_rms)
-                        pattern_correlation = float(np.mean(source_values * donor_values) / denom)
-                        pattern_identity_substitution = (
-                            pattern_correlation < float(CFG.get("pattern_identity_min_correlation", 0.42))
+                        local_source_gray = s
+                        local_donor_gray = d
+                        pattern_source_edges = cv2.Canny(
+                            local_source_gray,
+                            int(CFG.get("pattern_identity_canny_low", 35)),
+                            int(CFG.get("pattern_identity_canny_high", 105)),
                         )
-                        substituted_pattern_cells += int(pattern_identity_substitution)
+                        pattern_donor_edges = cv2.Canny(
+                            local_donor_gray,
+                            int(CFG.get("pattern_identity_canny_low", 35)),
+                            int(CFG.get("pattern_identity_canny_high", 105)),
+                        )
+                        tight_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+                        pattern_source_support = cv2.dilate(pattern_source_edges, tight_kernel) > 0
+                        pattern_donor_support = cv2.dilate(pattern_donor_edges, tight_kernel) > 0
+                        masked_source_edges = (pattern_source_edges > 0) & pattern_mask
+                        masked_donor_edges = (pattern_donor_edges > 0) & pattern_mask
+                        pattern_source_edge_fraction = float(np.mean(masked_source_edges))
+                        if np.any(masked_source_edges):
+                            pattern_source_edge_preservation = float(
+                                np.mean(pattern_donor_support[masked_source_edges])
+                            )
+                        if np.any(masked_donor_edges):
+                            pattern_donor_edge_agreement = float(
+                                np.mean(pattern_source_support[masked_donor_edges])
+                            )
+
+                        # Evaluate only cells with enough SOURCE structure to identify
+                        # a real motif. This is phase/topology sensitive, unlike an
+                        # energy-only texture metric.
+                        if pattern_source_edge_fraction >= float(
+                            CFG.get("pattern_identity_min_source_edge_fraction", 0.012)
+                        ):
+                            pattern_cells_evaluated += 1
+                            denom = max(1e-6, source_pattern_rms * donor_pattern_rms)
+                            pattern_correlation = float(np.mean(source_values * donor_values) / denom)
+                            pattern_identity_substitution = (
+                                pattern_correlation < float(CFG.get("pattern_identity_min_correlation", 0.58))
+                                or pattern_source_edge_preservation
+                                < float(CFG.get("pattern_identity_min_source_edge_preservation", 0.72))
+                                or pattern_donor_edge_agreement
+                                < float(CFG.get("pattern_identity_min_donor_edge_agreement", 0.68))
+                            )
+                            substituted_pattern_cells += int(pattern_identity_substitution)
             issues: list[str] = []
             if local_valid < 0.90:
                 issues.append("incomplete")
@@ -3035,6 +3077,9 @@ def whole_scene_quality_gate(reference: Image.Image, donor: Image.Image) -> tupl
                 "source_pattern_rms": round(source_pattern_rms, 5),
                 "donor_pattern_rms": round(donor_pattern_rms, 5),
                 "pattern_correlation": round(pattern_correlation, 5),
+                "pattern_source_edge_fraction": round(pattern_source_edge_fraction, 5),
+                "pattern_source_edge_preservation": round(pattern_source_edge_preservation, 5),
+                "pattern_donor_edge_agreement": round(pattern_donor_edge_agreement, 5),
                 "pattern_identity_substitution": bool(pattern_identity_substitution),
             })
 
