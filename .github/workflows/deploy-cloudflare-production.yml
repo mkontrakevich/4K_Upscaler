@@ -13,7 +13,6 @@ on:
       - 'site/**'
       - 'src/**'
       - 'wrangler.jsonc'
-      - 'deploy/kontrakevich.com/wrangler.kontrakevich.com.jsonc'
       - '.github/workflows/deploy-cloudflare-production.yml'
   workflow_dispatch:
 
@@ -80,7 +79,7 @@ jobs:
           PY
 
       - name: Deploy Worker and Container
-        run: npx wrangler deploy --config deploy/kontrakevich.com/wrangler.kontrakevich.com.jsonc
+        run: npx wrangler deploy --config wrangler.jsonc
 
       - name: Verify public health
         shell: bash
