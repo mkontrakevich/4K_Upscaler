@@ -275,25 +275,37 @@ No plastic CGI look, fantasy styling, watermark, excessive sharpening, synthetic
 """
 
 
+
+PATTERN_IDENTITY_PROMPT = """\
+ABSOLUTE PATTERN / ORNAMENT IDENTITY LOCK.
+Any visible repeating or non-repeating surface pattern in SOURCE is identity evidence, not a style suggestion.
+Preserve the exact motif family, topology, spacing, orientation, phase/alignment, scale, rhythm, boundaries and interruption points.
+Do not redesign, simplify, regularize, randomize, substitute or hallucinate tiles, brick bonds, stone veins, perforations,
+screens, lattice, facade relief, cladding joints, paving, textile motifs, decorative panels, railings or ornamental graphics.
+Where SOURCE detail is unresolved, enhance only evidence already present; never invent a plausible replacement pattern.
+A sharper but different pattern is a FAILURE. A cleaner version of the same source pattern is the only acceptable result.
+"""
+
 def donor_generation_prompt() -> str:
     """Use the proven source-faithful reconstruction prompt as the cloud baseline.
 
     The UI lock profile may relax explicitly selected parameters, but it must never
     replace the detailed source-identity contract that preserves architecture,
-    object placement, materials, signage, contours and small visible details.
+    object placement, materials, signage, contours, patterns and small visible details.
     """
     override = os.environ.get("MG4K_PROMPT_OVERRIDE", "").strip()
     if override:
         return override
+    baseline = GENERATION_PROMPT + "\n\n" + PATTERN_IDENTITY_PROMPT
     if os.environ.get("MG4K_LOCK_PROFILE_JSON", "").strip():
         return (
-            GENERATION_PROMPT
+            baseline
             + "\n\nCLOUD LOCK PROFILE OVERRIDE — parameter-level permissions follow. "
               "Only an explicitly SOFT or FREE parameter may deviate from the strict baseline above; "
-              "all other source facts, identities, counts, positions, contours, materials, signage and visible details remain locked.\n"
+              "all other source facts, identities, counts, positions, contours, materials, signage, patterns and visible details remain locked.\n"
             + cloud_lock_prompt()
         )
-    return GENERATION_PROMPT
+    return baseline
 
 
 GENERATION_PROMPT = """NANO BANANA PRO — SOURCE-FAITHFUL DETAIL RECONSTRUCTION FOR UPSCALING.
@@ -2813,6 +2825,18 @@ def whole_scene_quality_gate(reference: Image.Image, donor: Image.Image) -> tupl
         cv2.GaussianBlur(donor_gray_float, (0, 0), sigmaX=material_inner_sigma)
         - cv2.GaussianBlur(donor_gray_float, (0, 0), sigmaX=material_outer_sigma)
     )
+    # Keep the signed band too: abs(midband) can detect added texture energy,
+    # but it cannot tell whether an existing SOURCE ornament was replaced by a
+    # different motif with similar density. Signed local correlation preserves
+    # motif phase/topology after donor-to-source registration.
+    source_pattern_band = (
+        cv2.GaussianBlur(source_gray_float, (0, 0), sigmaX=material_inner_sigma)
+        - cv2.GaussianBlur(source_gray_float, (0, 0), sigmaX=material_outer_sigma)
+    )
+    donor_pattern_band = (
+        cv2.GaussianBlur(donor_gray_float, (0, 0), sigmaX=material_inner_sigma)
+        - cv2.GaussianBlur(donor_gray_float, (0, 0), sigmaX=material_outer_sigma)
+    )
     new_material_edges = (donor_edges > 0) & ~source_support
 
     grid_cols = int(CFG["whole_scene_grid_columns"])
@@ -2823,6 +2847,8 @@ def whole_scene_quality_gate(reference: Image.Image, donor: Image.Image) -> tupl
     material_cells_evaluated = 0
     retextured_material_cells = 0
     recolored_material_cells = 0
+    pattern_cells_evaluated = 0
+    substituted_pattern_cells = 0
     audit = aligned.copy()
     for seam in canvas_integrity["unsupported_border_lines"]:
         x1, y1, x2, y2 = seam["points"]
@@ -2867,6 +2893,11 @@ def whole_scene_quality_gate(reference: Image.Image, donor: Image.Image) -> tupl
             smooth_sample_fraction = 0.0
             material_texture_substitution = False
             material_colour_substitution = False
+            pattern_sample_fraction = 0.0
+            source_pattern_rms = 0.0
+            donor_pattern_rms = 0.0
+            pattern_correlation = 1.0
+            pattern_identity_substitution = False
             if (
                 bool(CFG.get("material_identity_lock_enabled", True))
                 and local_hardscape_fraction
@@ -2914,6 +2945,31 @@ def whole_scene_quality_gate(reference: Image.Image, donor: Image.Image) -> tupl
                     )
                     retextured_material_cells += int(material_texture_substitution)
                     recolored_material_cells += int(material_colour_substitution)
+
+            if (
+                bool(CFG.get("pattern_identity_lock_enabled", True))
+                and local_hardscape_fraction >= float(CFG.get("pattern_identity_min_hardscape_fraction", 0.28))
+                and np.any(local_hardscape)
+            ):
+                local_source_pattern = source_pattern_band[y0:y1, x0:x1]
+                local_donor_pattern = donor_pattern_band[y0:y1, x0:x1]
+                pattern_mask = local_hardscape & v
+                pattern_sample_fraction = float(np.mean(pattern_mask))
+                if pattern_sample_fraction >= float(CFG.get("pattern_identity_min_sample_fraction", 0.08)):
+                    source_values = local_source_pattern[pattern_mask].astype(np.float32)
+                    donor_values = local_donor_pattern[pattern_mask].astype(np.float32)
+                    source_values -= float(np.mean(source_values))
+                    donor_values -= float(np.mean(donor_values))
+                    source_pattern_rms = float(np.sqrt(np.mean(source_values * source_values)))
+                    donor_pattern_rms = float(np.sqrt(np.mean(donor_values * donor_values)))
+                    if source_pattern_rms >= float(CFG.get("pattern_identity_source_rms_min", 3.0)):
+                        pattern_cells_evaluated += 1
+                        denom = max(1e-6, source_pattern_rms * donor_pattern_rms)
+                        pattern_correlation = float(np.mean(source_values * donor_values) / denom)
+                        pattern_identity_substitution = (
+                            pattern_correlation < float(CFG.get("pattern_identity_min_correlation", 0.42))
+                        )
+                        substituted_pattern_cells += int(pattern_identity_substitution)
             issues: list[str] = []
             if local_valid < 0.90:
                 issues.append("incomplete")
@@ -2944,6 +3000,8 @@ def whole_scene_quality_gate(reference: Image.Image, donor: Image.Image) -> tupl
                 issues.append("material_texture_substitution")
             if material_colour_substitution:
                 issues.append("material_colour_family_substitution")
+            if pattern_identity_substitution:
+                issues.append("source_pattern_identity_substitution")
             corrupt = bool(issues)
             corrupt_cells += int(corrupt)
             flat_collapse_cells += int(flat_collapse or blur_collapse)
@@ -2973,6 +3031,11 @@ def whole_scene_quality_gate(reference: Image.Image, donor: Image.Image) -> tupl
                 "source_material_saturation": round(source_material_saturation, 4),
                 "donor_material_saturation": round(donor_material_saturation, 4),
                 "smooth_material_sample_fraction": round(smooth_sample_fraction, 5),
+                "pattern_sample_fraction": round(pattern_sample_fraction, 5),
+                "source_pattern_rms": round(source_pattern_rms, 5),
+                "donor_pattern_rms": round(donor_pattern_rms, 5),
+                "pattern_correlation": round(pattern_correlation, 5),
+                "pattern_identity_substitution": bool(pattern_identity_substitution),
             })
 
     total_cells = max(1, grid_cols * grid_rows)
@@ -2983,6 +3046,9 @@ def whole_scene_quality_gate(reference: Image.Image, donor: Image.Image) -> tupl
     )
     recolored_material_cell_fraction = (
         recolored_material_cells / max(1, material_cells_evaluated)
+    )
+    substituted_pattern_cell_fraction = (
+        substituted_pattern_cells / max(1, pattern_cells_evaluated)
     )
     groups = {
         "geometry_and_identity": {
@@ -3013,6 +3079,8 @@ def whole_scene_quality_gate(reference: Image.Image, donor: Image.Image) -> tupl
             <= float(CFG["material_identity_max_retextured_cell_fraction"]),
             "no_material_colour_family_substitution": recolored_material_cell_fraction
             <= float(CFG["material_identity_max_recolored_cell_fraction"]),
+            "source_pattern_identity_preserved": substituted_pattern_cell_fraction
+            <= float(CFG.get("pattern_identity_max_substituted_cell_fraction", 0.0)),
         },
         "artifact_control": {
             "extreme_saturation": extreme_saturation_fraction <= float(CFG["whole_scene_max_extreme_saturation_fraction"]),
@@ -3093,6 +3161,9 @@ def whole_scene_quality_gate(reference: Image.Image, donor: Image.Image) -> tupl
             "retextured_material_cell_fraction": round(retextured_material_cell_fraction, 6),
             "recolored_material_cells": recolored_material_cells,
             "recolored_material_cell_fraction": round(recolored_material_cell_fraction, 6),
+            "pattern_cells_evaluated": pattern_cells_evaluated,
+            "substituted_pattern_cells": substituted_pattern_cells,
+            "substituted_pattern_cell_fraction": round(substituted_pattern_cell_fraction, 6),
             **canvas_integrity["metrics"],
         },
         "registration": registration,
@@ -3102,6 +3173,8 @@ def whole_scene_quality_gate(reference: Image.Image, donor: Image.Image) -> tupl
             "source_material_category_is_authoritative": True,
             "source_surface_finish_is_authoritative": True,
             "new_facade_texture_patterns_allowed": False,
+            "source_pattern_motif_phase_scale_and_rhythm_are_authoritative": True,
+            "pattern_substitution_allowed": False,
             "microdetail_improvement_without_material_reclassification_allowed": True,
         },
         "canvas_integrity_contract": {
