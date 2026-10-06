@@ -54,7 +54,7 @@ EXIT_WAITING_FOR_DONOR = 5
 EXIT_ALL_IMAGES_APPROVED = 6
 EXIT_REPLACEMENT_DONOR_APPROVAL_REQUIRED = 7
 
-# Nano Banana Pro/OpenRouter accepts discrete canvas ratios. The closest supported
+# OpenRouter image generators accept discrete canvas ratios. The closest supported
 # ratio is selected from the immutable source dimensions and sent in the paid
 # request itself; prompt wording alone is not a framing control.
 GENERATION_ASPECT_RATIOS: tuple[tuple[str, float], ...] = (
@@ -995,7 +995,7 @@ def generate_image(key: str, reference: Path, trace_name: str, seed: int) -> tup
     provider_model = body.get("model")
     if provider_model and str(provider_model) != str(CFG["model"]):
         raise RuntimeError(
-            f"Provider returned model {provider_model!r}, but Nano Banana Pro "
+            f"Provider returned model {provider_model!r}, but configured image model "
             f"({CFG['model']}) was required. RAW was not accepted."
         )
     raw = base64.b64decode(body["data"][0]["b64_json"])
@@ -1010,7 +1010,7 @@ def generate_image(key: str, reference: Path, trace_name: str, seed: int) -> tup
         output.width, output.height, generated_ratio, output_error,
     )
     usage = dict(body.get("usage", {}))
-    usage["generator"] = str(CFG.get("generator_display_name", "Nano Banana Pro"))
+    usage["generator"] = str(CFG.get("generator_display_name", "Configured OpenRouter image model"))
     usage["requested_model"] = str(CFG["model"])
     usage["provider_model"] = str(provider_model or CFG["model"])
     usage["prompt_sha256"] = hashlib.sha256(request_prompt.encode("utf-8")).hexdigest()
@@ -3184,7 +3184,7 @@ def _process_impl(
         if OFFLINE_SELF_TEST_MODE:
             logging.info("SELF-TEST | Creating deterministic offline donor. No API request is made.")
         else:
-            logging.info("GENERATION | Calling Nano Banana Pro (google/gemini-3-pro-image). Legacy Seedream RAWs are blocked.")
+            logging.info("GENERATION | Calling %s (%s). Legacy Seedream RAWs are blocked.", CFG.get("generator_display_name", "Configured OpenRouter image model"), CFG["model"])
         seed = random.SystemRandom().randint(1, 2_147_483_646) if force_generation else int(CFG["seed_base"]) + int(sha256[:8], 16) % 1_000_000
         donor, usage = generate_image(active_key, reference_path, f"{sha256[:10]}_appearance_donor", seed)
         whole_scene_gate, whole_scene_audit = whole_scene_quality_gate(reference, donor)
@@ -3214,7 +3214,7 @@ def _process_impl(
             "source_sha256": sha256,
             "donor_sha256": committed_raw_sha256,
             "model": CFG["model"],
-            "generator": CFG.get("generator_display_name", "Nano Banana Pro"),
+            "generator": CFG.get("generator_display_name", "Configured OpenRouter image model"),
             "seed": seed,
             "api_request_count": 1,
             "checkpoint_reused": False,
@@ -3239,7 +3239,7 @@ def _process_impl(
             "source": str(source_path),
             "source_sha256": sha256,
             "model": CFG["model"],
-            "generator": CFG.get("generator_display_name", "Nano Banana Pro"),
+            "generator": CFG.get("generator_display_name", "Configured OpenRouter image model"),
             "seed": seed,
             "api_endpoint": "https://openrouter.ai/api/v1/images",
             "api_request_count": 1,
@@ -4257,7 +4257,7 @@ def load_sequential_state() -> dict[str, Any]:
                 "paid_attempts": int(active.get("v860_verified_regeneration_attempts", 0)),
                 "technical_decision": active.get("technical_decision"),
                 "recovered_at_utc": utc_now(),
-                "reason": "V8.6.2 requires a fresh google/gemini-3-pro-image RAW",
+                "reason": f"V8.6.2 requires a fresh {CFG['model']} RAW",
             }
             for key_name in (
                 "donor", "provenance", "generation_receipt", "final", "report",
