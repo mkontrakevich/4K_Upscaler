@@ -208,7 +208,7 @@ async function action(name) {
       name = "reject_candidate";
     } else if (name === "reject" && !await ask("Отклонить результат?", "Кадр останется активным. Следующее изображение не будет обработано.", "reject")) return;
     if (name === "generate") {
-      if (!await ask("Новая платная генерация", "Будет выполнен ровно один новый запрос Nano Banana Pro только для текущего изображения. Обычный запуск никогда не делает этот запрос.", "generate")) return;
+      if (!await ask("Новая платная генерация", "Будет выполнен ровно один новый запрос Nano Banana 2 только для текущего изображения. Обычный запуск никогда не делает этот запрос.", "generate")) return;
       paid = true;
     }
     await api(`/api/action/${name}`, {method: "POST", body: JSON.stringify({paid_confirmed: paid})});
