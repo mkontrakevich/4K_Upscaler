@@ -305,7 +305,7 @@ class ConsoleRuntime:
                 raise RuntimeError("Mode cannot be changed while processing")
             self.mode = mode
             atomic_json(WEB_SETTINGS, {"mode": mode, "updated_at_utc": utc_now()})
-            self.add_log("INFO", "Выбран режим: " + ("SAFE · без генерации" if mode == "safe" else "GENERATIVE · Nano Banana Pro"))
+            self.add_log("INFO", "Выбран режим: " + ("SAFE · без генерации" if mode == "safe" else "GENERATIVE · Nano Banana 2"))
 
     def public_status(self, token: str) -> dict[str, Any]:
         with self.lock:
