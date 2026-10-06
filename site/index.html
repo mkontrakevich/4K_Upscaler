@@ -669,7 +669,7 @@ function toast(text){const el=$("toast");el.textContent=text;el.classList.add("s
 function classifyClientFailure(state){
   const text=[state?.error,state?.diagnostic_excerpt].filter(Boolean).join("\n");
   const lower=text.toLowerCase();
-  const http=state?.diagnostic_http_status??Number((text.match(/HTTP\s+(\d{3})/i)||[])[1]||0)||null;
+  const http=state?.diagnostic_http_status ?? (Number((text.match(/HTTP\s+(\d{3})/i)||[])[1]||0) || null);
   if(state?.diagnostic_code)return {
     code:state.diagnostic_code,layer:state.diagnostic_layer||"—",summary:state.diagnostic_summary||"—",
     action:state.diagnostic_action||"—",retryable:state.diagnostic_retryable,http,
