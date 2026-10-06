@@ -657,6 +657,66 @@ async function deletePrefix(env, prefix) {
   return keys.length;
 }
 
+function archiveTimestamp() {
+  return new Date().toISOString().replace(/[:.]/g, "-");
+}
+
+async function archiveBytes(env, {
+  job,
+  bytes,
+  contentType,
+  name,
+  kind,
+  status,
+  checksum,
+  persistSource,
+}) {
+  const safeName = cleanName(name || "artifact");
+  const stamp = archiveTimestamp();
+  const digest = checksum || await sha256(bytes);
+  const key = `archive/jobs/${job.id}/${kind}/${stamp}_${digest.slice(0,16)}_${safeName}`;
+  await env.TEMP_BUFFER_R7.put(key, bytes, {
+    httpMetadata: { contentType: contentType || "application/octet-stream" },
+    customMetadata: {
+      session_id: job.session_id,
+      job_id: job.id,
+      kind,
+      status: String(status || ""),
+      original_name: safeName,
+      sha256: digest,
+      persist_source: persistSource || "unknown",
+      archived_at: new Date().toISOString(),
+    },
+  });
+  const eventKey = `archive/jobs/${job.id}/events/${stamp}_${kind}_${digest.slice(0,16)}.json`;
+  await env.TEMP_BUFFER_R7.put(eventKey, JSON.stringify({
+    job_id: job.id,
+    session_id: job.session_id,
+    archived_at: new Date().toISOString(),
+    kind,
+    status: status || null,
+    name: safeName,
+    sha256: digest,
+    bytes: bytes.byteLength ?? null,
+    content_type: contentType || null,
+    persist_source: persistSource || null,
+    archive_key: key,
+    source_filename: job.filename || null,
+    mode: job.mode || null,
+    locks: job.locks || {},
+    prompt_sha256: job.prompt_sha256 || null,
+  }, null, 2), {
+    httpMetadata: { contentType: "application/json; charset=utf-8" },
+    customMetadata: {
+      job_id: job.id,
+      kind: "archive_event",
+      artifact_kind: kind,
+      sha256: digest,
+    },
+  });
+  return key;
+}
+
 async function endSession(env, session) {
   let deletedObjects = 0;
   try {
@@ -898,6 +958,16 @@ async function storeContainerResult(env, container, job) {
       sha256: checksum,
       persist_source: "container_pull",
     },
+  });
+  job.archive_result_key = await archiveBytes(env, {
+    job,
+    bytes,
+    contentType,
+    name: resultName,
+    kind: "RESULT",
+    status: job.status || "processing",
+    checksum,
+    persistSource: "container_pull",
   });
 
   job.result_key = resultKey;
@@ -1268,7 +1338,8 @@ async function handleApi(request, env, ctx, url) {
     const filename = cleanName(file.name || "source-image");
     const sourceKey = `sessions/${session.id}/jobs/${id}/source/${filename}`;
 
-    await env.TEMP_BUFFER_R7.put(sourceKey, file.stream(), {
+    const sourceBytes = await file.arrayBuffer();
+    await env.TEMP_BUFFER_R7.put(sourceKey, sourceBytes, {
       httpMetadata: { contentType: type },
       customMetadata: {
         session_id: session.id,
@@ -1276,6 +1347,17 @@ async function handleApi(request, env, ctx, url) {
         kind: "source",
         original_name: filename,
       },
+    });
+    const sourceChecksum = await sha256(sourceBytes);
+    await archiveBytes(env, {
+      job: { id, session_id: session.id, filename, mode, locks, prompt_sha256: promptOverride ? await sha256(promptOverride) : null },
+      bytes: sourceBytes,
+      contentType: type,
+      name: filename,
+      kind: "SOURCE",
+      status: "uploaded",
+      checksum: sourceChecksum,
+      persistSource: "worker_upload",
     });
 
     let billingClaim = null;
@@ -1681,6 +1763,23 @@ async function handleApi(request, env, ctx, url) {
         persist_source: "container_push",
       },
     });
+
+    const archiveKind = requestedStatus === "review" ? "DONOR_RAW" : "FINAL";
+    const archiveKey = await archiveBytes(env, {
+      job,
+      bytes,
+      contentType: resultContentType,
+      name: resultName,
+      kind: archiveKind,
+      status: requestedStatus,
+      checksum,
+      persistSource: "container_push",
+    });
+    if (requestedStatus === "review") {
+      job.archive_donor_keys = Array.from(new Set([...(job.archive_donor_keys || []), archiveKey]));
+    } else {
+      job.archive_final_key = archiveKey;
+    }
 
     job.result_key = resultKey;
     job.result_bytes = actualBytes;
