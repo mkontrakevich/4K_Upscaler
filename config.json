@@ -309,6 +309,11 @@
   "pattern_identity_min_hardscape_fraction": 0.28,
   "pattern_identity_min_sample_fraction": 0.08,
   "pattern_identity_source_rms_min": 3,
-  "pattern_identity_min_correlation": 0.42,
-  "pattern_identity_max_substituted_cell_fraction": 0
+  "pattern_identity_min_correlation": 0.58,
+  "pattern_identity_max_substituted_cell_fraction": 0,
+  "pattern_identity_canny_low": 35,
+  "pattern_identity_canny_high": 105,
+  "pattern_identity_min_source_edge_fraction": 0.012,
+  "pattern_identity_min_source_edge_preservation": 0.72,
+  "pattern_identity_min_donor_edge_agreement": 0.68
 }
