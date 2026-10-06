@@ -94,7 +94,9 @@ jobs:
           import v8_safe_appearance as v
 
           os.environ.pop("MG4K_LOCK_PROFILE_JSON", None)
-          assert v.donor_generation_prompt() == v.GENERATION_PROMPT, "Legacy local prompt changed"
+          local_prompt = v.donor_generation_prompt()
+assert v.GENERATION_PROMPT in local_prompt, "Legacy source-faithful prompt baseline missing"
+assert v.PATTERN_IDENTITY_PROMPT in local_prompt, "Pattern identity lock missing from local donor prompt"
 
           profile = {
               "camera": "soft",
