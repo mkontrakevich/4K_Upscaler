@@ -23,8 +23,7 @@
       "instance_type": "standard-1",
       "max_instances": 1,
       "constraints": {
-        "regions": ["ENAM", "WNAM"],
-        "jurisdiction": "us"
+        "regions": ["ENAM", "WNAM"]
       }
     }
   ],
