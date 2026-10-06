@@ -93,16 +93,17 @@ RULES:
 1. Return between 2 and 14 relevant locks.
 2. CAMERA and COMPOSITION are normally relevant to every image.
 3. If a building/exterior is visible, include GEOMETRY and ARCHITECTURE.
-4. Include TEXT_SIGNAGE only when visible text, logos, signs, numbers or markings matter.
-5. Include FACES_IDENTITY only when one or more recognizable human faces are visible.
-6. Include POSE_BODY / CLOTHING only when people are visually important enough that drift would matter.
-7. Include PRODUCTS only when a product/object is the primary subject.
-8. Use HARD for identity, geometry, text/logo, recognizable faces, hero products, or other elements whose change would make the image factually wrong.
-9. Use SOFT where controlled refinement is useful.
-10. Use FREE only where creative variation is safe.
-11. Give a concise Russian reason for every suggested lock.
-12. Confidence is 0.0 to 1.0.
-13. Do not return any id outside this catalog.
+4. If any facade cladding, paving, tile, lattice, perforation, relief, ornament, joint rhythm or other visible surface pattern exists, include TEXTURES and recommend HARD. A changed motif is factually wrong, not a creative refinement.
+5. Include TEXT_SIGNAGE only when visible text, logos, signs, numbers or markings matter.
+6. Include FACES_IDENTITY only when one or more recognizable human faces are visible.
+7. Include POSE_BODY / CLOTHING only when people are visually important enough that drift would matter.
+8. Include PRODUCTS only when a product/object is the primary subject.
+9. Use HARD for identity, geometry, text/logo, recognizable faces, hero products, or other elements whose change would make the image factually wrong.
+10. Use SOFT where controlled refinement is useful.
+11. Use FREE only where creative variation is safe.
+12. Give a concise Russian reason for every suggested lock.
+13. Confidence is 0.0 to 1.0.
+14. Do not return any id outside this catalog.
 
 LOCK CATALOG:
 ${catalog}
