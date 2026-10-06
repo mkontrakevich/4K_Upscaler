@@ -78,7 +78,7 @@ body{overflow-x:hidden}
 .result-state strong{display:block;color:#d4e0ea;margin-bottom:6px;font-size:14px}
 .result-state span{font-size:12px;line-height:1.45}
 .result-stage.ready .result-state{display:none}
-.lock-panel,.prompt-panel,.analysis-panel,.debug-panel,.actions-panel,.log-panel{margin-top:12px;border:1px solid var(--line);border-radius:9px;overflow:hidden;background:linear-gradient(180deg,#0b1b2a,#081521)}
+.lock-panel,.prompt-panel,.analysis-panel,.actions-panel,.log-panel{margin-top:12px;border:1px solid var(--line);border-radius:9px;overflow:hidden;background:linear-gradient(180deg,#0b1b2a,#081521)}
 .section-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 13px;border-bottom:1px solid var(--line);background:#0b1c2c}
 .section-head strong{font-size:12px;letter-spacing:.1em}
 .section-head span{font-size:10px;color:var(--muted)}
@@ -454,38 +454,6 @@ body{overflow-x:hidden}
     </div>
   </section>
 
-  <section class="debug-panel" id="debug-panel" hidden>
-    <div class="section-head">
-      <strong>DEBUGGER / ДИАГНОСТИКА</strong>
-      <div class="debug-tools">
-        <span id="debug-caption">автоматическая классификация ошибки</span>
-        <button class="btn ghost" id="debug-health" type="button">Проверить контур</button>
-        <button class="btn ghost" id="debug-copy" type="button">Копировать JSON</button>
-        <button class="btn ghost" id="debug-save" type="button">Сохранить .json</button>
-      </div>
-    </div>
-    <div class="debug-summary">
-      <div class="debug-card" id="debug-code-card"><small>КОД</small><strong id="debug-code">—</strong></div>
-      <div class="debug-card"><small>СЛОЙ</small><strong id="debug-layer">—</strong></div>
-      <div class="debug-card"><small>HTTP</small><strong id="debug-http">—</strong></div>
-      <div class="debug-card"><small>MODEL / ROUTE</small><strong id="debug-model">—</strong></div>
-    </div>
-    <div class="debug-explain">
-      <div><b id="debug-summary">Диагностика появится при ошибке или по запросу.</b></div>
-      <div class="action" id="debug-action">—</div>
-    </div>
-    <div class="debug-grid">
-      <div>
-        <div class="subhead">САНИТИЗИРОВАННЫЙ STATE</div>
-        <pre id="debug-state">—</pre>
-      </div>
-      <div>
-        <div class="subhead">PIPELINE EXCERPT</div>
-        <pre id="debug-raw">—</pre>
-      </div>
-    </div>
-  </section>
-
   <section class="log-panel">
     <div class="section-head">
       <strong>ЛОГ ПРОЦЕССА</strong>
@@ -726,56 +694,7 @@ function diagnosticPayload(state=latestJobState){
     secret_policy:"API credentials and embedded image payloads are not included."
   };
 }
-function renderDebugger(state=latestJobState,{force=false}={}){
-  const panel=$("debug-panel");if(!panel)return;
-  const shouldShow=Boolean(force||state?.status==="failed"||state?.diagnostic_code||state?.diagnostic_excerpt||state?.error);
-  panel.hidden=!shouldShow;
-  if(!shouldShow)return;
-  const d=classifyClientFailure(state||{});
-  $("debug-code").textContent=d.code||"—";
-  $("debug-layer").textContent=d.layer||"—";
-  $("debug-http").textContent=d.http?String(d.http):"—";
-  $("debug-model").textContent=[d.model,d.route].filter(Boolean).join(" · ")||"—";
-  $("debug-summary").textContent=d.summary||"—";
-  $("debug-action").textContent="Действие: "+(d.action||"—");
-  $("debug-state").textContent=JSON.stringify(diagnosticPayload(state),null,2);
-  $("debug-raw").textContent=state?.diagnostic_excerpt||state?.error||"—";
-  const card=$("debug-code-card");card.classList.remove("error","warn","ok");
-  card.classList.add(d.code==="OK"?"ok":d.retryable?"warn":"error");
-  $("debug-caption").textContent=d.retryable?"ошибка допускает ограниченный retry":"авторетрай запрещён или не нужен";
-}
-async function runDebuggerHealth(){
-  const btn=$("debug-health"),prev=btn.textContent;btn.disabled=true;btn.textContent="Проверяю…";
-  try{
-    const [health,state]=await Promise.all([
-      fetch("/api/health",{cache:"no-store"}).then(r=>r.json()),
-      currentJob?jobStatus(currentJob).catch(()=>null):Promise.resolve(null)
-    ]);
-    const payload=diagnosticPayload(state||latestJobState);
-    payload.health=health;
-    $("debug-state").textContent=JSON.stringify(payload,null,2);
-    $("debug-caption").textContent="health проверен · генерация не запускалась";
-    toast("Контур диагностики проверен без платной генерации.");
-  }catch(error){
-    $("debug-caption").textContent="health check failed: "+error.message;
-  }finally{btn.disabled=false;btn.textContent=prev}
-}
-async function copyDebuggerJson(){
-  const text=JSON.stringify(diagnosticPayload(),null,2);
-  try{await navigator.clipboard.writeText(text);toast("Диагностика скопирована.");}
-  catch{toast("Не удалось скопировать диагностику.")}
-}
-function saveDebuggerJson(){
-  const text=JSON.stringify(diagnosticPayload(),null,2);
-  const blob=new Blob([text],{type:"application/json;charset=utf-8"});
-  const url=URL.createObjectURL(blob),a=document.createElement("a");
-  a.href=url;a.download="MG4K_DEBUG_"+String(currentJob?.id||"session").slice(0,8)+"_"+new Date().toISOString().replace(/[:.]/g,"-")+".json";
-  document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
-  toast("Диагностический JSON сохранён.");
-}
-$("debug-health").addEventListener("click",runDebuggerHealth);
-$("debug-copy").addEventListener("click",copyDebuggerJson);
-$("debug-save").addEventListener("click",saveDebuggerJson);
+
 
 function logExportText(){
   const rows=Array.from($("log-lines").querySelectorAll(".log-line")).map(row=>{
@@ -1632,7 +1551,6 @@ function showResult(state,mode="review"){
 function renderJobState(state){
   if(!state)return null;
   latestJobState=state;
-  renderDebugger(state);
   rememberCurrentItem(state);
   updateRecoveryActions(state);
   const p=Number(state.progress||0),stage=state.stage||state.status||"queued";
