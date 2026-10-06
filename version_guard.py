@@ -8,7 +8,7 @@ from pathlib import Path
 EXPECTED_VERSION = "8.8.1"
 EXPECTED_PIPELINE_TAG = "V874_CANVAS_INTEGRITY_GATE"
 EXPECTED_RELEASE_TAG = "V881_SCENE_STABILITY_PROFILE"
-EXPECTED_MODEL = "google/gemini-3-pro-image"
+EXPECTED_MODEL = "google/gemini-3.1-flash-image"
 
 
 def main() -> int:
@@ -35,7 +35,7 @@ def main() -> int:
         "pipeline_tag_compatible": version.get("pipeline_tag") == EXPECTED_PIPELINE_TAG,
         "application_release_tag": version.get("application_release_tag") == EXPECTED_RELEASE_TAG,
         "pipeline_source_tag": f'PIPELINE_TAG = "{EXPECTED_PIPELINE_TAG}"' in pipeline,
-        "nano_banana_pro": config.get("model") == EXPECTED_MODEL,
+        "configured_image_model": config.get("model") == EXPECTED_MODEL,
         "generative_master_enabled": config.get("verified_donor_is_final_master") is True,
         "generative_no_source_blend": "atomic_copy_verified_master(raw_path, final_path)" in pipeline,
         "strict_whole_scene_gate": "whole_scene_quality_gate(reference, donor)" in pipeline,
