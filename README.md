@@ -2,7 +2,7 @@
 
 Status: **READY / PRODUCTION**
 
-CORE **8.8.1 R4** · CLOUD UI **R10.2** · processor **result-persist-r11b**
+CORE **8.8.1 R4** · CLOUD UI **R10.3** · processor **result-persist-r11b**
 
 Production: https://4k-upscaler.kontrakevich.workers.dev/
 
@@ -25,7 +25,8 @@ Ready scope:
 - **Prompt AI Assistant** accepts the operator's natural-language goal, uses current scene analysis + LOCK + ADDITIONS + FINAL PROMPT, and returns precise prompt wording plus recommended LOCK changes;
 - architecture quick commands include vertical/horizontal straightening, facade preservation, signage preservation, people, sky, evening light and premium-hotel styling;
 - ADDITIONS are merged into the visible FINAL PROMPT, while the parameter LOCK profile remains higher priority on conflicts;
-- process diagnostics and regression protection.
+- process diagnostics and regression protection;
+- **in-site debugger** classifies provider/network/pipeline failures, shows sanitized job state + pipeline excerpt, and exports a secret-free JSON diagnostic bundle;
 
 Project state: **core product done / production ready**.
 

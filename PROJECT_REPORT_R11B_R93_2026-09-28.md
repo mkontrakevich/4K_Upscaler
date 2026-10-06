@@ -404,3 +404,40 @@ The assistant is advisory only:
 - it never changes LOCK until the operator presses an apply action;
 - its OpenRouter API key remains server-side;
 - session/hourly call limits prevent accidental loops and abuse.
+
+
+## In-site debugger / normalized diagnostics — R10.3
+
+A dedicated **DEBUGGER / ДИАГНОСТИКА** panel is now available in the Cloud UI.
+
+It appears automatically when a job fails and provides:
+- normalized diagnostic code and layer;
+- HTTP status;
+- detected provider model and OpenRouter routing step;
+- Russian summary and recommended operator action;
+- retryable / non-retryable classification;
+- sanitized job state;
+- sanitized pipeline excerpt;
+- copy JSON;
+- save `MG4K_DEBUG_<job>_<timestamp>.json`;
+- a safe **Проверить контур** health check that never launches a paid generation.
+
+Provider errors are normalized in the Container before reaching the UI. Initial classifications include:
+- `PROVIDER_REGION_BLOCKED`;
+- `PROVIDER_RATE_LIMIT`;
+- `PROVIDER_AUTH_FAILED`;
+- `PROVIDER_CREDITS_EXHAUSTED`;
+- `PROVIDER_TIMEOUT`;
+- `PROVIDER_UPSTREAM_ERROR`;
+- `CONTAINER_STATE_LOST`;
+- fallback `PIPELINE_RUNTIME_ERROR`.
+
+Security:
+- OpenRouter credentials are redacted;
+- embedded base64 images are redacted;
+- the debugger never exposes API secrets;
+- health/debug actions do not authorize generation.
+
+The reported OpenRouter error:
+`This model is not available in your region`
+is classified as `PROVIDER_REGION_BLOCKED`, layer `openrouter_routing`, HTTP 403, non-retryable with the same model/route.
