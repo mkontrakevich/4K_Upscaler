@@ -276,12 +276,23 @@ No plastic CGI look, fantasy styling, watermark, excessive sharpening, synthetic
 
 
 def donor_generation_prompt() -> str:
-    """Preserve legacy/default prompt composition unless an exact UI override is supplied."""
+    """Use the proven source-faithful reconstruction prompt as the cloud baseline.
+
+    The UI lock profile may relax explicitly selected parameters, but it must never
+    replace the detailed source-identity contract that preserves architecture,
+    object placement, materials, signage, contours and small visible details.
+    """
     override = os.environ.get("MG4K_PROMPT_OVERRIDE", "").strip()
     if override:
         return override
     if os.environ.get("MG4K_LOCK_PROFILE_JSON", "").strip():
-        return CLOUD_GENERATION_PROMPT + cloud_lock_prompt()
+        return (
+            GENERATION_PROMPT
+            + "\n\nCLOUD LOCK PROFILE OVERRIDE — parameter-level permissions follow. "
+              "Only an explicitly SOFT or FREE parameter may deviate from the strict baseline above; "
+              "all other source facts, identities, counts, positions, contours, materials, signage and visible details remain locked.\n"
+            + cloud_lock_prompt()
+        )
     return GENERATION_PROMPT
 
 
