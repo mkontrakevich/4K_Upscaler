@@ -1574,11 +1574,32 @@ async function handleApi(request, env, ctx, url) {
     }
     if (!job.result_key) return json({ error: "result_not_ready", status: job.status }, 409);
 
-    const object = await env.TEMP_BUFFER_R7.get(job.result_key);
-    if (!object) return json({ error: "result_missing" }, 404);
+    let object = await env.TEMP_BUFFER_R7.get(job.result_key);
+    let servedFromArchive = false;
+    if (!object && job.archive_result_key) {
+      object = await env.TEMP_BUFFER_R7.get(job.archive_result_key);
+      if (object) {
+        servedFromArchive = true;
+        job.result_recovered_from_archive_at = now();
+        job.result_recovery_warning = null;
+        await writeJob(env, job);
+        console.warn("MG4K_RESULT_RECOVERED_FROM_ARCHIVE", job.id, job.archive_result_key);
+      }
+    }
+    if (!object) {
+      job.result_recovery_warning = job.archive_result_key
+        ? "Both live RESULT and archived RESULT are missing from R2."
+        : "Live RESULT is missing from R2 and no archive_result_key is recorded.";
+      await writeJob(env, job);
+      return json({
+        error: "result_missing",
+        archive_available: Boolean(job.archive_result_key),
+      }, 404);
+    }
 
     const headers = new Headers();
     object.writeHttpMetadata(headers);
+    if (servedFromArchive) headers.set("x-mg4k-result-source", "archive");
     headers.set("etag", object.httpEtag);
     headers.set("cache-control", "private, no-store");
     if (url.searchParams.get("download") === "1") {
