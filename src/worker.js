@@ -1491,6 +1491,12 @@ async function handleApi(request, env, ctx, url) {
     let job = await readJob(env, jobStatusMatch[1]);
     if (!job) return json({ error: "job_not_found" }, 404);
     if (!await authorizeJob(request, url, job)) return json({ error: "forbidden" }, 403);
+    // Recover legacy result_sync_failed jobs whose RESULT bytes reached R2
+    // but whose result_key metadata was lost by the former push/pull race.
+    if (job.status === "failed" && job.stage === "result_sync_failed" && !job.result_key) {
+      job = await recoverSessionResultFromR2(env, job);
+    }
+
     const durableReview = persistedReviewIsDurable(job);
     if (!["done", "failed", "skipped"].includes(job.status) && !durableReview) {
       try {
