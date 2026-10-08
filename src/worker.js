@@ -648,6 +648,36 @@ async function listAllObjects(env, prefix) {
   return objects;
 }
 
+async function recoverSessionResultFromR2(env, job) {
+  if (!job?.session_id || !job?.id || job.result_key) return job;
+  const prefix = `sessions/${job.session_id}/jobs/${job.id}/result/`;
+  const objects = await listAllObjects(env, prefix);
+  if (!objects.length) return job;
+
+  objects.sort((a, b) => String(b.uploaded || "").localeCompare(String(a.uploaded || "")));
+  const candidate = objects[0];
+  const head = await env.TEMP_BUFFER_R7.head(candidate.key);
+  if (!head) return job;
+
+  job.result_key = candidate.key;
+  job.result_bytes = Number(candidate.size || head.size || 0);
+  job.result_content_type = head.httpMetadata?.contentType || job.result_content_type || "application/octet-stream";
+  job.result_persist_source = "r2_prefix_recovery";
+  job.result_recovered_at = now();
+  job.result_sync_attempts = 0;
+  job.result_sync_warning = null;
+  job.manual_retry_required = false;
+  if (String(job.stage || "") === "result_sync_failed") {
+    job.status = job.container_review_status === "done" ? "done" : "review";
+    job.stage = job.status === "done" ? "final" : "awaiting_approval";
+    job.progress = job.status === "done" ? 100 : 90;
+    job.error = null;
+  }
+  await writeJob(env, job);
+  console.warn("MG4K_RESULT_METADATA_RECOVERED_FROM_R2", job.id, candidate.key);
+  return job;
+}
+
 async function deletePrefix(env, prefix) {
   const objects = await listAllObjects(env, prefix);
   const keys = objects.map(item => item.key);
@@ -1086,35 +1116,57 @@ async function syncJobFromContainer(env, job, origin) {
   const previousStatus = job.status;
   applyContainerState(job, state);
 
-  // Persist authoritative Container state before copying large result bytes.
-  // A transient R2/result transfer failure must never rewrite a valid REVIEW
-  // state into a contradictory terminal-looking sync error.
+  // Persist authoritative Container state before resolving RESULT persistence.
   await writeJob(env, job);
 
-  if (state.result_available && (!hadResult || (state.status === "done" && previousStatus !== "done"))) {
-    try {
-      await storeContainerResult(env, container, job);
-      job.result_sync_warning = null;
-      job.error = state.error || null;
-      await writeJob(env, job);
-    } catch (error) {
-      job.container_review_status = String(state.status || job.status || "");
-      job.result_sync_attempts = Number(job.result_sync_attempts || 0) + 1;
-      job.result_sync_warning = error?.message || String(error);
-      job.error = null;
+  // The Container pushes RESULT to Worker/R2 before review. If an older pull-sync
+  // raced with that push and overwrote result_key, recover metadata from the
+  // deterministic job-specific R2 prefix without regenerating anything.
+  if (!job.result_key) {
+    job = await recoverSessionResultFromR2(env, job);
+  }
 
-      if (job.result_sync_attempts >= 5) {
-        job.status = "failed";
-        job.stage = "result_sync_failed";
-        job.manual_retry_required = true;
-        job.progress = Math.min(89, Math.max(1, Number(state.progress || job.progress || 0)));
-        job.error = "RESULT was generated but could not be copied to R2 after 5 attempts. Paid regeneration was not started.";
-      } else {
-        job.status = "processing";
-        job.stage = "result_sync_retry";
-        job.progress = Math.min(89, Math.max(1, Number(state.progress || job.progress || 0)));
-      }
+  if (state.result_available && !job.result_key && (!hadResult || (state.status === "done" && previousStatus !== "done"))) {
+    const pushAwareContainer = String(state.build_id || job.container_build_id || "") === CONTAINER_BUILD_ID;
+    if (pushAwareContainer) {
+      // Current Containers persist RESULT by POSTing it to Worker/R2 themselves.
+      // Never start a competing large-file pull: it can disconnect the Container
+      // and, worse, let stale job metadata overwrite the successful push.
+      job.container_review_status = String(state.status || job.status || "");
+      job.status = "processing";
+      job.stage = state.result_persisted ? "result_push_commit_wait" : "result_push_pending";
+      job.progress = Math.min(89, Math.max(1, Number(state.progress || job.progress || 0)));
+      job.result_sync_warning = state.result_persisted
+        ? "Container reports RESULT persisted; waiting for Worker metadata visibility."
+        : "RESULT generated; waiting for canonical Container push to R2.";
+      job.error = null;
       await writeJob(env, job);
+    } else {
+      // Legacy Container compatibility only.
+      try {
+        await storeContainerResult(env, container, job);
+        job.result_sync_warning = null;
+        job.error = state.error || null;
+        await writeJob(env, job);
+      } catch (error) {
+        job.container_review_status = String(state.status || job.status || "");
+        job.result_sync_attempts = Number(job.result_sync_attempts || 0) + 1;
+        job.result_sync_warning = error?.message || String(error);
+        job.error = null;
+
+        if (job.result_sync_attempts >= 5) {
+          job.status = "failed";
+          job.stage = "result_sync_failed";
+          job.manual_retry_required = true;
+          job.progress = Math.min(89, Math.max(1, Number(state.progress || job.progress || 0)));
+          job.error = "RESULT was generated but could not be copied to R2 after 5 attempts. Paid regeneration was not started.";
+        } else {
+          job.status = "processing";
+          job.stage = "result_sync_retry";
+          job.progress = Math.min(89, Math.max(1, Number(state.progress || job.progress || 0)));
+        }
+        await writeJob(env, job);
+      }
     }
   }
 
@@ -1574,16 +1626,26 @@ async function handleApi(request, env, ctx, url) {
     }
     if (!job.result_key) return json({ error: "result_not_ready", status: job.status }, 409);
 
-    let object = await env.TEMP_BUFFER_R7.get(job.result_key);
+    if (!job.result_key) {
+      job = await recoverSessionResultFromR2(env, job);
+    }
+    let object = job.result_key ? await env.TEMP_BUFFER_R7.get(job.result_key) : null;
     let servedFromArchive = false;
-    if (!object && job.archive_result_key) {
-      object = await env.TEMP_BUFFER_R7.get(job.archive_result_key);
-      if (object) {
+    const archiveCandidates = [
+      job.archive_final_key,
+      job.archive_result_key,
+      ...((job.archive_donor_keys || []).slice().reverse()),
+    ].filter(Boolean);
+    if (!object) {
+      for (const archiveKey of archiveCandidates) {
+        object = await env.TEMP_BUFFER_R7.get(archiveKey);
+        if (!object) continue;
         servedFromArchive = true;
         job.result_recovered_from_archive_at = now();
         job.result_recovery_warning = null;
         await writeJob(env, job);
-        console.warn("MG4K_RESULT_RECOVERED_FROM_ARCHIVE", job.id, job.archive_result_key);
+        console.warn("MG4K_RESULT_RECOVERED_FROM_ARCHIVE", job.id, archiveKey);
+        break;
       }
     }
     if (!object) {
