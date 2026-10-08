@@ -708,8 +708,10 @@ jobs:
           bridge = Path("cloudflare_bridge.py").read_text(encoding="utf-8")
           ui = Path("site/index.html").read_text(encoding="utf-8")
 
-          assert 'await writeJob(env, job);\n\n  if (state.result_available' in worker
-          assert 'job.stage = "result_sync_retry";' in worker
+          assert 'recoverSessionResultFromR2(env, job)' in worker
+          assert 'pushAwareContainer' in worker
+          assert 'result_push_pending' in worker
+          assert 'result_push_commit_wait' in worker
           assert 'container_review_status' in worker
           assert 'result_sync_warning' in worker
           assert 'if (!["review", "done"].includes(job.status))' in worker
@@ -757,6 +759,8 @@ jobs:
           assert 'container_result_empty' in worker
           assert 'container_result_size_mismatch' in worker
           assert 'result_sync_attempts' in worker
+          assert 'pushAwareContainer' in worker
+          assert 'Legacy Container compatibility only.' in worker
           assert 'job.result_sync_attempts >= 5' in worker
           assert 'stage = "result_sync_failed"' in worker
           assert 'Paid regeneration was not started.' in worker
