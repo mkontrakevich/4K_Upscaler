@@ -1704,19 +1704,47 @@ async function sendDecision(action){
 }
 async function releaseReviewForRegeneration(){
   if(!currentJob)return true;
+  const job=currentJob;
   try{
-    const state=await jobStatus(currentJob);
-    if(state.status==="review"){
-      const r=await fetch("/api/jobs/"+currentJob.id+"/decision",{method:"POST",headers:{"Content-Type":"application/json","X-Job-Token":currentJob.token},body:JSON.stringify({action:"skip"})});
-      if(!r.ok)return false;
-      return true;
-    }
-    if(["queued","processing","decision_pending"].includes(state.status)){
+    const state=await jobStatus(job).catch(()=>latestJobState||null);
+    const status=String(state?.status||"");
+    if(["queued","processing","decision_pending"].includes(status)){
       toast("Текущее задание ещё выполняется. Дождитесь результата перед регенерацией.");
       return false;
     }
+
+    const r=await fetchNetworkRetry("/api/jobs/"+job.id+"/reset",{
+      method:"POST",
+      headers:{"Content-Type":"application/json","X-Job-Token":job.token},
+      body:"{}"
+    },3);
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok){
+      const message=d.error||("regeneration_reset_failed_"+r.status);
+      setStatus("Не удалось подготовить ручную регенерацию: "+message,"err",true);
+      toast("Регенерация не запущена: "+message);
+      return false;
+    }
+
+    clearInterval(jobPollTimer);jobPollTimer=null;
+    const item=currentSourceItem();
+    if(item){item.job=null;item.lastState=null;item.pendingJobRequestId=null}
+    currentJob=null;latestJobState=null;
+    resetResult();setProgress(0,"0%");
+    persistSessionHistory();updateQueueNavigation();
+    setStatus(
+      d.reset_warning
+        ?"Предыдущий RESULT освобождён. Container не подтвердил завершение, но Worker снял блокировку. Запускаю новую генерацию…"
+        :"Предыдущий RESULT освобождён. Запускаю новую генерацию…",
+      "info",true
+    );
     return true;
-  }catch{return true}
+  }catch(error){
+    const message=error?.message||String(error);
+    setStatus("Не удалось подготовить ручную регенерацию: "+message,"err",true);
+    toast("Регенерация не запущена: "+message);
+    return false;
+  }
 }
 function confirmPaidGeneration(){return window.confirm("Запустить Nano Banana Pro? Будет выполнен платный API-запрос. LOCK-профиль будет применён к DONOR prompt.")}
 
