@@ -1342,6 +1342,31 @@ async function handleApi(request, env, ctx, url) {
     const session = await authorizeSession(request, url, env);
     if (!session) return json({ error: "session_required" }, 403);
 
+    const requestIdRaw = String(request.headers.get("x-mg4k-request-id") || "").trim();
+    const requestId = /^[A-Za-z0-9._:-]{8,128}$/.test(requestIdRaw) ? requestIdRaw : "";
+    const requestHash = requestId ? await sha256(`job:${session.id}:${requestId}`) : "";
+    const id = requestId
+      ? `${requestHash.slice(0,8)}-${requestHash.slice(8,12)}-${requestHash.slice(12,16)}-${requestHash.slice(16,20)}-${requestHash.slice(20,32)}`
+      : crypto.randomUUID();
+    const sessionToken = String(request.headers.get("x-session-token") || "");
+    const accessToken = requestId
+      ? (await sha256(`job-access:${session.id}:${requestId}:${sessionToken}`)).slice(0,48)
+      : randomToken();
+
+    if (requestId) {
+      const existing = await readJob(env, id);
+      if (existing) {
+        return json({
+          id,
+          token: accessToken,
+          status: existing.status,
+          stage: existing.stage,
+          progress: existing.progress,
+          idempotent: true,
+        }, 200);
+      }
+    }
+
     const commercial = billingEnabled(env);
     let billingPermitToken = "";
     let billingPermit = null;
@@ -1385,8 +1410,6 @@ async function handleApi(request, env, ctx, url) {
     const mode = String(form.get("mode") || "generative");
     const promptOverride = String(form.get("prompt") || "").trim();
     if (promptOverride.length > 30000) return json({ error: "prompt_too_long", max_chars: 30000 }, 413);
-    const id = crypto.randomUUID();
-    const accessToken = randomToken();
     const filename = cleanName(file.name || "source-image");
     const sourceKey = `sessions/${session.id}/jobs/${id}/source/${filename}`;
 
