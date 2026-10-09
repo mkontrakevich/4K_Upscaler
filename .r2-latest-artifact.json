@@ -1,0 +1,146 @@
+{
+  "run_id": 37982275466,
+  "artifact_id": 11642130476,
+  "artifact_name": "r2-latest-image",
+  "bucket": "4k-upscaler-temp-buffer-r7",
+  "prefix": "archive/jobs/",
+  "latest": {
+    "job_id": "9322f4c4-a781-15d3-3dd9-bea97e3ea489",
+    "artifact_kind": "DONOR_RAW",
+    "key": "archive/jobs/9322f4c4-a781-15d3-3dd9-bea97e3ea489/DONOR_RAW/2026-10-09T15-55-17-201Z_abb76de290be93c6_image_870x_67624fac7263a_d9072e49d08cde1d_V874_CANVAS_INTEGRITY_GATE_REJECTED_CAMERA_VIEW_RAW_ATTEMPT_1867176891.png",
+    "last_modified": "2026-10-09T15:55:17.943Z",
+    "size": 19369273,
+    "content_type": "image/png",
+    "filename": "2026-10-09T15-55-17-201Z_abb76de290be93c6_image_870x_67624fac7263a_d9072e49d08cde1d_V874_CANVAS_INTEGRITY_GATE_REJECTED_CAMERA_VIEW_RAW_ATTEMPT_1867176891.png"
+  },
+  "jobs_sorted_by_last_modified": [
+    {
+      "job_id": "9322f4c4-a781-15d3-3dd9-bea97e3ea489",
+      "last_modified": "2026-10-09T15:55:17.943Z",
+      "latest_image_key": "archive/jobs/9322f4c4-a781-15d3-3dd9-bea97e3ea489/DONOR_RAW/2026-10-09T15-55-17-201Z_abb76de290be93c6_image_870x_67624fac7263a_d9072e49d08cde1d_V874_CANVAS_INTEGRITY_GATE_REJECTED_CAMERA_VIEW_RAW_ATTEMPT_1867176891.png",
+      "size": 19369273
+    },
+    {
+      "job_id": "d3b94901-0b60-dabb-db6e-a2993ea03e00",
+      "last_modified": "2026-10-09T15:46:07.870Z",
+      "latest_image_key": "archive/jobs/d3b94901-0b60-dabb-db6e-a2993ea03e00/DONOR_RAW/2026-10-09T15-46-07-113Z_0739c40313b23a95_image_870x_67624fac7263a_d9072e49d08cde1d_V874_CANVAS_INTEGRITY_GATE_REJECTED_CANVAS_INTEGRITY_RAW_ATTEMPT_610840203.png",
+      "size": 17040312
+    },
+    {
+      "job_id": "e652742f-d510-465f-7a4a-b16dfef41d9b",
+      "last_modified": "2026-10-09T15:25:07.663Z",
+      "latest_image_key": "archive/jobs/e652742f-d510-465f-7a4a-b16dfef41d9b/DONOR_RAW/2026-10-09T15-25-06-947Z_f756aa725506cb05_image_870x_67624fac7263a_d9072e49d08cde1d_V874_CANVAS_INTEGRITY_GATE_REJECTED_CAMERA_VIEW_RAW_ATTEMPT_1054751783.png",
+      "size": 17800154
+    },
+    {
+      "job_id": "002e27df-0026-e710-c8a3-a85e7478acf3",
+      "last_modified": "2026-10-09T15:19:55.855Z",
+      "latest_image_key": "archive/jobs/002e27df-0026-e710-c8a3-a85e7478acf3/DONOR_RAW/2026-10-09T15-19-55-194Z_8d7d728a547633dd_image_870x_67624fac7263a_d9072e49d08cde1d_V874_CANVAS_INTEGRITY_GATE_REJECTED_CAMERA_VIEW_RAW_ATTEMPT_852539147.png",
+      "size": 18231227
+    },
+    {
+      "job_id": "1a2ce444-b950-ae68-a808-2389fb1eb046",
+      "last_modified": "2026-10-09T15:16:34.926Z",
+      "latest_image_key": "archive/jobs/1a2ce444-b950-ae68-a808-2389fb1eb046/DONOR_RAW/2026-10-09T15-16-34-124Z_7cf83dd085ef210f_image_870x_67624fac7263a_d9072e49d08cde1d_V874_CANVAS_INTEGRITY_GATE_REJECTED_CAMERA_VIEW_RAW_ATTEMPT_897646604.png",
+      "size": 17910413
+    },
+    {
+      "job_id": "90b900ab-c045-cd3a-1aa5-f77667419e52",
+      "last_modified": "2026-10-09T14:49:18.673Z",
+      "latest_image_key": "archive/jobs/90b900ab-c045-cd3a-1aa5-f77667419e52/DONOR_RAW/2026-10-09T14-49-17-462Z_bd4a106a9498c33b_image_870x_67624fac7263a_d9072e49d08cde1d_V874_CANVAS_INTEGRITY_GATE_REJECTED_CANVAS_INTEGRITY_RAW_ATTEMPT_1459901278.png",
+      "size": 17534154
+    },
+    {
+      "job_id": "5edddfb0-c016-d9b0-ff96-292b58eed4f7",
+      "last_modified": "2026-10-09T14:44:41.718Z",
+      "latest_image_key": "archive/jobs/5edddfb0-c016-d9b0-ff96-292b58eed4f7/DONOR_RAW/2026-10-09T14-44-40-606Z_679eaa8e27467d45_image_870x_67624fac7263a_d9072e49d08cde1d_V874_CANVAS_INTEGRITY_GATE_REJECTED_CAMERA_VIEW_RAW_ATTEMPT_528394519.png",
+      "size": 18190270
+    },
+    {
+      "job_id": "9f4f62b6-81a5-3653-c4ea-eed3f5f494e1",
+      "last_modified": "2026-10-09T14:37:27.905Z",
+      "latest_image_key": "archive/jobs/9f4f62b6-81a5-3653-c4ea-eed3f5f494e1/DONOR_RAW/2026-10-09T14-37-27-000Z_1695ca42419d092b_image_870x_67624fac7263a_d9072e49d08cde1d_V874_CANVAS_INTEGRITY_GATE_REJECTED_CANVAS_INTEGRITY_RAW_ATTEMPT_26445170.png",
+      "size": 18274708
+    },
+    {
+      "job_id": "6d840099-a7c4-6f26-ffa2-3426c8ae83a9",
+      "last_modified": "2026-10-09T14:22:48.403Z",
+      "latest_image_key": "archive/jobs/6d840099-a7c4-6f26-ffa2-3426c8ae83a9/DONOR_RAW/2026-10-09T14-22-47-563Z_7b20b153b70c4229_image_870x_67624fac7263a_d9072e49d08cde1d_V874_CANVAS_INTEGRITY_GATE_REJECTED_CAMERA_VIEW_RAW_ATTEMPT_1829302542.png",
+      "size": 18754897
+    },
+    {
+      "job_id": "ebdce135-833b-40d7-95a3-8c4c1aedd71e",
+      "last_modified": "2026-10-09T13:29:15.430Z",
+      "latest_image_key": "archive/jobs/ebdce135-833b-40d7-95a3-8c4c1aedd71e/DONOR_RAW/2026-10-09T13-29-14-612Z_a88deceb95979f3c_Russian_Photographer_-_Mikhail_Saltykov-Shchedrin_Russian_author_and_satirist_-__MeisterDrucke-345703_-2_eb6f0baa90c776d3_V874_CANVAS_INTEGRITY_GATE_REJECTED_CA",
+      "size": 22260240
+    },
+    {
+      "job_id": "6437436d-5180-4f96-b9b0-0292ce3642d3",
+      "last_modified": "2026-10-09T13:21:19.466Z",
+      "latest_image_key": "archive/jobs/6437436d-5180-4f96-b9b0-0292ce3642d3/DONOR_RAW/2026-10-09T13-21-18-813Z_c1ab16ec6307fb48_Russian_Photographer_-_Mikhail_Saltykov-Shchedrin_Russian_author_and_satirist_-__MeisterDrucke-345703_-2_eb6f0baa90c776d3_V874_CANVAS_INTEGRITY_GATE_REJECTED_CA",
+      "size": 19291955
+    },
+    {
+      "job_id": "5e1112e9-15f3-4c13-b231-7bc6076cbd8a",
+      "last_modified": "2026-10-09T10:59:17.525Z",
+      "latest_image_key": "archive/jobs/5e1112e9-15f3-4c13-b231-7bc6076cbd8a/DONOR_RAW/2026-10-09T10-59-16-828Z_f3d598a8bf2a6901_Russian_Photographer_-_Mikhail_Saltykov-Shchedrin_Russian_author_and_satirist_-__MeisterDrucke-345703_-2_eb6f0baa90c776d3_V874_CANVAS_INTEGRITY_GATE_REJECTED_CA",
+      "size": 20040975
+    },
+    {
+      "job_id": "84fe7837-7e28-4310-9e7e-458b24c18ae4",
+      "last_modified": "2026-10-09T10:27:18.337Z",
+      "latest_image_key": "archive/jobs/84fe7837-7e28-4310-9e7e-458b24c18ae4/DONOR_RAW/2026-10-09T10-27-17-520Z_cada3cc0e94005d8_Russian_Photographer_-_Mikhail_Saltykov-Shchedrin_Russian_author_and_satirist_-__MeisterDrucke-345703_-2_eb6f0baa90c776d3_V874_CANVAS_INTEGRITY_GATE_REJECTED_CA",
+      "size": 19205784
+    },
+    {
+      "job_id": "2ee3f8f7-782a-433b-bf7f-afe271f4444b",
+      "last_modified": "2026-10-08T10:31:47.816Z",
+      "latest_image_key": "archive/jobs/2ee3f8f7-782a-433b-bf7f-afe271f4444b/DONOR_RAW/2026-10-08T10-31-47-166Z_da5c742975361a83_Отель _Marins Park_ _ фасад_d85c17e659ba8c76_V874_CANVAS_INTEGRITY_GATE_REJECTED_CAMERA_VIEW_RAW_ATTEMPT_1709795672.png",
+      "size": 13918379
+    },
+    {
+      "job_id": "6d86546d-f53d-42d8-89e6-7e7754f64119",
+      "last_modified": "2026-10-08T10:24:03.774Z",
+      "latest_image_key": "archive/jobs/6d86546d-f53d-42d8-89e6-7e7754f64119/DONOR_RAW/2026-10-08T10-24-02-898Z_5accd1d6af97f9bb_Отель _Marins Park_ _ фасад_d85c17e659ba8c76_V874_CANVAS_INTEGRITY_GATE_REJECTED_CAMERA_VIEW_RAW_ATTEMPT_1090270271.png",
+      "size": 16117961
+    },
+    {
+      "job_id": "c184c1f1-e26a-4a70-8808-7a814bb2d953",
+      "last_modified": "2026-10-08T10:04:32.185Z",
+      "latest_image_key": "archive/jobs/c184c1f1-e26a-4a70-8808-7a814bb2d953/DONOR_RAW/2026-10-08T10-04-31-533Z_1add6659e1710b90_Отель _Marins Park_ _ фасад_d85c17e659ba8c76_V874_CANVAS_INTEGRITY_GATE_REJECTED_CAMERA_VIEW_RAW_ATTEMPT_2128227507.png",
+      "size": 15795533
+    },
+    {
+      "job_id": "d4936352-43af-4186-9b2e-f35446c05758",
+      "last_modified": "2026-10-07T12:17:17.198Z",
+      "latest_image_key": "archive/jobs/d4936352-43af-4186-9b2e-f35446c05758/RESULT/2026-10-07T12-17-16-026Z_2926eea217635b35_Ekt copy_MG4K_REJECTED_854fafac_5c442ae0172b9350_V874_CANVAS_INTEGRITY_GATE_REJECTED_CAMERA_VIEW_RAW_ATTEMPT_1265958639.png",
+      "size": 7497316
+    },
+    {
+      "job_id": "2b6f4711-431f-48b2-b80f-2f56ac1979ce",
+      "last_modified": "2026-10-07T11:56:32.362Z",
+      "latest_image_key": "archive/jobs/2b6f4711-431f-48b2-b80f-2f56ac1979ce/RESULT/2026-10-07T11-56-31-712Z_31fc29d4022c0a27_Ekt copy_MG4K_REJECTED_854fafac_5c442ae0172b9350_V874_CANVAS_INTEGRITY_GATE_REJECTED_CAMERA_VIEW_RAW_ATTEMPT_743524351.png",
+      "size": 17204458
+    },
+    {
+      "job_id": "c273c91a-d975-4be3-8d9e-b0de4942bf49",
+      "last_modified": "2026-10-06T15:08:54.135Z",
+      "latest_image_key": "archive/jobs/c273c91a-d975-4be3-8d9e-b0de4942bf49/RESULT/2026-10-06T15-08-52-605Z_cb6623ca948f617d_result_36c2f523b1cd46d3_V874_CANVAS_INTEGRITY_GATE_STRICT_GENERATIVE_FINAL.png",
+      "size": 20243838
+    },
+    {
+      "job_id": "b68cdbb1-ce44-4585-b1e4-15f17de164e0",
+      "last_modified": "2026-10-06T10:35:09.571Z",
+      "latest_image_key": "archive/jobs/b68cdbb1-ce44-4585-b1e4-15f17de164e0/DONOR_RAW/2026-10-06T10-35-09-092Z_d290dc48a502aa28_photo_2026-10-06_13-04-19_f1751648c6d6f42b_V874_CANVAS_INTEGRITY_GATE_REJECTED_CAMERA_VIEW_RAW_ATTEMPT_99495855.png",
+      "size": 22299860
+    },
+    {
+      "job_id": "bed1a49b-6353-47f6-a03b-8553d73c586c",
+      "last_modified": "2026-10-06T10:23:40.047Z",
+      "latest_image_key": "archive/jobs/bed1a49b-6353-47f6-a03b-8553d73c586c/RESULT/2026-10-06T10-23-37-911Z_caac41bcfb3be479_photo_2026-10-06_13-04-19_f1751648c6d6f42b_V874_CANVAS_INTEGRITY_GATE_REJECTED_CAMERA_VIEW_RAW_ATTEMPT_561543574.png",
+      "size": 20858563
+    }
+  ],
+  "image_object_count": 50,
+  "object_count": 100
+}
