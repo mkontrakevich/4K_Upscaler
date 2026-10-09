@@ -1999,7 +1999,9 @@ async function saveCurrentResult(){
   const btn=$("action-save-result"),previous=btn.textContent;
   btn.disabled=true;btn.textContent="Сохранение…";
   try{
-    const response=await fetch(resultUrl(currentJob,true),{cache:"no-store"});
+    const health=await cloudHealthCheck();
+    if(!health.ok)throw new Error("cloud_api_unavailable");
+    const response=await fetchNetworkRetry(resultUrl(currentJob,true),{cache:"no-store"},3);
     if(!response.ok)throw new Error("result_download_failed_"+response.status);
     const blob=await response.blob();
     if(!blob.size)throw new Error("result_download_empty");
@@ -2014,8 +2016,11 @@ async function saveCurrentResult(){
     log("ok","RESULT сохранён: "+filename+" · "+humanSize(blob.size));
     toast("Результат сохранён: "+filename);
   }catch(error){
-    log("err","Ошибка сохранения RESULT: "+(error?.message||error));
-    toast("Не удалось сохранить результат.");
+    const message=error?.message==="cloud_api_unavailable"
+      ?"Cloudflare API временно недоступен. RESULT не потерян; повторите сохранение позже."
+      :("Ошибка сохранения RESULT: "+(error?.message||error));
+    log("err",message);
+    toast(error?.message==="cloud_api_unavailable"?"RESULT не потерян. Cloudflare API временно недоступен.":"Не удалось сохранить результат.");
   }finally{
     btn.textContent=previous;
     btn.disabled=!Boolean((latestJobState||state)?.result_available);
