@@ -1,0 +1,166 @@
+name: Read latest R2 archive image
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/r2-latest-image.yml'
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  latest:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      R2_BUCKET: 4k-upscaler-temp-buffer-r7
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Find and download latest archived image
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}"
+          test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
+          mkdir -p r2-latest-out
+          python - <<'PY'
+          import json, os, pathlib, urllib.parse, urllib.request
+
+          account = os.environ["CLOUDFLARE_ACCOUNT_ID"]
+          token = os.environ["CLOUDFLARE_API_TOKEN"]
+          bucket = os.environ["R2_BUCKET"]
+          base = f"https://api.cloudflare.com/client/v4/accounts/{account}/r2/buckets/{bucket}/objects"
+          prefix = "archive/jobs/"
+          headers = {"Authorization": f"Bearer {token}"}
+
+          objects = []
+          cursor = None
+          while True:
+              q = {"prefix": prefix, "per_page": "1000"}
+              if cursor:
+                  q["cursor"] = cursor
+              req = urllib.request.Request(base + "?" + urllib.parse.urlencode(q), headers=headers)
+              with urllib.request.urlopen(req, timeout=60) as resp:
+                  payload = json.load(resp)
+              if not payload.get("success"):
+                  raise RuntimeError(payload)
+              objects.extend(payload.get("result") or [])
+              info = payload.get("result_info") or {}
+              if not info.get("is_truncated"):
+                  break
+              cursor = info.get("cursor")
+              if not cursor:
+                  break
+
+          image_ext = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".tif", ".tiff", ".bmp", ".avif", ".heic", ".heif"}
+          def is_image(o):
+              ctype = str((o.get("http_metadata") or {}).get("contentType") or "").lower()
+              ext = pathlib.PurePosixPath(str(o.get("key") or "")).suffix.lower()
+              return ctype.startswith("image/") or ext in image_ext
+
+          images = [o for o in objects if is_image(o)]
+          images.sort(key=lambda o: str(o.get("last_modified") or ""), reverse=True)
+          if not images:
+              raise RuntimeError("No image objects found under archive/jobs/")
+
+          latest = images[0]
+          key = str(latest["key"])
+          job_parts = key.split("/")
+          job_id = job_parts[2] if len(job_parts) > 2 else None
+          artifact_kind = job_parts[3] if len(job_parts) > 3 else None
+
+          per_job = {}
+          for obj in images:
+              parts = str(obj.get("key") or "").split("/")
+              jid = parts[2] if len(parts) > 2 else "unknown"
+              prev = per_job.get(jid)
+              if prev is None or str(obj.get("last_modified") or "") > str(prev.get("last_modified") or ""):
+                  per_job[jid] = {
+                      "job_id": jid,
+                      "last_modified": obj.get("last_modified"),
+                      "latest_image_key": obj.get("key"),
+                      "size": obj.get("size"),
+                  }
+          jobs = sorted(per_job.values(), key=lambda x: str(x.get("last_modified") or ""), reverse=True)
+
+          encoded_key = urllib.parse.quote(key, safe="/")
+          req = urllib.request.Request(base + "/" + encoded_key, headers=headers)
+          with urllib.request.urlopen(req, timeout=180) as resp:
+              data = resp.read()
+              ctype = resp.headers.get("content-type") or (latest.get("http_metadata") or {}).get("contentType") or "application/octet-stream"
+
+          name = pathlib.PurePosixPath(key).name or "latest-image"
+          out = pathlib.Path("r2-latest-out")
+          (out / name).write_bytes(data)
+          metadata = {
+              "bucket": bucket,
+              "prefix": prefix,
+              "latest": {
+                  "job_id": job_id,
+                  "artifact_kind": artifact_kind,
+                  "key": key,
+                  "last_modified": latest.get("last_modified"),
+                  "size": latest.get("size"),
+                  "content_type": ctype,
+                  "filename": name,
+              },
+              "jobs_sorted_by_last_modified": jobs,
+              "image_object_count": len(images),
+              "object_count": len(objects),
+          }
+          (out / "metadata.json").write_text(json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8")
+          print(json.dumps({
+              "latest_job_id": job_id,
+              "latest_kind": artifact_kind,
+              "latest_last_modified": latest.get("last_modified"),
+              "latest_filename": name,
+              "jobs_found": len(jobs),
+              "images_found": len(images),
+          }, ensure_ascii=False))
+          PY
+
+      - name: Upload latest image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: r2-latest-image
+          path: r2-latest-out/
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Record artifact locator
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          artifact_id=""
+          for i in $(seq 1 12); do
+            artifact_id="$(curl -fsSL -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json"               "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts"               | python -c 'import json,sys; d=json.load(sys.stdin); a=[x for x in d.get("artifacts",[]) if x.get("name")=="r2-latest-image"]; print(a[0]["id"] if a else "")')"
+            [ -n "$artifact_id" ] && break
+            sleep 2
+          done
+          test -n "$artifact_id"
+
+          python - <<PY
+          import json, os, pathlib
+          m=json.loads(pathlib.Path("r2-latest-out/metadata.json").read_text(encoding="utf-8"))
+          out={
+            "run_id": int(os.environ["GITHUB_RUN_ID"]),
+            "artifact_id": int("$artifact_id"),
+            "artifact_name": "r2-latest-image",
+            **m,
+          }
+          pathlib.Path(".r2-latest-artifact.json").write_text(json.dumps(out,ensure_ascii=False,indent=2),encoding="utf-8")
+          PY
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .r2-latest-artifact.json
+          git commit -m "Record latest R2 archive artifact" || exit 0
+          git pull --rebase origin "$GITHUB_REF_NAME"
+          git push origin "HEAD:$GITHUB_REF_NAME"
