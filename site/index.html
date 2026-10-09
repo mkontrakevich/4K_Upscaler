@@ -1434,15 +1434,39 @@ $("additions-clear").addEventListener("click",()=>{additionsText="";selectedCust
 $("custom-lock-save").addEventListener("click",saveCustomLock);
 $("custom-lock-overwrite").addEventListener("click",overwriteCustomLock);
 
+function networkDelay(ms){return new Promise(resolve=>setTimeout(resolve,ms))}
+async function fetchNetworkRetry(input,init={},attempts=3){
+  let lastError=null;
+  for(let attempt=1;attempt<=attempts;attempt++){
+    try{return await fetch(input,init)}
+    catch(error){
+      lastError=error;
+      if(attempt>=attempts)break;
+      await networkDelay(attempt===1?700:1600);
+    }
+  }
+  throw lastError||new Error("network_request_failed");
+}
+async function cloudHealthCheck(){
+  try{
+    const r=await fetchNetworkRetry("/api/health?ui="+Date.now(),{cache:"no-store"},2);
+    if(!r.ok)return {ok:false,status:r.status};
+    const d=await r.json().catch(()=>({}));
+    return {ok:d?.status==="ok",status:r.status,data:d};
+  }catch(error){
+    return {ok:false,status:0,error:error?.message||String(error)};
+  }
+}
+
 async function startCloudSession(){
   if(cloudSession)return cloudSession;if(sessionStartPromise)return sessionStartPromise;
-  sessionStartPromise=(async()=>{const r=await fetch("/api/session/start",{method:"POST",cache:"no-store"});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||"session_start_failed");cloudSession={id:d.id,token:d.token};clearInterval(heartbeatTimer);heartbeatTimer=setInterval(heartbeatCloudSession,60000);return cloudSession})();
+  sessionStartPromise=(async()=>{const r=await fetchNetworkRetry("/api/session/start",{method:"POST",cache:"no-store"},3);const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||"session_start_failed");cloudSession={id:d.id,token:d.token};clearInterval(heartbeatTimer);heartbeatTimer=setInterval(heartbeatCloudSession,60000);return cloudSession})();
   try{return await sessionStartPromise}finally{sessionStartPromise=null}
 }
 async function heartbeatCloudSession(){
   if(!cloudSession)return;
   try{
-    const r=await fetch("/api/session/heartbeat",{method:"POST",headers:{"Content-Type":"application/json","X-Session-Id":cloudSession.id,"X-Session-Token":cloudSession.token},body:"{}"});
+    const r=await fetchNetworkRetry("/api/session/heartbeat",{method:"POST",headers:{"Content-Type":"application/json","X-Session-Id":cloudSession.id,"X-Session-Token":cloudSession.token},body:"{}"},2);
     if(r.status===403){clearSessionHistory();cloudSession=null;await startCloudSession()}
     else if(r.ok)persistSessionHistory();
   }catch{}
@@ -2019,15 +2043,20 @@ async function prepareJob(forceNew=false){
 
   if(!currentPrompt.trim())syncPromptFromLocks(true);
   const form=new FormData();form.append("file",currentFile,currentFile.name);form.append("locks",JSON.stringify(locks));form.append("mode","generative");form.append("prompt",currentPrompt);
+  const item=currentSourceItem();
+  if(item&&!item.pendingJobRequestId)item.pendingJobRequestId=crypto.randomUUID();
+  const requestId=item?.pendingJobRequestId||crypto.randomUUID();
   try{
+    const health=await cloudHealthCheck();
+    if(!health.ok)throw new Error("cloud_api_unavailable");
     const session=await startCloudSession();
-    const headers={"X-Session-Id":session.id,"X-Session-Token":session.token};
+    const headers={"X-Session-Id":session.id,"X-Session-Token":session.token,"X-MG4K-Request-Id":requestId};
     if(billingPermit)headers["X-MG4K-Entitlement"]=billingPermit;
-    const r=await fetch("/api/jobs",{method:"POST",headers,body:form});
+    const r=await fetchNetworkRetry("/api/jobs",{method:"POST",headers,body:form},3);
     const d=await r.json().catch(()=>({}));
     if(!r.ok)throw new Error(d.error||"upload_failed");
     currentJob={id:d.id,token:d.token};billing.pendingReservationId=null;
-    const item=currentSourceItem();if(item){item.job=currentJob;item.lastState={id:d.id,status:d.status,stage:d.stage,progress:d.progress,filename:currentFile?.name,content_type:currentFile?.type,bytes:currentFile?.size}}
+    if(item){item.pendingJobRequestId=null;item.job=currentJob;item.lastState={id:d.id,status:d.status,stage:d.stage,progress:d.progress,filename:currentFile?.name,content_type:currentFile?.type,bytes:currentFile?.size}}
     persistSessionHistory();
     $("action-process").textContent="Обработка…";$("mobile-process").textContent="Обработка";
     setStatus("Задача "+d.id.slice(0,8)+" принята. Облачный processor запускается.","ok");setProgress(d.progress||5,(d.progress||5)+"%");
@@ -2036,7 +2065,10 @@ async function prepareJob(forceNew=false){
   }catch(e){
     await billingReleasePendingReservation();
     $("action-process").disabled=false;$("mobile-process").disabled=false;$("action-process").textContent="Запустить / продолжить";$("mobile-process").textContent="Обработка";
-    setStatus("Не удалось создать облачную задачу: "+e.message,"err");
+    const message=e?.message==="cloud_api_unavailable"
+      ?"Cloudflare API временно недоступен. Генерация не запускалась; повторите запуск после восстановления соединения."
+      :("Не удалось создать облачную задачу: "+(e?.message||e));
+    setStatus(message,"err");
   }
 }
 $("action-refresh").addEventListener("click",refreshCurrentJob);
