@@ -79,7 +79,7 @@ jobs:
       - name: Legacy local web console self-test
         run: python web_review_server.py --self-test
 
-      - name: Existing ARCH LOCK offline checks
+      - name: Existing V8 fidelity offline checks
         run: |
           python canvas_integrity_self_test.py
           python material_identity_self_test.py
@@ -787,7 +787,7 @@ jobs:
           assert 'source_state' in bridge
 
           assert 'if(!state.result_available)' in ui
-          assert 'ARCH LOCK завершён. Синхронизирую RESULT' in ui
+          assert 'Проверка SOURCE FIDELITY завершена. Синхронизирую RESULT' in ui
           assert 'RESULT сформирован. Повторяю синхронизацию в R2' in ui
           print("Review sync metadata contract: PASSED")
           PY
