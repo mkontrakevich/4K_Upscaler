@@ -439,6 +439,7 @@ body{overflow-x:hidden}
       <div class="stat"><small>СТАТУС</small><strong id="analysis-status">—</strong></div>
       <div class="stat"><small>РЕШЕНИЕ</small><strong id="analysis-decision">—</strong></div>
       <div class="stat"><small>ARCH LOCK</small><strong id="analysis-validation">—</strong></div>
+      <div class="stat"><small>SOURCE FIDELITY</small><strong id="analysis-fidelity">—</strong></div>
       <div class="stat"><small>ПРОГРЕСС</small><strong id="analysis-progress">—</strong></div>
       <div class="stat"><small>OPENROUTER COST</small><strong id="analysis-cost">—</strong></div>
     </div>
@@ -796,8 +797,8 @@ NANO BANANA PRO — SOURCE-FAITHFUL 4K DONOR RECONSTRUCTION.
 Create one high-resolution photographic DONOR from the supplied SOURCE. The objective is to recover clarity, optical fidelity,
 surface readability and high-frequency detail while respecting the ACTIVE USER LOCK PROFILE appended below.
 
-The ACTIVE USER LOCK PROFILE is the sole authority for HARD / SOFT / FREE behaviour of each listed visual parameter.
-Do not infer a stricter or looser lock level from generic restoration language. Apply each parameter independently.
+SOURCE_FIDELITY_CORE is the non-relaxable authority for image identity and factual content.
+The ACTIVE USER LOCK PROFILE controls only restoration treatment inside that boundary. Apply each parameter independently without violating SOURCE_FIDELITY_CORE.
 
 The source image remains the identity reference for the scene. Even when one parameter is FREE, do not turn the task into an
 unrelated redesign, a different project, a different location or a new narrative. Locked parameters must remain independent
@@ -1566,7 +1567,7 @@ function flattenChecks(validation){
 function validationLabel(v){if(!v)return"WAIT";if(v.passed===true)return"PASSED";if(v.decision)return String(v.decision).toUpperCase();if((v.mandatory_failures||[]).length)return"FAILED";return"REVIEW"}
 function renderValidation(state){
   const v=state?.validation||null;$("analysis-panel").classList.add("visible");
-  $("analysis-job").textContent=currentJob?.id?.slice(0,8)||"—";$("analysis-status").textContent=String(state?.status||"—").toUpperCase();$("analysis-decision").textContent=String(state?.decision||v?.decision||"—").toUpperCase();$("analysis-validation").textContent=validationLabel(v);$("analysis-progress").textContent=Number(state?.progress||0)+"%";$("analysis-cost").textContent=state?.provider_cost_usd!=null?"$"+Number(state.provider_cost_usd).toFixed(4)+" · "+Number(state.provider_request_count||0)+" req":"—";
+  $("analysis-job").textContent=currentJob?.id?.slice(0,8)||"—";$("analysis-status").textContent=String(state?.status||"—").toUpperCase();$("analysis-decision").textContent=String(state?.decision||v?.decision||"—").toUpperCase();$("analysis-validation").textContent=validationLabel(v);$("analysis-fidelity").textContent=v?.source_fidelity_score!=null?Number(v.source_fidelity_score).toFixed(1)+" / 100":"—";$("analysis-progress").textContent=Number(state?.progress||0)+"%";$("analysis-cost").textContent=state?.provider_cost_usd!=null?"$"+Number(state.provider_cost_usd).toFixed(4)+" · "+Number(state.provider_request_count||0)+" req":"—";
   $("analysis-caption").textContent=v?"полный отчёт текущего кандидата":"ожидает данных валидации";
   const checks=flattenChecks(v);
   $("check-list").innerHTML=checks.length?checks.map(x=>'<div class="check '+x.state+'"><i></i><span>'+escapeHtml(x.key)+'</span><code>'+escapeHtml(String(x.value))+'</code></div>').join(""):'<div class="check warn"><i></i><span>Детальные проверки ещё не получены</span><code>WAIT</code></div>';
