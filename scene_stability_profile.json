@@ -1,6 +1,10 @@
 {
-  "version": "1.0",
-  "profile_name": "ARCH_LOCK_SCENE_STABILITY",
+  "version": "2.0",
+  "profile_name": "SOURCE_FIDELITY_FIRST_ARCH_LOCK",
+  "primary_product_goal": "Increase image quality and resolution while reproducing the SOURCE as accurately as possible. Fidelity to SOURCE has higher priority than aesthetic enhancement.",
+  "acceptance_rule": "A sharper, cleaner or more attractive image is a FAILURE if it changes the identity, structure, composition, material/pattern identity or factual content of the SOURCE.",
+  "uncertainty_rule": "When source evidence is ambiguous, preserve the simpler visible SOURCE evidence. Never invent a plausible replacement.",
+  "candidate_ranking_rule": "Among technically acceptable candidates, choose the candidate with the highest SOURCE fidelity first; use detail/appearance gain only as a secondary tie-breaker.",
   "hard_lock": [
     "CAMERA",
     "GEOMETRY",
@@ -15,11 +19,14 @@
     "WATER / REFLECTIONS / SHADOWS"
   ],
   "principles": [
+    "SOURCE_FIDELITY_IS_PRIMARY_PRODUCT_CRITERION",
     "DETAIL_ENHANCEMENT_ONLY",
     "NO_SCENE_REINTERPRETATION",
-    "SOURCE_IS_AUTHORITY_FOR_HARD_LOCK",
-    "SOFT_LOCK_ALLOWS_MINOR_LOCAL_VARIATION_WITH_GLOBAL_CAUSALITY_PRESERVED",
-    "DONOR_IS_DETAIL_REFERENCE_ONLY"
+    "SOURCE_IS_AUTHORITY_FOR_IDENTITY_AND_STRUCTURE",
+    "SHARPER_BUT_DIFFERENT_IS_FAILURE",
+    "UNCERTAIN_DETAIL_MUST_NOT_BE_HALLUCINATED",
+    "DONOR_IS_DETAIL_REFERENCE_ONLY",
+    "QUALITY_GAIN_IS_SECONDARY_TO_SOURCE_FIDELITY"
   ],
   "rules": {
     "CAMERA": "Exact viewpoint, camera height, direction, field of view, perspective, crop and object scale.",
@@ -28,8 +35,8 @@
     "TEXTURES": "Material identity and texture pattern are locked; recover detail, never invent a new pattern.",
     "VEGETATION": "Position, crown silhouette, volume, density and character are locked.",
     "PEOPLE / VEHICLES / SMALL_OBJECTS": "Count, position, scale, orientation, silhouette and identity are locked.",
-    "LIGHTING": "Preserve time of day, main light direction and scene mood; minor local contrast/shadow refinement allowed.",
-    "SKY_CLOUDS": "Preserve overall cloud distribution, mass balance, weather and atmosphere; minor local cloud-shape variation allowed.",
-    "WATER / REFLECTIONS / SHADOWS": "Preserve overall location, direction, scale and causal logic; minor local surface variation allowed."
+    "LIGHTING": "Preserve time of day, main light direction and scene mood; only restrained local correction is allowed.",
+    "SKY_CLOUDS": "Preserve overall cloud distribution, mass balance, weather and atmosphere; local refinement must not change scene identity.",
+    "WATER / REFLECTIONS / SHADOWS": "Preserve overall location, direction, scale and causal logic; local refinement must not alter scene reading."
   }
 }
