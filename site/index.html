@@ -355,7 +355,7 @@ body{overflow-x:hidden}
   <section class="prompt-panel" id="prompt-panel">
     <div class="section-head">
       <strong>PROMPT / LOCK BUTTONS</strong>
-      <span>LOCK ограничивает · ADDITIONS добавляет · FINAL PROMPT уходит генератору</span>
+      <span>SOURCE FIDELITY всегда включён · LOCK уточняет · ADDITIONS добавляет · FINAL PROMPT уходит генератору</span>
     </div>
     <div class="prompt-body">
       <div class="prompt-subhead"><strong>ПРОФИЛИ LOCK</strong><span>сохраняют LOCK + полный prompt</span></div>
@@ -780,7 +780,18 @@ function setStatus(text,level="info",forceLog=false){
   }
 }
 
-const PROMPT_BASE=`NANO BANANA PRO — SOURCE-FAITHFUL 4K DONOR RECONSTRUCTION.
+const SOURCE_FIDELITY_CORE=`PRIMARY PRODUCT CRITERION — SOURCE FIDELITY FIRST.
+
+MG 4K exists to increase image quality and resolution while reproducing SOURCE as accurately as possible.
+Fidelity to SOURCE is more important than beauty, drama, styling, novelty or apparent detail gain.
+A sharper or more impressive image is a FAILURE if it changes scene identity, composition, camera, geometry, object identity/count/position, architecture, materials, patterns, signage or factual visual content.
+When SOURCE detail is ambiguous, preserve the simpler visible evidence; never invent a plausible replacement.
+Prefer less enhancement with higher SOURCE fidelity over more enhancement with lower fidelity.
+This rule is always active and cannot be disabled by LOCK presets, FREE parameters, ADDITIONS, manual FINAL PROMPT or AI suggestions.`;
+
+const PROMPT_BASE=`${SOURCE_FIDELITY_CORE}
+
+NANO BANANA PRO — SOURCE-FAITHFUL 4K DONOR RECONSTRUCTION.
 
 Create one high-resolution photographic DONOR from the supplied SOURCE. The objective is to recover clarity, optical fidelity,
 surface readability and high-frequency detail while respecting the ACTIVE USER LOCK PROFILE appended below.
@@ -898,7 +909,7 @@ function lockRule(item,level){
   const subject=item.subject||item.hint||item.name;
   if(level==="hard")return {label:item.name.toUpperCase(),text:"HARD_LOCK. Preserve "+subject+" exactly. Do not add, remove, replace, move, recolor or reinterpret these elements unless explicitly required by another higher-priority constraint."};
   if(level==="soft")return {label:item.name.toUpperCase(),text:"SOFT_LOCK. Preserve the recognizable identity and overall structure of "+subject+" while allowing restrained local refinement that does not change factual content."};
-  return {label:item.name.toUpperCase(),text:"FREE. "+subject+" may be interpreted or adjusted for quality and the user's additions, while remaining physically plausible and consistent with all HARD/SOFT locks."};
+  return {label:item.name.toUpperCase(),text:"FREE. "+subject+" may receive broader restoration treatment, but SOURCE_FIDELITY_CORE still applies: do not change scene identity, factual content or unrelated source evidence."};
 }
 function buildPromptFromLocks(){
   const lines=[PROMPT_BASE];
@@ -908,15 +919,15 @@ function buildPromptFromLocks(){
     lines.push(
       "",
       "USER ADDITIONS — REQUESTED CREATIVE CHANGES.",
-      "Apply these additions only where they do not conflict with the ACTIVE USER LOCK PROFILE below. The LOCK PROFILE has higher priority."
+      "Apply these additions only where they do not conflict with SOURCE_FIDELITY_CORE or the ACTIVE USER LOCK PROFILE below. SOURCE_FIDELITY_CORE has the highest priority."
     );
     custom.forEach(item=>lines.push("- "+item.name+": "+item.prompt));
     if(freeAdditions)lines.push("- ADDITIONAL REQUEST: "+freeAdditions);
   }
   lines.push(
     "",
-    "ACTIVE USER LOCK PROFILE — HIGHEST-PRIORITY PER-PARAMETER POLICY FOR THIS DONOR REQUEST.",
-    "These levels are supplied by the user interface for this exact job. They supersede generic instructions and USER ADDITIONS when there is a conflict."
+    "ACTIVE USER LOCK PROFILE — PER-PARAMETER RESTORATION POLICY FOR THIS DONOR REQUEST.",
+    "These levels guide restoration treatment for this exact job but remain subordinate to SOURCE_FIDELITY_CORE. They supersede USER ADDITIONS only when there is a conflict."
   );
   promptLockItems().forEach(item=>{
     const level=locks[item.id]||item.level;
@@ -929,7 +940,7 @@ function buildPromptFromLocks(){
     "- Return one coherent photographic scene, never a collage, frame-within-frame, inset, poster, screen or duplicated canvas.",
     "- Preserve existing text, logos and signage; never invent readable wording that is absent or illegible in SOURCE.",
     "- Do not introduce corruption, duplicated objects, melted forms, blank zones, border seams, fake UI or watermarks.",
-    "- A FREE parameter grants freedom only to that parameter. It never silently unlocks the other parameters.",
+    "- A FREE parameter grants restoration freedom only inside that parameter. It never permits changing SOURCE identity or factual content, and never unlocks other parameters.",
     "OUTPUT CANVAS CONTRACT: return exactly one complete "+currentProviderAspect()+" image. The scene must fill the canvas edge to edge with no padding, frame, inset or duplicated border. Camera/framing behaviour must follow the ACTIVE CAMERA lock level for this job."
   );
   return lines.join("\n");
@@ -959,7 +970,7 @@ function setPromptMode(mode){
 function updatePromptMeta(){
   const text=$("prompt-editor")?.value||currentPrompt||"";
   const activeCustom=activeCustomPromptFragments().length;
-  $("prompt-meta").textContent=text.length+" chars · "+currentProviderAspect()+" · "+activeCustom+" custom LOCK · "+(activePromptPresetId==="builtin-arch-lock"?"ARCH LOCK":(promptPresets.find(p=>p.id===activePromptPresetId)?.name||"CUSTOM"));
+  $("prompt-meta").textContent="SOURCE FIDELITY CORE · "+text.length+" chars · "+currentProviderAspect()+" · "+activeCustom+" custom LOCK · "+(activePromptPresetId==="builtin-arch-lock"?"ARCH LOCK":(promptPresets.find(p=>p.id===activePromptPresetId)?.name||"CUSTOM"));
 }
 function setCurrentPrompt(text,{mode=promptMode,presetId=activePromptPresetId}={}){
   currentPrompt=String(text||"").slice(0,30000);
