@@ -619,8 +619,12 @@ let selectedCustomLockId=null;
 let additionsText="";
 let promptAssistantBusy=false;
 let promptAssistantResult=null;
+const LEGACY_BUILTIN_PRESET_ID="builtin"+"-arch-lock";
 let activePromptPresetId=localStorage.getItem(ACTIVE_PROMPT_PRESET_KEY)||"builtin-source-profile";
-if(activePromptPresetId==="builtin-source-profile")activePromptPresetId="builtin-source-profile";
+if(activePromptPresetId===LEGACY_BUILTIN_PRESET_ID){
+  activePromptPresetId="builtin-source-profile";
+  localStorage.setItem(ACTIVE_PROMPT_PRESET_KEY,activePromptPresetId);
+}
 let promptMode="sync";
 let currentPrompt="";
 const BILLING_SESSION_KEY="mg4k.billingSession.v1";
