@@ -2,7 +2,19 @@ name: MG4K V8 Acceptance
 
 on:
   push:
+    branches: [main]
     paths:
+      - 'v8_safe_appearance.py'
+      - 'config.json'
+      - 'VERSION.json'
+      - 'scene_stability_profile.json'
+      - 'cloudflare_bridge.py'
+      - 'cloud_processor_service.py'
+      - 'material_identity_self_test.py'
+      - 'canvas_integrity_self_test.py'
+      - 'source_sky_recovery_self_test.py'
+      - 'faithful_donor_detail_carrier_self_test.py'
+      - 'dual_mode_self_test.py'
       - '.github/workflows/mg4k-v8-acceptance.yml'
   workflow_dispatch:
 
