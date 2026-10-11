@@ -276,6 +276,26 @@ No plastic CGI look, fantasy styling, watermark, excessive sharpening, synthetic
 
 
 
+SOURCE_FIDELITY_CONTRACT = """\
+PRIMARY PRODUCT CONTRACT — SOURCE FIDELITY FIRST.
+
+The purpose of MG 4K is to increase resolution, clarity and recoverable detail while reproducing the SOURCE as accurately as possible.
+SOURCE fidelity has higher priority than beauty, drama, realism, style, novelty or apparent detail gain.
+
+The output must be recognizably the same image, not a new interpretation of it:
+- preserve scene identity, composition, viewpoint, crop, perspective, geometry and spatial relationships;
+- preserve object identity, count, position, scale, silhouette and orientation;
+- preserve architecture, materials, texture/pattern identity, signage, logos and visible factual content;
+- preserve background, horizon, terrain, vegetation layout and the causal reading of light, shadows, reflections, water and sky;
+- improve only evidence already supported by SOURCE: resolution, local clarity, edge definition, microtexture and physically plausible fine detail.
+
+When SOURCE evidence is ambiguous, preserve the simpler visible evidence. Never invent a plausible replacement.
+A sharper, cleaner or more attractive image that changes SOURCE content is a FAILURE.
+A candidate with less visual enhancement but higher SOURCE fidelity is preferred over a more impressive candidate with lower fidelity.
+
+This contract is NON-RELAXABLE in UPSCALER mode. User prompts, LOCK levels, presets, AI suggestions and provider creativity are subordinate to it.
+"""
+
 PATTERN_IDENTITY_PROMPT = """\
 ABSOLUTE PATTERN / ORNAMENT IDENTITY LOCK.
 Any visible repeating or non-repeating surface pattern in SOURCE is identity evidence, not a style suggestion.
@@ -289,25 +309,28 @@ If exact pattern detail cannot be recovered confidently, preserve the SOURCE pat
 """
 
 def donor_generation_prompt() -> str:
-    """Use the proven source-faithful reconstruction prompt as the cloud baseline.
+    """Build the provider prompt around the non-relaxable SOURCE-fidelity contract.
 
-    The UI lock profile may relax explicitly selected parameters, but it must never
-    replace the detailed source-identity contract that preserves architecture,
-    object placement, materials, signage, contours, patterns and small visible details.
+    UI/manual prompts may request refinements, but they can no longer replace the
+    product's primary reconstruction contract. Quality gain is always secondary
+    to preserving the identity and factual content of SOURCE.
     """
     override = os.environ.get("MG4K_PROMPT_OVERRIDE", "").strip()
+    parts = [SOURCE_FIDELITY_CONTRACT, GENERATION_PROMPT, PATTERN_IDENTITY_PROMPT]
     if override:
-        return override
-    baseline = GENERATION_PROMPT + "\n\n" + PATTERN_IDENTITY_PROMPT
+        parts.extend([
+            "OPERATOR / UI PROMPT — SUBORDINATE TO SOURCE_FIDELITY_CONTRACT. "
+            "Apply only instructions that do not violate the primary SOURCE-fidelity contract.",
+            override,
+        ])
     if os.environ.get("MG4K_LOCK_PROFILE_JSON", "").strip():
-        return (
-            baseline
-            + "\n\nCLOUD LOCK PROFILE OVERRIDE — parameter-level permissions follow. "
-              "Only an explicitly SOFT or FREE parameter may deviate from the strict baseline above; "
-              "all other source facts, identities, counts, positions, contours, materials, signage, patterns and visible details remain locked.\n"
-            + cloud_lock_prompt()
-        )
-    return baseline
+        parts.extend([
+            "CLOUD LOCK PROFILE — parameter-level guidance follows. "
+            "No HARD/SOFT/FREE level may override SOURCE_FIDELITY_CONTRACT. "
+            "FREE means more freedom in restoration treatment, never permission to change scene identity or factual content.",
+            cloud_lock_prompt(),
+        ])
+    return "\n\n".join(part for part in parts if part)
 
 
 GENERATION_PROMPT = """NANO BANANA PRO — SOURCE-FAITHFUL DETAIL RECONSTRUCTION FOR UPSCALING.
@@ -2356,7 +2379,45 @@ def validate_final(
                 "p99_rgb_delta_limit": round(tile_delta_limit, 4),
             })
     failed_tile_fraction = failed_tiles / max(1, grid_cols * grid_rows)
+    def _fidelity_inverse(value: float, limit: float) -> float:
+        return float(np.clip(1.0 - value / max(1e-9, limit), 0.0, 1.0))
+
+    source_fidelity_components = {
+        "exact_output_size": final.size == reference.size,
+        "exact_camera_view": bool(final_camera_lock["passed"]),
+        "coordinate_lock": shift_magnitude <= float(CFG["validation_max_shift_px"]),
+        "source_edge_preservation": preservation >= float(CFG["validation_min_source_edge_preservation"]),
+        "new_edge_control": agreement >= float(CFG["validation_min_final_edge_agreement"]),
+        "structural_similarity": ssim >= float(CFG["validation_min_ssim"]),
+        "low_frequency_bounded": low_rms <= float(CFG["validation_max_low_rms"]),
+        "source_background_and_tone_field_locked": broad_luminance_delta_p99
+        <= float(CFG["validation_max_broad_luminance_delta_p99"]),
+        "source_colour_field_locked": chroma_p99 <= float(CFG["validation_max_chroma_delta_p99"]),
+        "source_lighting_direction_locked": lighting_direction_cosine
+        >= float(CFG["validation_min_lighting_direction_cosine"]),
+        "no_new_final_contours": new_final_edge_fraction
+        <= float(CFG["validation_max_new_final_edge_fraction"]),
+        "hardscape_delta_bounded": hardscape_p99_delta <= float(CFG["validation_max_hardscape_p99_delta"]),
+        "all_grid_cells_clean": failed_tile_fraction <= float(CFG["validation_max_failed_tile_fraction"]),
+    }
+    source_fidelity_core = all(source_fidelity_components.values())
+    source_fidelity_score = 100.0 * (
+        0.16 * float(np.clip(float(final_camera_lock.get("camera_score", 0.0)) / 100.0, 0.0, 1.0))
+        + 0.06 * _fidelity_inverse(shift_magnitude, float(CFG["validation_max_shift_px"]))
+        + 0.14 * float(np.clip(preservation, 0.0, 1.0))
+        + 0.08 * float(np.clip(agreement, 0.0, 1.0))
+        + 0.20 * float(np.clip(ssim, 0.0, 1.0))
+        + 0.08 * _fidelity_inverse(low_rms, float(CFG["validation_max_low_rms"]))
+        + 0.05 * _fidelity_inverse(broad_luminance_delta_p99, float(CFG["validation_max_broad_luminance_delta_p99"]))
+        + 0.05 * _fidelity_inverse(chroma_p99, float(CFG["validation_max_chroma_delta_p99"]))
+        + 0.04 * float(np.clip(lighting_direction_cosine, 0.0, 1.0))
+        + 0.05 * _fidelity_inverse(new_final_edge_fraction, float(CFG["validation_max_new_final_edge_fraction"]))
+        + 0.05 * _fidelity_inverse(hardscape_p99_delta, float(CFG["validation_max_hardscape_p99_delta"]))
+        + 0.04 * _fidelity_inverse(failed_tile_fraction, max(0.01, float(CFG["validation_max_failed_tile_fraction"])))
+    )
+
     checks = {
+        "source_fidelity_core": source_fidelity_core,
         "exact_output_size": final.size == reference.size,
         "exact_camera_view": bool(final_camera_lock["passed"]),
         "coordinate_lock": shift_magnitude <= float(CFG["validation_max_shift_px"]),
@@ -2428,6 +2489,10 @@ def validate_final(
         cv2.putText(defect_audit, f"{col + 1}:{row + 1}", (x0 + 5, y0 + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 35, 35), 1, cv2.LINE_AA)
     validation = {
         "checks": checks,
+        "source_fidelity_core": source_fidelity_core,
+        "source_fidelity_components": source_fidelity_components,
+        "source_fidelity_score": round(source_fidelity_score, 6),
+        "primary_quality_criterion": "SOURCE_FIDELITY_FIRST",
         "passed": all(checks.values()),
         "decision": "approve" if all(checks.values()) else "review",
         "camera_view_lock": final_camera_lock,
@@ -2473,9 +2538,16 @@ def final_release_policy(validation: dict[str, Any]) -> dict[str, Any]:
     soft_warnings = [name for name in failures if name in reviewable_soft_checks]
     mandatory_failures = [name for name in failures if name not in reviewable_soft_checks]
     exact_camera = bool(checks.get("exact_camera_view"))
-    mandatory_safety_passed = exact_camera and not mandatory_failures
+    source_fidelity_core = bool(checks.get("source_fidelity_core"))
+    if not source_fidelity_core and "source_fidelity_core" not in mandatory_failures:
+        mandatory_failures.append("source_fidelity_core")
+        mandatory_failures.sort()
+    mandatory_safety_passed = exact_camera and source_fidelity_core and not mandatory_failures
     return {
         "strictly_passed": bool(validation.get("passed")),
+        "source_fidelity_core": source_fidelity_core,
+        "source_fidelity_score": float(validation.get("source_fidelity_score", 0.0)),
+        "primary_quality_criterion": "SOURCE_FIDELITY_FIRST",
         "mandatory_safety_passed": mandatory_safety_passed,
         "operator_reviewable": mandatory_safety_passed and bool(soft_warnings),
         "failed_checks": failures,
@@ -3577,9 +3649,9 @@ def _process_impl(
     save_state(source_path, sha256, "structure_appearance_separation", "running")
     candidate_results: list[dict[str, Any]] = []
     selected: tuple[Image.Image, dict[str, Image.Image], dict[str, Any], dict[str, Any], Image.Image, Image.Image, Image.Image] | None = None
-    passing: list[tuple[float, float, tuple[Image.Image, dict[str, Image.Image], dict[str, Any], dict[str, Any], Image.Image, Image.Image, Image.Image]]] = []
-    reviewable: list[tuple[float, float, tuple[Image.Image, dict[str, Image.Image], dict[str, Any], dict[str, Any], Image.Image, Image.Image, Image.Image]]] = []
-    evaluated: list[tuple[int, int, float, tuple[Image.Image, dict[str, Image.Image], dict[str, Any], dict[str, Any], Image.Image, Image.Image, Image.Image]]] = []
+    passing: list[tuple[float, float, float, tuple[Image.Image, dict[str, Image.Image], dict[str, Any], dict[str, Any], Image.Image, Image.Image, Image.Image]]] = []
+    reviewable: list[tuple[float, float, float, tuple[Image.Image, dict[str, Image.Image], dict[str, Any], dict[str, Any], Image.Image, Image.Image, Image.Image]]] = []
+    evaluated: list[tuple[int, int, float, float, tuple[Image.Image, dict[str, Image.Image], dict[str, Any], dict[str, Any], Image.Image, Image.Image, Image.Image]]] = []
     adaptive_recovery_used = False
 
     def evaluate_candidate(intensity: float, stage: str) -> bool:
@@ -3606,6 +3678,7 @@ def _process_impl(
             "path": str(candidate_path),
             "validation": candidate_validation,
             "appearance_gain": candidate_validation["appearance_gain_score"],
+            "source_fidelity_score": candidate_validation["source_fidelity_score"],
         })
         bundle = (
             candidate, candidate_masks, candidate_appearance, candidate_validation,
@@ -3613,19 +3686,21 @@ def _process_impl(
         )
         preferred = float(CFG["preferred_intensity"])
         distance = abs(intensity - preferred)
-        evaluated.append((len(release["mandatory_failures"]), len(release["failed_checks"]), distance, bundle))
+        fidelity_rank = -float(candidate_validation["source_fidelity_score"])
+        evaluated.append((len(release["mandatory_failures"]), len(release["failed_checks"]), fidelity_rank, distance, bundle))
         logging.info(
-            "FINAL CANDIDATE | %s | intensity=%.2f | %s%s",
+            "FINAL CANDIDATE | %s | intensity=%.2f | fidelity=%.3f | %s%s",
             stage,
             intensity,
+            float(candidate_validation["source_fidelity_score"]),
             "PASSED" if candidate_validation["passed"] else "REVIEW",
             "" if not release["failed_checks"] else " | failed=" + ", ".join(release["failed_checks"]),
         )
         if candidate_validation["passed"]:
-            passing.append((distance, -float(candidate_validation["appearance_gain_score"]), bundle))
+            passing.append((fidelity_rank, distance, -float(candidate_validation["appearance_gain_score"]), bundle))
             return True
         if release["operator_reviewable"]:
-            reviewable.append((distance, -float(candidate_validation["appearance_gain_score"]), bundle))
+            reviewable.append((fidelity_rank, distance, -float(candidate_validation["appearance_gain_score"]), bundle))
         return False
 
     for intensity in [float(item) for item in CFG["candidate_intensities"]]:
@@ -3658,19 +3733,19 @@ def _process_impl(
                 break
 
     if passing:
-        passing.sort(key=lambda item: (item[0], item[1]))
-        selected = passing[0][2]
+        passing.sort(key=lambda item: (item[0], item[1], item[2]))
+        selected = passing[0][3]
     elif reviewable:
-        reviewable.sort(key=lambda item: (item[0], item[1]))
-        selected = reviewable[0][2]
+        reviewable.sort(key=lambda item: (item[0], item[1], item[2]))
+        selected = reviewable[0][3]
         logging.warning(
             "FINAL READY FOR OPERATOR | camera, architecture and artifact checks passed; "
             "aesthetic warnings require visual approval: %s",
             ", ".join(selected[3]["release_policy"]["aesthetic_warnings"]),
         )
     elif evaluated:
-        evaluated.sort(key=lambda item: (item[0], item[1], item[2]))
-        selected = evaluated[0][3]
+        evaluated.sort(key=lambda item: (item[0], item[1], item[2], item[3]))
+        selected = evaluated[0][4]
     if selected is None:
         raise RuntimeError("FINAL recovery has no configured appearance candidates.")
     final, masks, appearance, validation, edge_audit, heatmap, defect_audit = selected
