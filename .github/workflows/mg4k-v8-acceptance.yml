@@ -1,0 +1,118 @@
+name: MG4K V8 Acceptance
+
+on:
+  push:
+    paths:
+      - '.github/workflows/mg4k-v8-acceptance.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  acceptance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Run acceptance suite and record results
+        shell: bash
+        run: |
+          set +e
+          mkdir -p /tmp/mg4k-acceptance
+          python - <<'PY'
+          import json, subprocess, pathlib, os, sys, shlex
+
+          tests = [
+              ("python_compile", [sys.executable, "-m", "py_compile", "v8_safe_appearance.py", "cloudflare_bridge.py", "cloud_processor_service.py", "web_review_server.py", "safe_local_upscale.py"]),
+              ("version_guard", [sys.executable, "version_guard.py"]),
+              ("validator_self_test", [sys.executable, "v8_safe_appearance.py", "--validator-self-test"]),
+              ("canvas_integrity", [sys.executable, "canvas_integrity_self_test.py"]),
+              ("material_identity", [sys.executable, "material_identity_self_test.py"]),
+              ("source_sky_recovery", [sys.executable, "source_sky_recovery_self_test.py"]),
+              ("faithful_donor_detail_carrier", [sys.executable, "faithful_donor_detail_carrier_self_test.py"]),
+              ("dual_mode", [sys.executable, "dual_mode_self_test.py"]),
+              ("retry_budget", [sys.executable, "retry_budget_self_test.py"]),
+              ("viewer_inspection", [sys.executable, "viewer_inspection_self_test.py"]),
+              ("web_review_server", [sys.executable, "web_review_server.py", "--self-test"]),
+          ]
+
+          results = []
+          all_ok = True
+          for name, cmd in tests:
+              p = subprocess.run(cmd, cwd=".", text=True, capture_output=True)
+              ok = p.returncode == 0
+              all_ok = all_ok and ok
+              results.append({
+                  "name": name,
+                  "ok": ok,
+                  "returncode": p.returncode,
+                  "command": " ".join(shlex.quote(x) for x in cmd),
+                  "stdout_tail": p.stdout[-5000:],
+                  "stderr_tail": p.stderr[-5000:],
+              })
+              print(f"[{'PASS' if ok else 'FAIL'}] {name}")
+
+          cfg = json.loads(pathlib.Path("config.json").read_text(encoding="utf-8"))
+          version = json.loads(pathlib.Path("VERSION.json").read_text(encoding="utf-8"))
+          pipeline = pathlib.Path("v8_safe_appearance.py").read_text(encoding="utf-8")
+          profile = json.loads(pathlib.Path("scene_stability_profile.json").read_text(encoding="utf-8"))
+
+          contracts = {
+              "verified_donor_is_final_master": cfg.get("verified_donor_is_final_master") is True,
+              "raw_final_byte_identity_required": version.get("raw_final_byte_identity_required") is True,
+              "whole_scene_gate_present": "whole_scene_quality_gate(reference, donor)" in pipeline,
+              "byte_identical_publish_present": "atomic_copy_verified_master(raw_path, final_path)" in pipeline,
+              "source_fidelity_contract_present": "SOURCE_FIDELITY_CONTRACT" in pipeline,
+              "source_fidelity_primary": profile.get("primary_product_goal", "").startswith("Increase image quality and resolution"),
+              "source_geometry_authority_absolute": version.get("source_geometry_contour_authority") == "absolute",
+              "donor_geometry_transfer_blocked": version.get("donor_geometry_transfer") == "blocked",
+              "post_gate_blending_disabled": version.get("post_gate_blending") is False,
+              "post_gate_reencoding_disabled": version.get("post_gate_reencoding") is False,
+          }
+          all_ok = all_ok and all(contracts.values())
+
+          report = {
+              "commit": os.environ.get("GITHUB_SHA"),
+              "all_passed": all_ok,
+              "tests": results,
+              "contracts": contracts,
+          }
+          pathlib.Path(".mg4k-v8-acceptance.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+          print(json.dumps({"all_passed": all_ok, "contracts": contracts}, ensure_ascii=False, indent=2))
+          PY
+
+      - name: Commit acceptance report
+        if: always()
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .mg4k-v8-acceptance.json
+          git commit -m "Record MG4K V8 acceptance results" || true
+          git pull --rebase origin "$GITHUB_REF_NAME"
+          git push origin "HEAD:$GITHUB_REF_NAME"
+
+      - name: Enforce acceptance
+        if: always()
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json, pathlib, sys
+          p=pathlib.Path(".mg4k-v8-acceptance.json")
+          if not p.exists():
+              raise SystemExit("Acceptance report missing")
+          r=json.loads(p.read_text(encoding="utf-8"))
+          if not r.get("all_passed"):
+              print(json.dumps(r, ensure_ascii=False, indent=2))
+              raise SystemExit("MG4K V8 acceptance failed")
+          print("MG4K V8 acceptance PASSED")
+          PY
