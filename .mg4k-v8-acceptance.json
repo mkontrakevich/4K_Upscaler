@@ -1,0 +1,106 @@
+{
+  "commit": "cf1a019252dff0792af8c03ee4323ff84a3509b5",
+  "all_passed": true,
+  "tests": [
+    {
+      "name": "python_compile",
+      "ok": true,
+      "returncode": 0,
+      "command": "/opt/hostedtoolcache/Python/3.11.17/x64/bin/python -m py_compile v8_safe_appearance.py cloudflare_bridge.py cloud_processor_service.py web_review_server.py safe_local_upscale.py",
+      "stdout_tail": "",
+      "stderr_tail": ""
+    },
+    {
+      "name": "version_guard",
+      "ok": true,
+      "returncode": 0,
+      "command": "/opt/hostedtoolcache/Python/3.11.17/x64/bin/python version_guard.py",
+      "stdout_tail": "VERSION GUARD PASSED: V8.8.1 | self-healing web bootstrap\n",
+      "stderr_tail": ""
+    },
+    {
+      "name": "validator_self_test",
+      "ok": true,
+      "returncode": 0,
+      "command": "/opt/hostedtoolcache/Python/3.11.17/x64/bin/python v8_safe_appearance.py --validator-self-test",
+      "stdout_tail": "V8 REGRESSION VALIDATOR SELF-TEST PASSED\n",
+      "stderr_tail": ""
+    },
+    {
+      "name": "canvas_integrity",
+      "ok": true,
+      "returncode": 0,
+      "command": "/opt/hostedtoolcache/Python/3.11.17/x64/bin/python canvas_integrity_self_test.py",
+      "stdout_tail": "V8.7.4 CANVAS INTEGRITY GATE SELF-TEST PASSED\n{\n  \"faithful_detail_passed\": true,\n  \"frame_within_frame_rejected\": true,\n  \"invented_side_margins_rejected\": true,\n  \"paired_inset_seams_rejected\": true,\n  \"v873_pending_donor_forced_to_free_revalidation\": true,\n  \"real_api_requests\": 0,\n  \"faithful_metrics\": {\n    \"strict_source_edge_preservation\": 1.0,\n    \"critical_edge_preservation\": 1.0,\n    \"border_low_delta_p95\": 0.127399,\n    \"border_low_delta_fraction\": 0.0,\n    \"border_delta_threshold\": 32.0,\n    \"max_unsupported_border_line_fraction\": 0.0,\n    \"unsupported_border_line_count\": 0,\n    \"paired_inset_side_seams\": false\n  },\n  \"broken_metrics\": {\n    \"strict_source_edge_preservation\": 0.375766,\n    \"critical_edge_preservation\": 0.380707,\n    \"border_low_delta_p95\": 49.051117,\n    \"border_low_delta_fraction\": 0.081457,\n    \"border_delta_threshold\": 32.0,\n    \"max_unsupported_border_line_fraction\": 1.588889,\n    \"unsupported_border_line_count\": 7,\n    \"paired_inset_side_seams\": true\n  }\n}\n",
+      "stderr_tail": ""
+    },
+    {
+      "name": "material_identity",
+      "ok": true,
+      "returncode": 0,
+      "command": "/opt/hostedtoolcache/Python/3.11.17/x64/bin/python material_identity_self_test.py",
+      "stdout_tail": "V8.6.9 MATERIAL IDENTITY LOCK SELF-TEST PASSED\n{\n  \"faithful_microdetail_allowed\": true,\n  \"smooth_plaster_to_masonry_rejected\": true,\n  \"material_failure_has_grid_coordinates\": true,\n  \"decision\": \"REJECTED_CAMERA_VIEW\",\n  \"failed_material_cells\": 5,\n  \"real_api_requests\": 0\n}\n",
+      "stderr_tail": ""
+    },
+    {
+      "name": "source_sky_recovery",
+      "ok": true,
+      "returncode": 0,
+      "command": "/opt/hostedtoolcache/Python/3.11.17/x64/bin/python source_sky_recovery_self_test.py",
+      "stdout_tail": "V8.8.1 SOURCE SKY RECOVERY SELF-TEST PASSED\n{\"original_sky_restored\": true, \"donor_foreground_preserved\": true, \"foreground_corruption_still_blocked\": true, \"subpixel_border_artifact_ignored\": true, \"api_requests\": 0}\n",
+      "stderr_tail": ""
+    },
+    {
+      "name": "faithful_donor_detail_carrier",
+      "ok": true,
+      "returncode": 0,
+      "command": "/opt/hostedtoolcache/Python/3.11.17/x64/bin/python faithful_donor_detail_carrier_self_test.py",
+      "stdout_tail": "V8.7.4 VERIFIED DONOR FINAL MASTER PIPELINE SELF-TEST PASSED\n{\n  \"invented_background_transfer_ratio\": 0.0081598,\n  \"broad_luminance_delta_p99\": 1.192033,\n  \"chroma_delta_p99\": 1.0,\n  \"lighting_direction_cosine\": 0.99914283,\n  \"donor_low_frequency_transfer\": 0.0,\n  \"donor_chroma_transfer\": 0.0,\n  \"donor_detail_retention\": 0.673071,\n  \"mean_carrier_weight\": 0.637279,\n  \"donor_detail_fidelity\": 0.545298,\n  \"donor_detail_energy_ratio\": 0.624229,\n  \"source_immutable\": true,\n  \"accepted_raw_is_byte_identical_final\": true,\n  \"existing_v868_faithful_donor_reused\": true,\n  \"verified_donor_final_approval\": true,\n  \"additional_api_requests\": 0\n}\n",
+      "stderr_tail": ""
+    },
+    {
+      "name": "dual_mode",
+      "ok": true,
+      "returncode": 0,
+      "command": "/opt/hostedtoolcache/Python/3.11.17/x64/bin/python dual_mode_self_test.py",
+      "stdout_tail": "{\n  \"status\": \"passed\",\n  \"safe_mode_api_requests\": 0,\n  \"safe_mode_source_only\": true,\n  \"safe_output_size\": [\n    3840,\n    2160\n  ],\n  \"generative_final_equals_accepted_donor_bytes\": true,\n  \"post_acceptance_source_blending\": false,\n  \"changed_background_rejected\": true,\n  \"strict_gate_decision\": \"REJECTED_CAMERA_VIEW\",\n  \"real_api_requests\": 0\n}\n",
+      "stderr_tail": ""
+    },
+    {
+      "name": "retry_budget",
+      "ok": true,
+      "returncode": 0,
+      "command": "/opt/hostedtoolcache/Python/3.11.17/x64/bin/python retry_budget_self_test.py",
+      "stdout_tail": "V8.7.4 VERSIONED RETRY BUDGET MIGRATION SELF-TEST PASSED\n{\n  \"unfinished_mg_4_preserved\": true,\n  \"legacy_v867_attempts_archived\": true,\n  \"fresh_v869_paid_attempt_allowance\": 3,\n  \"migration_is_idempotent\": true,\n  \"unfinished_mg_34_preserved\": true,\n  \"existing_v868_donor_preserved\": true,\n  \"held_v868_final_invalidated\": true,\n  \"real_api_requests\": 0\n}\n",
+      "stderr_tail": ""
+    },
+    {
+      "name": "viewer_inspection",
+      "ok": true,
+      "returncode": 0,
+      "command": "/opt/hostedtoolcache/Python/3.11.17/x64/bin/python viewer_inspection_self_test.py",
+      "stdout_tail": "{\n  \"status\": \"passed\",\n  \"fullscreen_inspection_canvas\": true,\n  \"split_mode\": true,\n  \"diff_mode\": true,\n  \"blink_mode\": true,\n  \"zoom_100\": true,\n  \"zoom_200\": true,\n  \"pan_pointer_events\": true,\n  \"sync_pan\": true,\n  \"rejection_reason_ui\": true,\n  \"defect_overlay\": true,\n  \"reason_catalog_known\": true,\n  \"reason_catalog_fallback\": true,\n  \"border_overlay_available\": true,\n  \"server_exposes_detailed_reasons\": true,\n  \"server_exposes_overlays\": true,\n  \"viewer_capabilities\": true,\n  \"inspection_css\": true,\n  \"real_api_requests\": 0\n}\n",
+      "stderr_tail": ""
+    },
+    {
+      "name": "web_review_server",
+      "ok": true,
+      "returncode": 0,
+      "command": "/opt/hostedtoolcache/Python/3.11.17/x64/bin/python web_review_server.py --self-test",
+      "stdout_tail": "{\n  \"status\": \"passed\",\n  \"version\": true,\n  \"build_revision\": true,\n  \"failure_reason_catalog\": true,\n  \"loopback_default\": true,\n  \"startup_never_generates\": true,\n  \"paid_generation_separate\": true,\n  \"replacement_explicit\": true,\n  \"one_image_per_action\": true,\n  \"safe_has_no_generator\": true,\n  \"csrf_token_present\": true,\n  \"web_assets_present\": true,\n  \"diagnostics_present\": true,\n  \"source_folder_endpoint\": true,\n  \"folder_switch_never_generates\": true,\n  \"real_api_requests\": 0\n}\n",
+      "stderr_tail": ""
+    }
+  ],
+  "contracts": {
+    "verified_donor_is_final_master": true,
+    "raw_final_byte_identity_required": true,
+    "whole_scene_gate_present": true,
+    "byte_identical_publish_present": true,
+    "source_fidelity_contract_present": true,
+    "source_fidelity_primary": true,
+    "source_geometry_authority_absolute": true,
+    "donor_geometry_transfer_blocked": true,
+    "post_gate_blending_disabled": true,
+    "post_gate_reencoding_disabled": true
+  }
+}
