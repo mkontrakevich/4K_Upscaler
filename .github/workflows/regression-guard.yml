@@ -125,7 +125,72 @@ jobs:
           ]
           missing = [item for item in required if item not in prompt]
           assert not missing, f"Dynamic donor prompt missing: {missing}"
+          assert v.SOURCE_FIDELITY_CONTRACT in prompt
+          assert "SOURCE fidelity has higher priority" in v.SOURCE_FIDELITY_CONTRACT
+          assert "source_fidelity_score" in Path("v8_safe_appearance.py").read_text(encoding="utf-8")
+          assert '"source_fidelity_core": source_fidelity_core' in Path("v8_safe_appearance.py").read_text(encoding="utf-8")
           print("Dynamic DONOR prompt contract: PASSED")
+          PY
+
+      - name: SOURCE fidelity primary product contract
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          import v8_safe_appearance as v
+
+          profile=json.loads(Path("scene_stability_profile.json").read_text(encoding="utf-8"))
+          ui=Path("site/index.html").read_text(encoding="utf-8")
+          assistant=Path("src/prompt_assistant.js").read_text(encoding="utf-8")
+          pipeline=Path("v8_safe_appearance.py").read_text(encoding="utf-8")
+
+          assert profile["primary_product_goal"].startswith("Increase image quality and resolution")
+          assert profile["candidate_ranking_rule"].startswith("Among technically acceptable candidates")
+          assert "SOURCE_FIDELITY_IS_PRIMARY_PRODUCT_CRITERION" in profile["principles"]
+          assert "SHARPER_BUT_DIFFERENT_IS_FAILURE" in profile["principles"]
+
+          old_prompt=os.environ.get("MG4K_PROMPT_OVERRIDE")
+          old_lock=os.environ.get("MG4K_LOCK_PROFILE_JSON")
+          try:
+              os.environ["MG4K_PROMPT_OVERRIDE"]="MAKE IT COMPLETELY DIFFERENT"
+              os.environ["MG4K_LOCK_PROFILE_JSON"]='{"camera":"free","geometry":"free"}'
+              prompt=v.donor_generation_prompt()
+              assert v.SOURCE_FIDELITY_CONTRACT in prompt
+              assert "MAKE IT COMPLETELY DIFFERENT" in prompt
+              assert prompt.index("PRIMARY PRODUCT CONTRACT") < prompt.index("MAKE IT COMPLETELY DIFFERENT")
+              assert "No HARD/SOFT/FREE level may override SOURCE_FIDELITY_CONTRACT" in prompt
+          finally:
+              if old_prompt is None: os.environ.pop("MG4K_PROMPT_OVERRIDE",None)
+              else: os.environ["MG4K_PROMPT_OVERRIDE"]=old_prompt
+              if old_lock is None: os.environ.pop("MG4K_LOCK_PROFILE_JSON",None)
+              else: os.environ["MG4K_LOCK_PROFILE_JSON"]=old_lock
+
+          for token in [
+              "SOURCE_FIDELITY_CORE",
+              "SOURCE FIDELITY всегда включён",
+              "Prefer less enhancement with higher SOURCE fidelity",
+          ]:
+              assert token in ui, token
+
+          for token in [
+              "SOURCE_IDENTITY_LOCKS",
+              "SOURCE FIDELITY FIRST",
+              "SOURCE fidelity outranks aesthetic improvement",
+          ]:
+              assert token in assistant, token
+
+          for token in [
+              "source_fidelity_core",
+              "source_fidelity_score",
+              "primary_quality_criterion",
+              "fidelity_rank",
+              "SOURCE_FIDELITY_FIRST",
+          ]:
+              assert token in pipeline, token
+
+          assert "passing.append((fidelity_rank, distance" in pipeline
+          assert "reviewable.append((fidelity_rank, distance" in pipeline
+          print("SOURCE fidelity primary product contract: PASSED")
           PY
 
       - name: Cloud review UI contract
@@ -355,7 +420,7 @@ jobs:
           assert 'def generation_request_prompt(' in pipeline
           assert 'MG4K_PROMPT_OVERRIDE' in pipeline
           assert 'usage["prompt_sha256"]' in pipeline
-          assert "The LOCK PROFILE has higher priority" in ui
+          assert "SOURCE_FIDELITY_CORE has the highest priority" in ui
           assert "localStorage.setItem(CUSTOM_LOCK_BUTTONS_KEY" in ui
           print("Editable prompt / custom LOCK buttons contract: PASSED")
           PY
