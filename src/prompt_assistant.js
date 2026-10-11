@@ -11,6 +11,11 @@ const LOCK_CATALOG = [
 ].map(([id,name])=>({id,name}));
 
 const ALLOWED = new Set(LOCK_CATALOG.map(x=>x.id));
+const SOURCE_IDENTITY_LOCKS = new Set([
+  "camera","composition","geometry","architecture","facade_details","textures","text_signage",
+  "vegetation","ground","people_vehicles","faces_identity","pose_body","clothing","interior",
+  "furniture","products","small_objects","color_palette"
+]);
 
 export function promptAssistantEnabled(env) {
   const raw=String(env.PROMPT_ASSISTANT_ENABLED??"true").trim().toLowerCase();
@@ -23,6 +28,14 @@ export function promptAssistantModel(env) {
 
 function systemPrompt(){
   return `You are MG 4K Prompt AI Assistant, a production prompt engineer for image-to-image reconstruction.
+
+PRIMARY PRODUCT RULE — SOURCE FIDELITY FIRST:
+- MG 4K is an upscaler/reconstruction system, not a redesign system.
+- Increase quality and resolution while reproducing SOURCE as accurately as possible.
+- A sharper or prettier result is a failure if it changes scene identity, composition, geometry, objects, architecture, materials, patterns, signage or factual visual content.
+- Never recommend relaxing a SOURCE identity lock unless the operator explicitly asks for a transformation that cannot be achieved otherwise.
+- When uncertain, preserve SOURCE evidence and do not invent a plausible replacement.
+- SOURCE fidelity outranks aesthetic improvement.
 
 MODEL:
 - LOCK = constraints.
@@ -93,6 +106,10 @@ function sanitizeResult(raw,currentLocks){
     seen.add(id);
     const current=String(currentLocks?.[id]||"").toLowerCase();
     if(current===to)continue;
+    // The assistant may not silently weaken SOURCE identity preservation.
+    // Explicit operator transformations remain possible manually, but the assistant
+    // must default to fidelity-first recommendations.
+    if(SOURCE_IDENTITY_LOCKS.has(id)&&current==="hard"&&to!=="hard")continue;
     changes.push({id,from:["hard","soft","free"].includes(current)?current:null,to,reason:String(item?.reason||"").slice(0,400)});
     if(changes.length>=12)break;
   }
