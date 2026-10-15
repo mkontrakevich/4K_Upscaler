@@ -76,6 +76,20 @@ jobs:
           PY
           node --check /tmp/site-inline.js
 
+      - name: Generation directory button contract
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          ui=Path("site/index.html").read_text(encoding="utf-8")
+          assert 'id="action-open-generation-dir"' in ui
+          assert 'function generationDirectoryUrl(job=currentJob)' in ui
+          assert 'archive/jobs/"+job.id+"/"' in ui
+          assert '4k-upscaler-temp-buffer-r7' in ui
+          assert '$("action-open-generation-dir").disabled=!hasJob' in ui
+          assert '$("action-open-generation-dir").addEventListener("click",openGenerationDirectory)' in ui
+          print("Generation directory button contract: PASSED")
+          PY
+
       - name: Legacy local web console self-test
         run: python web_review_server.py --self-test
 
