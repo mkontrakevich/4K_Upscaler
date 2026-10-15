@@ -425,6 +425,7 @@ body{overflow-x:hidden}
       <button class="btn primary" id="action-process" type="button" disabled>▶ Запустить / продолжить</button>
       <button class="btn ghost" id="action-inspect" type="button" disabled>Инспекция</button>
       <button class="btn ghost save-result" id="action-save-result" type="button" disabled>↓ Сохранить результат</button>
+      <button class="btn ghost" id="action-open-generation-dir" type="button" disabled>↗ Открыть директорию генерации</button>
       <button class="btn approve" id="action-approve" type="button" disabled>✓ Утвердить</button>
       <button class="btn reject" id="action-reject" type="button" disabled>× Отклонить</button>
       <button class="btn generate" id="action-regenerate" type="button" disabled>↻ Регенерировать</button>
@@ -1337,6 +1338,7 @@ function updateRecoveryActions(state=latestJobState){
   const status=String(state?.status||"");
   const busy=["queued","processing","decision_pending"].includes(status);
   $("action-refresh").disabled=!hasJob;
+  $("action-open-generation-dir").disabled=!hasJob;
   $("action-reset-job").disabled=!hasJob||busy;
   $("action-reload-source").disabled=!hasFile||busy;
   $("action-replace-source").disabled=!hasFile||busy;
@@ -1581,6 +1583,16 @@ function renderValidation(state){
 }
 function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]))}
 function resultUrl(job,download=false){return"/api/jobs/"+job.id+"/result?token="+encodeURIComponent(job.token)+(download?"&download=1":"")+"&v="+Date.now()}
+const R2_DASHBOARD_BASE="https://dash.cloudflare.com/e649ec98e96dd4b1f4d5ff45f92b00a4/r2/default/buckets/4k-upscaler-temp-buffer-r7";
+function generationDirectoryUrl(job=currentJob){
+  if(!job?.id)return "";
+  return R2_DASHBOARD_BASE+"?prefix="+encodeURIComponent("archive/jobs/"+job.id+"/");
+}
+function openGenerationDirectory(){
+  const url=generationDirectoryUrl();
+  if(!url){toast("Для текущего SOURCE ещё нет генерации.");return}
+  window.open(url,"_blank","noopener,noreferrer");
+}
 function setReviewActions({approve=false,reject=false,skip=false,regenerate=false,inspect=false,save=false}={}){
   $("action-approve").disabled=!approve;
   $("action-reject").disabled=!reject;
@@ -2126,6 +2138,7 @@ $("action-reset-job").addEventListener("click",()=>resetCurrentJob({confirmReset
 $("action-reload-source").addEventListener("click",reloadCurrentSource);
 $("action-process").addEventListener("click",()=>prepareJob(false));$("mobile-process").addEventListener("click",()=>prepareJob(false));
 $("action-save-result").addEventListener("click",saveCurrentResult);
+$("action-open-generation-dir").addEventListener("click",openGenerationDirectory);
 $("action-approve").addEventListener("click",()=>sendDecision("approve"));
 $("action-reject").addEventListener("click",()=>sendDecision("reject"));
 $("action-skip").addEventListener("click",()=>sendDecision("skip"));
