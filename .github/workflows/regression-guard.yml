@@ -76,18 +76,24 @@ jobs:
           PY
           node --check /tmp/site-inline.js
 
-      - name: Generation directory button contract
+      - name: Generation archive browser contract
         run: |
           python - <<'PY'
           from pathlib import Path
           ui=Path("site/index.html").read_text(encoding="utf-8")
+          worker=Path("src/worker.js").read_text(encoding="utf-8")
           assert 'id="action-open-generation-dir"' in ui
+          assert 'Открыть RESULT / архив' in ui
           assert 'function generationDirectoryUrl(job=currentJob)' in ui
-          assert 'archive/jobs/"+job.id+"/"' in ui
-          assert '4k-upscaler-temp-buffer-r7' in ui
+          assert '"/api/jobs/"+job.id+"/archive?token="' in ui
           assert '$("action-open-generation-dir").disabled=!hasJob' in ui
           assert '$("action-open-generation-dir").addEventListener("click",openGenerationDirectory)' in ui
-          print("Generation directory button contract: PASSED")
+          assert 'jobArchiveMatch = path.match' in worker
+          assert 'jobArchiveFileMatch = path.match' in worker
+          assert 'archive/jobs/' in worker and 'job.id' in worker
+          assert 'Текущий сохранённый RESULT' in worker
+          assert 'x-robots-tag' in worker
+          print("Generation job archive browser contract: PASSED")
           PY
 
       - name: Legacy local web console self-test
@@ -587,21 +593,20 @@ jobs:
           required = [
               "CORE 8.8.1 R4 · CLOUD UI R10.3",
               'id="action-save-result"',
-              'function saveCurrentResult()',
-              'fetch(resultUrl(currentJob,true),{cache:"no-store"})',
-              'a.download=filename',
-              'URL.revokeObjectURL(url)',
-              'RESULT сохранён:',
+              'async function saveCurrentResult()',
+              'a.href=resultUrl(currentJob,true)',
+              'RESULT передан браузеру для прямого streaming-download',
               'save:Boolean(state.result_available)',
               'save:true',
           ]
           missing=[x for x in required if x not in html]
           assert not missing, f"Result save contract missing: {missing}"
           block=html[html.index("async function saveCurrentResult()"):html.index("async function prepareJob", html.index("async function saveCurrentResult()"))]
-          assert "/api/jobs" not in block, "Saving a result must never create a new job"
+          assert "response.blob()" not in block, "Large RESULT must not be buffered in browser JavaScript"
+          assert "URL.createObjectURL(blob)" not in block, "Large RESULT must use direct streaming download"
           assert "prepareJob(" not in block, "Saving a result must never trigger paid generation"
           assert "resultUrl(currentJob,true)" in block
-          print("Cloud RESULT save/download contract: PASSED")
+          print("Cloud RESULT direct-stream download contract: PASSED")
           PY
 
       - name: Cloud local V8.8.1 inspection parity contract
@@ -777,6 +782,23 @@ jobs:
           assert '"Diagnostic: "+(latestJobState?.diagnostic_excerpt||"—")' in ui
           assert 'Диагностика pipeline:' in ui
           print("Sanitized cloud diagnostics: PASSED")
+          PY
+
+      - name: Durable RESULT/job lifetime contract
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          worker=Path("src/worker.js").read_text(encoding="utf-8")
+          assert 'const JOB_TTL = 60 * 60 * 24 * 7;' in worker
+          assert 'expirationTtl: JOB_TTL' in worker
+          assert 'job_ttl_seconds: JOB_TTL' in worker
+          assert 'if (session) await writeSession(env, session);' in worker
+          assert 'session_expired" }, 410' not in worker
+          result=worker[worker.index('const jobResultMatch'):worker.index('if (path === "/api/processor/pair/request"')]
+          assert 'recoverSessionResultFromR2(env, job)' in result
+          assert 'const archiveCandidates = [' in result
+          assert 'if (!job.result_key) return json({ error: "result_not_ready"' not in result
+          print("Durable RESULT/job lifetime contract: PASSED")
           PY
 
       - name: Review sync metadata contract
