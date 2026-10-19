@@ -715,6 +715,74 @@ function archiveTimestamp() {
   return new Date().toISOString().replace(/[:.]/g, "-");
 }
 
+async function persistArchiveAccessManifest(env, job) {
+  if (!job?.id || !job?.access_hash) return;
+  const key = `archive/jobs/${job.id}/_access.json`;
+  await env.TEMP_BUFFER_R7.put(key, JSON.stringify({
+    job_id: job.id,
+    session_id: job.session_id || null,
+    access_hash: job.access_hash,
+    filename: job.filename || null,
+    updated_at: now(),
+  }), {
+    httpMetadata: { contentType: "application/json; charset=utf-8" },
+    customMetadata: {
+      job_id: job.id,
+      session_id: String(job.session_id || ""),
+      job_access_hash: String(job.access_hash),
+      kind: "access_manifest",
+    },
+  });
+}
+
+async function recoverArchivedJobForAccess(env, jobId, token) {
+  if (!jobId || !token) return null;
+  const key = `archive/jobs/${jobId}/_access.json`;
+  const object = await env.TEMP_BUFFER_R7.get(key);
+  if (!object) return null;
+  let manifest = {};
+  try { manifest = JSON.parse(await object.text()); } catch { return null; }
+  const accessHash = String(manifest.access_hash || object.customMetadata?.job_access_hash || "");
+  if (!accessHash || await sha256(token) !== accessHash) return null;
+
+  const prefix = `archive/jobs/${jobId}/`;
+  const objects = await listAllObjects(env, prefix);
+  const imageObjects = objects.filter(item => isArchiveImageKey(item.key));
+  imageObjects.sort((a, b) => String(b.uploaded || "").localeCompare(String(a.uploaded || "")));
+  const finalKeys = imageObjects.filter(item => archiveKindFromKey(item.key, prefix) === "FINAL").map(item => item.key);
+  const donorKeys = imageObjects.filter(item => archiveKindFromKey(item.key, prefix) === "DONOR_RAW").map(item => item.key);
+  const resultKeys = imageObjects.filter(item => archiveKindFromKey(item.key, prefix) === "RESULT").map(item => item.key);
+  const latest = finalKeys[0] || resultKeys[0] || donorKeys[0] || imageObjects[0]?.key || null;
+  if (!latest) return null;
+  const head = await env.TEMP_BUFFER_R7.head(latest);
+  const status = finalKeys.length ? "done" : "review";
+  const job = {
+    id: jobId,
+    session_id: manifest.session_id || null,
+    access_hash: accessHash,
+    filename: cleanName(manifest.filename || latest.split("/").pop() || "result.png"),
+    status,
+    stage: status === "done" ? "final" : "awaiting_approval",
+    progress: status === "done" ? 100 : 90,
+    created_at: manifest.updated_at || now(),
+    updated_at: now(),
+    result_key: null,
+    result_bytes: Number(head?.size || 0),
+    result_content_type: head?.httpMetadata?.contentType || "application/octet-stream",
+    result_persist_source: "archive_manifest_recovery",
+    result_persisted_at: manifest.updated_at || now(),
+    archive_final_key: finalKeys[0] || null,
+    archive_result_key: resultKeys[0] || null,
+    archive_donor_keys: donorKeys,
+    review_detached_from_container: true,
+    container_dispatched: false,
+    manual_retry_required: false,
+  };
+  await writeJob(env, job);
+  console.warn("MG4K_JOB_RECOVERED_FROM_ARCHIVE_MANIFEST", jobId);
+  return job;
+}
+
 async function archiveBytes(env, {
   job,
   bytes,
@@ -1502,6 +1570,9 @@ async function handleApi(request, env, ctx, url) {
     };
 
     await writeJob(env, job);
+    try { await persistArchiveAccessManifest(env, job); } catch (error) {
+      console.warn("MG4K_ARCHIVE_ACCESS_MANIFEST_WARNING", job.id, error?.message || String(error));
+    }
     if (!session.jobs.includes(id)) session.jobs.push(id);
     await writeSession(env, session);
 
@@ -1540,6 +1611,9 @@ async function handleApi(request, env, ctx, url) {
     let job = await readJob(env, jobStatusMatch[1]);
     if (!job) return json({ error: "job_not_found" }, 404);
     if (!await authorizeJob(request, url, job)) return json({ error: "forbidden" }, 403);
+    try { await persistArchiveAccessManifest(env, job); } catch (error) {
+      console.warn("MG4K_ARCHIVE_ACCESS_MANIFEST_WARNING", job.id, error?.message || String(error));
+    }
     // Recover legacy result_sync_failed jobs whose RESULT bytes reached R2
     // but whose result_key metadata was lost by the former push/pull race.
     if (job.status === "failed" && job.stage === "result_sync_failed" && !job.result_key) {
@@ -1657,7 +1731,9 @@ async function handleApi(request, env, ctx, url) {
 
   const jobArchiveFileMatch = path.match(/^\/api\/jobs\/([0-9a-f-]+)\/archive-file$/i);
   if (jobArchiveFileMatch && method === "GET") {
-    const job = await readJob(env, jobArchiveFileMatch[1]);
+    const token = jobToken(request, url);
+    let job = await readJob(env, jobArchiveFileMatch[1]);
+    if (!job) job = await recoverArchivedJobForAccess(env, jobArchiveFileMatch[1], token);
     if (!job) return json({ error: "job_not_found" }, 404);
     if (!await authorizeJob(request, url, job)) return json({ error: "forbidden" }, 403);
     const prefix = `archive/jobs/${job.id}/`;
@@ -1681,7 +1757,9 @@ async function handleApi(request, env, ctx, url) {
 
   const jobArchiveMatch = path.match(/^\/api\/jobs\/([0-9a-f-]+)\/archive$/i);
   if (jobArchiveMatch && method === "GET") {
-    const job = await readJob(env, jobArchiveMatch[1]);
+    const token = jobToken(request, url);
+    let job = await readJob(env, jobArchiveMatch[1]);
+    if (!job) job = await recoverArchivedJobForAccess(env, jobArchiveMatch[1], token);
     if (!job) return json({ error: "job_not_found" }, 404);
     if (!await authorizeJob(request, url, job)) return json({ error: "forbidden" }, 403);
 
@@ -1744,7 +1822,9 @@ async function handleApi(request, env, ctx, url) {
 
   const jobResultMatch = path.match(/^\/api\/jobs\/([0-9a-f-]+)\/result$/i);
   if (jobResultMatch && method === "GET") {
+    const token = jobToken(request, url);
     let job = await readJob(env, jobResultMatch[1]);
+    if (!job) job = await recoverArchivedJobForAccess(env, jobResultMatch[1], token);
     if (!job) return json({ error: "job_not_found" }, 404);
     if (!await authorizeJob(request, url, job)) return json({ error: "forbidden" }, 403);
     if (!job.result_key && !["failed", "skipped"].includes(job.status)) {
@@ -2013,6 +2093,9 @@ async function handleApi(request, env, ctx, url) {
       job.decision = "approve";
     }
     await writeJob(env, job);
+    try { await persistArchiveAccessManifest(env, job); } catch (error) {
+      console.warn("MG4K_ARCHIVE_ACCESS_MANIFEST_WARNING", job.id, error?.message || String(error));
+    }
     if (session) await writeSession(env, session);
     if (job.billing_reservation_id) {
       await settleBilling(env, job, { resultAvailable: true, hardSystemFailure: false });
