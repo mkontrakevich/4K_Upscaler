@@ -425,7 +425,7 @@ body{overflow-x:hidden}
       <button class="btn primary" id="action-process" type="button" disabled>▶ Запустить / продолжить</button>
       <button class="btn ghost" id="action-inspect" type="button" disabled>Инспекция</button>
       <button class="btn ghost save-result" id="action-save-result" type="button" disabled>↓ Сохранить результат</button>
-      <button class="btn ghost" id="action-open-generation-dir" type="button" disabled>↗ Открыть директорию генерации</button>
+      <button class="btn ghost" id="action-open-generation-dir" type="button" disabled>↗ Открыть RESULT / архив</button>
       <button class="btn approve" id="action-approve" type="button" disabled>✓ Утвердить</button>
       <button class="btn reject" id="action-reject" type="button" disabled>× Отклонить</button>
       <button class="btn generate" id="action-regenerate" type="button" disabled>↻ Регенерировать</button>
@@ -1583,10 +1583,9 @@ function renderValidation(state){
 }
 function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]))}
 function resultUrl(job,download=false){return"/api/jobs/"+job.id+"/result?token="+encodeURIComponent(job.token)+(download?"&download=1":"")+"&v="+Date.now()}
-const R2_DASHBOARD_BASE="https://dash.cloudflare.com/e649ec98e96dd4b1f4d5ff45f92b00a4/r2/default/buckets/4k-upscaler-temp-buffer-r7";
 function generationDirectoryUrl(job=currentJob){
-  if(!job?.id)return "";
-  return R2_DASHBOARD_BASE+"?prefix="+encodeURIComponent("archive/jobs/"+job.id+"/");
+  if(!job?.id||!job?.token)return "";
+  return "/api/jobs/"+job.id+"/archive?token="+encodeURIComponent(job.token)+"&v="+Date.now();
 }
 function openGenerationDirectory(){
   const url=generationDirectoryUrl();
@@ -2054,33 +2053,27 @@ async function saveCurrentResult(){
   const state=latestJobState||currentSourceItem()?.lastState||null;
   if(!state?.result_available){toast("RESULT ещё не доступен для сохранения.");return}
   const btn=$("action-save-result"),previous=btn.textContent;
-  btn.disabled=true;btn.textContent="Сохранение…";
+  btn.disabled=true;btn.textContent="Скачивание…";
   try{
-    const health=await cloudHealthCheck();
-    if(!health.ok)throw new Error("cloud_api_unavailable");
-    const response=await fetchNetworkRetry(resultUrl(currentJob,true),{cache:"no-store"},3);
-    if(!response.ok)throw new Error("result_download_failed_"+response.status);
-    const blob=await response.blob();
-    if(!blob.size)throw new Error("result_download_empty");
-    const base=safeResultBaseName(currentFile?.name||currentSourceItem()?.file?.name||state?.filename||"result");
-    const ext=resultExtension(blob.type||state?.result_content_type||state?.content_type);
-    const jobId=String(currentJob.id||"").slice(0,8);
-    const filename=base+"_MG4K_"+resultSaveLabel(state)+(jobId?"_"+jobId:"")+"."+ext;
-    const url=URL.createObjectURL(blob);
-    const a=document.createElement("a");a.href=url;a.download=filename;
-    document.body.appendChild(a);a.click();a.remove();
-    setTimeout(()=>URL.revokeObjectURL(url),3000);
-    log("ok","RESULT сохранён: "+filename+" · "+humanSize(blob.size));
-    toast("Результат сохранён: "+filename);
+    // Do not pull a 10–30 MB RESULT into JavaScript memory. Let the browser
+    // stream the authenticated Worker/R2 response directly to disk.
+    const a=document.createElement("a");
+    a.href=resultUrl(currentJob,true);
+    a.rel="noopener";
+    a.style.display="none";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    log("ok","RESULT передан браузеру для прямого streaming-download · job "+String(currentJob.id||"").slice(0,8));
+    toast("Скачивание RESULT запущено.");
   }catch(error){
-    const message=error?.message==="cloud_api_unavailable"
-      ?"Cloudflare API временно недоступен. RESULT не потерян; повторите сохранение позже."
-      :("Ошибка сохранения RESULT: "+(error?.message||error));
-    log("err",message);
-    toast(error?.message==="cloud_api_unavailable"?"RESULT не потерян. Cloudflare API временно недоступен.":"Не удалось сохранить результат.");
+    log("err","Не удалось запустить скачивание RESULT: "+(error?.message||error));
+    toast("Не удалось запустить скачивание RESULT.");
   }finally{
-    btn.textContent=previous;
-    btn.disabled=!Boolean((latestJobState||state)?.result_available);
+    setTimeout(()=>{
+      btn.textContent=previous;
+      btn.disabled=!Boolean((latestJobState||state)?.result_available);
+    },600);
   }
 }
 
