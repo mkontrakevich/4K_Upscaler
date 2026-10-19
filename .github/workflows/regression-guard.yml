@@ -794,6 +794,11 @@ jobs:
           assert 'job_ttl_seconds: JOB_TTL' in worker
           assert 'if (session) await writeSession(env, session);' in worker
           assert 'session_expired" }, 410' not in worker
+          assert 'function hasArchivedResult(job)' in worker
+          assert 'function persistArchiveAccessManifest(env, job)' in worker
+          assert 'function recoverArchivedJobForAccess(env, jobId, token)' in worker
+          assert 'result_available: Boolean(job.result_key || hasArchivedResult(job))' in worker
+          assert 'MG4K_JOB_RECOVERED_FROM_ARCHIVE_MANIFEST' in worker
           result=worker[worker.index('const jobResultMatch'):worker.index('if (path === "/api/processor/pair/request"')]
           assert 'recoverSessionResultFromR2(env, job)' in result
           assert 'const archiveCandidates = [' in result
