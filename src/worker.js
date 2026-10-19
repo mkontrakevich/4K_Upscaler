@@ -276,9 +276,17 @@ function processorContainerForJob(env, job) {
   };
 }
 
+function hasArchivedResult(job) {
+  return Boolean(
+    job?.archive_final_key
+    || job?.archive_result_key
+    || (Array.isArray(job?.archive_donor_keys) && job.archive_donor_keys.length)
+  );
+}
+
 function persistedReviewIsDurable(job) {
   return String(job?.status || "") === "review"
-    && Boolean(job?.result_key)
+    && Boolean(job?.result_key || hasArchivedResult(job))
     && Number(job?.result_bytes || 0) > 0
     && Boolean(job?.result_persisted_at);
 }
@@ -580,7 +588,7 @@ function publicJob(job) {
     mode: job.mode,
     progress: job.progress || 0,
     stage: job.stage || "queued",
-    result_available: Boolean(job.result_key),
+    result_available: Boolean(job.result_key || hasArchivedResult(job)),
     error: job.error || null,
     diagnostic_excerpt: job.diagnostic_excerpt || null,
     result_sync_warning: job.result_sync_warning || null,
@@ -1608,7 +1616,9 @@ async function handleApi(request, env, ctx, url) {
 
   const jobStatusMatch = path.match(/^\/api\/jobs\/([0-9a-f-]+)$/i);
   if (jobStatusMatch && method === "GET") {
+    const token = jobToken(request, url);
     let job = await readJob(env, jobStatusMatch[1]);
+    if (!job) job = await recoverArchivedJobForAccess(env, jobStatusMatch[1], token);
     if (!job) return json({ error: "job_not_found" }, 404);
     if (!await authorizeJob(request, url, job)) return json({ error: "forbidden" }, 403);
     try { await persistArchiveAccessManifest(env, job); } catch (error) {
@@ -1827,7 +1837,7 @@ async function handleApi(request, env, ctx, url) {
     if (!job) job = await recoverArchivedJobForAccess(env, jobResultMatch[1], token);
     if (!job) return json({ error: "job_not_found" }, 404);
     if (!await authorizeJob(request, url, job)) return json({ error: "forbidden" }, 403);
-    if (!job.result_key && !["failed", "skipped"].includes(job.status)) {
+    if (!job.result_key && !hasArchivedResult(job) && !["failed", "skipped"].includes(job.status)) {
       try { job = await syncJobFromContainer(env, job, url.origin); } catch {}
     }
     if (!job.result_key) {
