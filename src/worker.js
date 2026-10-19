@@ -30,6 +30,7 @@ export class MG4KProcessor extends Container {
 }
 
 const SESSION_TTL = 60 * 10;
+const JOB_TTL = 60 * 60 * 24 * 7;
 const PAIR_TTL = 60 * 10;
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 const WORKER_BUILD_ID = "pid1-tini-r11b";
@@ -299,12 +300,9 @@ async function hasInFlightProcessorJob(env, instanceNames) {
     if (!raw) continue;
     const job = JSON.parse(raw);
 
-    const session = await readSession(env, job.session_id);
-    if (!session) {
-      await env.SESSION_STATE_R7.delete(key.name);
-      continue;
-    }
-
+    // Job metadata intentionally outlives the short UI session.
+    // A generated/review job must remain discoverable and must not be deleted
+    // merely because the browser session expired.
     if (!job.container_dispatched) continue;
     if (persistedReviewIsDurable(job) || persistedDecisionIsDurable(job)) continue;
 
@@ -375,6 +373,32 @@ function cleanName(name = "image") {
     .replace(/[\\/]+/g, "_")
     .replace(/[^\p{L}\p{N}._ -]+/gu, "_")
     .slice(0, 160) || "image";
+}
+
+function escapeHtmlText(value = "") {
+  return String(value).replace(/[&<>"']/g, ch => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;",
+  }[ch]));
+}
+
+function humanBytesServer(value) {
+  const bytes = Math.max(0, Number(value || 0));
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+}
+
+function archiveKindFromKey(key, prefix) {
+  const relative = String(key || "").slice(String(prefix || "").length);
+  return relative.split("/")[0] || "FILE";
+}
+
+function isArchiveImageKey(key) {
+  return /\.(?:png|jpe?g|webp|avif|tiff?|heic|heif)$/i.test(String(key || ""));
 }
 
 function sanitizeProviderCostSummary(value) {
@@ -539,7 +563,7 @@ async function readJob(env, id) {
 
 async function writeJob(env, job) {
   job.updated_at = now();
-  await env.SESSION_STATE_R7.put(`job:${job.id}`, JSON.stringify(job), { expirationTtl: SESSION_TTL });
+  await env.SESSION_STATE_R7.put(`job:${job.id}`, JSON.stringify(job), { expirationTtl: JOB_TTL });
 }
 
 function publicJob(job) {
@@ -716,6 +740,7 @@ async function archiveBytes(env, {
       sha256: digest,
       persist_source: persistSource || "unknown",
       archived_at: new Date().toISOString(),
+      job_access_hash: String(job.access_hash || ""),
     },
   });
   const eventKey = `archive/jobs/${job.id}/events/${stamp}_${kind}_${digest.slice(0,16)}.json`;
@@ -1222,7 +1247,8 @@ async function handleApi(request, env, ctx, url) {
       processor_instance_expected: CONTAINER_INSTANCE_NAME,
       processor_lifecycle: "tini-pid1-group-forwarding",
       session_ttl_seconds: SESSION_TTL,
-      persistence: "ephemeral-session-only",
+      job_ttl_seconds: JOB_TTL,
+      persistence: "short-ui-session + durable-job/archive-access",
       persistent_user_database: false,
       session_store: "Cloudflare KV with sliding TTL",
       image_buffer: "private Cloudflare R2, session-scoped",
@@ -1629,6 +1655,77 @@ async function handleApi(request, env, ctx, url) {
     return json({ ok: true, job: publicJob(job), reset_warning: resetWarning });
   }
 
+  const jobArchiveFileMatch = path.match(/^\/api\/jobs\/([0-9a-f-]+)\/archive-file$/i);
+  if (jobArchiveFileMatch && method === "GET") {
+    const job = await readJob(env, jobArchiveFileMatch[1]);
+    if (!job) return json({ error: "job_not_found" }, 404);
+    if (!await authorizeJob(request, url, job)) return json({ error: "forbidden" }, 403);
+    const prefix = `archive/jobs/${job.id}/`;
+    const key = String(url.searchParams.get("key") || "");
+    if (!key.startsWith(prefix)) return json({ error: "invalid_archive_key" }, 400);
+    const object = await env.TEMP_BUFFER_R7.get(key);
+    if (!object) return json({ error: "archive_file_not_found" }, 404);
+    const headers = new Headers();
+    object.writeHttpMetadata(headers);
+    headers.set("etag", object.httpEtag);
+    headers.set("cache-control", "private, no-store");
+    const name = cleanName(key.split("/").pop() || "MG4K_RESULT");
+    headers.set(
+      "content-disposition",
+      url.searchParams.get("download") === "1"
+        ? `attachment; filename="${name}"`
+        : `inline; filename="${name}"`
+    );
+    return new Response(object.body, { headers });
+  }
+
+  const jobArchiveMatch = path.match(/^\/api\/jobs\/([0-9a-f-]+)\/archive$/i);
+  if (jobArchiveMatch && method === "GET") {
+    const job = await readJob(env, jobArchiveMatch[1]);
+    if (!job) return json({ error: "job_not_found" }, 404);
+    if (!await authorizeJob(request, url, job)) return json({ error: "forbidden" }, 403);
+
+    const prefix = `archive/jobs/${job.id}/`;
+    const files = await listAllObjects(env, prefix);
+    files.sort((a, b) => String(b.uploaded || "").localeCompare(String(a.uploaded || "")));
+    const token = jobToken(request, url);
+    const tokenEncoded = encodeURIComponent(token);
+    const images = files.filter(item => isArchiveImageKey(item.key));
+    const kindPriority = { FINAL: 4, RESULT: 3, DONOR_RAW: 2, SOURCE: 1 };
+    const preferred = images.slice().sort((a, b) => {
+      const ak = archiveKindFromKey(a.key, prefix);
+      const bk = archiveKindFromKey(b.key, prefix);
+      return (kindPriority[bk] || 0) - (kindPriority[ak] || 0)
+        || String(b.uploaded || "").localeCompare(String(a.uploaded || ""));
+    })[0] || null;
+
+    const fileUrl = key => `/api/jobs/${job.id}/archive-file?token=${tokenEncoded}&key=${encodeURIComponent(key)}`;
+    const rows = files.map(item => {
+      const kind = archiveKindFromKey(item.key, prefix);
+      const relative = String(item.key).slice(prefix.length);
+      const view = fileUrl(item.key);
+      const download = view + "&download=1";
+      return `<tr><td><b>${escapeHtmlText(kind)}</b></td><td class="name">${escapeHtmlText(relative)}</td><td>${escapeHtmlText(humanBytesServer(item.size))}</td><td>${escapeHtmlText(String(item.uploaded || "—"))}</td><td><a href="${escapeHtmlText(view)}" target="_blank" rel="noopener">Открыть</a> <a href="${escapeHtmlText(download)}">Скачать</a></td></tr>`;
+    }).join("");
+
+    const preferredHtml = preferred ? (() => {
+      const src = fileUrl(preferred.key);
+      const kind = archiveKindFromKey(preferred.key, prefix);
+      return `<section class="preview"><div><b>Текущий сохранённый RESULT</b><span>${escapeHtmlText(kind)} · ${escapeHtmlText(humanBytesServer(preferred.size))}</span></div><a href="${escapeHtmlText(src)}" target="_blank" rel="noopener"><img src="${escapeHtmlText(src)}" alt="MG4K RESULT"></a><p><a class="primary" href="${escapeHtmlText(src)}" target="_blank" rel="noopener">Открыть изображение</a><a href="${escapeHtmlText(src + "&download=1")}">Скачать</a></p></section>`;
+    })() : `<section class="preview"><b>Изображения в архиве job пока не найдены.</b></section>`;
+
+    const html = `<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MG4K · ${escapeHtmlText(job.id)}</title><style>
+      body{margin:0;background:#07111b;color:#eef5ff;font:14px Inter,Segoe UI,Arial,sans-serif}main{max-width:1500px;margin:auto;padding:24px}h1{font-size:20px;margin:0 0 4px}header span,.preview span{color:#8fa7ba;font-size:12px}.preview{margin:18px 0;padding:16px;border:1px solid #294054;border-radius:10px;background:#0a1928}.preview>div{display:flex;justify-content:space-between;gap:16px}.preview img{display:block;max-width:100%;max-height:72vh;margin:14px auto;background:#030a10;object-fit:contain}.preview p{display:flex;gap:8px;margin:12px 0 0}a{color:#61dafb;text-decoration:none}.preview p a{border:1px solid #35536b;padding:9px 12px;border-radius:7px}.preview p a.primary{background:#0a293b}table{width:100%;border-collapse:collapse;background:#091725;border:1px solid #294054}th,td{padding:9px 10px;border-bottom:1px solid #22384a;text-align:left;vertical-align:top}th{color:#91a7bb;font-size:11px}.name{font-family:Consolas,monospace;font-size:11px;word-break:break-all}@media(max-width:800px){table{font-size:11px}.preview>div{display:block}}
+    </style></head><body><main><header><h1>MG 4K · файлы генерации</h1><span>job ${escapeHtmlText(job.id)} · archive/jobs/${escapeHtmlText(job.id)}/</span></header>${preferredHtml}<table><thead><tr><th>Тип</th><th>Файл</th><th>Размер</th><th>Изменён</th><th>Действия</th></tr></thead><tbody>${rows || '<tr><td colspan="5">Архив пуст.</td></tr>'}</tbody></table></main></body></html>`;
+    return new Response(html, {
+      headers: {
+        "content-type": "text/html; charset=utf-8",
+        "cache-control": "private, no-store",
+        "x-robots-tag": "noindex, nofollow",
+      },
+    });
+  }
+
   const jobSourceMatch = path.match(/^\/api\/jobs\/([0-9a-f-]+)\/source$/i);
   if (jobSourceMatch && method === "GET") {
     const job = await readJob(env, jobSourceMatch[1]);
@@ -1653,8 +1750,6 @@ async function handleApi(request, env, ctx, url) {
     if (!job.result_key && !["failed", "skipped"].includes(job.status)) {
       try { job = await syncJobFromContainer(env, job, url.origin); } catch {}
     }
-    if (!job.result_key) return json({ error: "result_not_ready", status: job.status }, 409);
-
     if (!job.result_key) {
       job = await recoverSessionResultFromR2(env, job);
     }
@@ -1806,11 +1901,8 @@ async function handleApi(request, env, ctx, url) {
     if (!job) return json({ error: "job_not_found" }, 404);
 
     const session = await readSession(env, job.session_id);
-    if (!session) {
-      await env.SESSION_STATE_R7.delete(`job:${job.id}`);
-      return json({ error: "session_expired" }, 410);
-    }
-
+    // Processor authentication is sufficient for RESULT persistence.
+    // The UI session may expire while a paid generation is still running.
     const contentType = request.headers.get("content-type") || "";
     if (contentType.includes("application/json")) {
       let body = {};
@@ -1921,7 +2013,7 @@ async function handleApi(request, env, ctx, url) {
       job.decision = "approve";
     }
     await writeJob(env, job);
-    await writeSession(env, session);
+    if (session) await writeSession(env, session);
     if (job.billing_reservation_id) {
       await settleBilling(env, job, { resultAvailable: true, hardSystemFailure: false });
     }
