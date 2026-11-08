@@ -36,7 +36,7 @@ jobs:
           assert 'input_references' in s and '/images' in s
           assert 'EDITORIAL_REVIEW' in s and 'final:false' in s
           assert 'WorkflowEntrypoint' in s
-          assert 'retries:{limit:0}' in s
+          assert 'NonRetryableError' in s and 'retries:{limit:0}' not in s
           assert 'TROPICANA_EDITORIAL_R2' in s
           ui=Path('site/editorial-photo.html').read_text()
           assert 'Editorial Photo' in ui and '/api/editorial' in ui
