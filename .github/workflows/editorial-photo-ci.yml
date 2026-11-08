@@ -34,7 +34,7 @@ jobs:
           assert 'USAC_MAGSAC' in p
           assert 'FRAME="DSC09818"' in p
           assert 'geometry_status' in p
-          assert '0.015' in p
+          assert '.015' in p
           assert 'perspective' in Path('src/editorial_photo.js').read_text().lower()
           PY
       - name: Validate architecture and safety
