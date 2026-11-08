@@ -1,8 +1,5 @@
 name: Editorial Photo one-shot input preparation
 on:
-  pull_request:
-    paths:
-      - '.github/workflows/editorial-photo-stage.yml'
   workflow_dispatch:
 permissions:
   contents: read
