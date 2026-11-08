@@ -1,4 +1,5 @@
 import { WorkflowEntrypoint } from "cloudflare:workers";
+import { NonRetryableError } from "cloudflare:workflows";
 
 const PROJECT="tropicana-park", FRAME="DSC09818";
 const ROOT=PROJECT+"/"+FRAME+"/";
@@ -58,7 +59,7 @@ export class EditorialPhotoWorkflow extends WorkflowEntrypoint{
     }),{httpMetadata:{contentType:"application/json"}});
     return {sha256:o.sha,size:o.size,mime:o.mime};
   });
-  const analysis=await step.do("scene-editorial-analysis",{retries:{limit:0}},async()=>{
+  const analysis=await step.do("scene-editorial-analysis",async()=>{try{
     const o=await object(this.env,sourceKey);
     const res=await openrouter(this.env,"/chat/completions",{
       model:String(this.env.EDITORIAL_VISION_MODEL||AUDIT_MODEL),
@@ -68,8 +69,9 @@ export class EditorialPhotoWorkflow extends WorkflowEntrypoint{
     const text=String(res.choices?.[0]?.message?.content||"");
     await this.env.TROPICANA_EDITORIAL_R2.put(runRoot+"scene_analysis.json",JSON.stringify({model:this.env.EDITORIAL_VISION_MODEL||AUDIT_MODEL,analysis:text,usage:res.usage||null}),{httpMetadata:{contentType:"application/json"}});
     return {chars:text.length};
+  }catch(error){throw new NonRetryableError(String(error))}
   });
-  const candidate=await step.do("image-to-image-openrouter",{retries:{limit:0}},async()=>{
+  const candidate=await step.do("image-to-image-openrouter",async()=>{try{
     const o=await object(this.env,sourceKey);
     const result=await openrouter(this.env,"/images",{
       model:String(this.env.EDITORIAL_IMAGE_MODEL||MODEL),
@@ -85,8 +87,9 @@ export class EditorialPhotoWorkflow extends WorkflowEntrypoint{
     await this.env.TROPICANA_EDITORIAL_R2.put(key,bytes,{httpMetadata:{contentType:"image/png"},customMetadata:{source_sha256:source.sha256,sha256:sha,model:String(this.env.EDITORIAL_IMAGE_MODEL||MODEL),status:"REVIEW_ONLY"}});
     await this.env.TROPICANA_EDITORIAL_R2.put(runRoot+"model_cost.json",JSON.stringify({usage:result.usage||null,model:this.env.EDITORIAL_IMAGE_MODEL||MODEL,sha256:sha,bytes:bytes.byteLength}),{httpMetadata:{contentType:"application/json"}});
     return {key,sha256:sha,size:bytes.byteLength};
+  }catch(error){throw new NonRetryableError(String(error))}
   });
-  const audit=await step.do("post-generative-source-fidelity-qa",{retries:{limit:0}},async()=>{
+  const audit=await step.do("post-generative-source-fidelity-qa",async()=>{try{
     const a=await object(this.env,sourceKey),b=await object(this.env,candidate.key,20*1024*1024);
     const res=await openrouter(this.env,"/chat/completions",{
       model:String(this.env.EDITORIAL_VISION_MODEL||AUDIT_MODEL),temperature:0.1,max_tokens:1800,
@@ -95,6 +98,7 @@ export class EditorialPhotoWorkflow extends WorkflowEntrypoint{
     const answer=String(res.choices?.[0]?.message?.content||"");
     await this.env.TROPICANA_EDITORIAL_R2.put(runRoot+"fidelity_qa.json",JSON.stringify({model:this.env.EDITORIAL_VISION_MODEL||AUDIT_MODEL,audit:answer,usage:res.usage||null,approved:false}),{httpMetadata:{contentType:"application/json"}});
     return {length:answer.length};
+  }catch(error){throw new NonRetryableError(String(error))}
   });
   const manifest={
    project:PROJECT,frame:FRAME,job_id:id,status:"EDITORIAL_REVIEW",final:false,
