@@ -56,7 +56,7 @@ export class EditorialPhotoWorkflow extends WorkflowEntrypoint{
     if(!proofObject)throw new NonRetryableError("geometry_proof_missing");
     const proof=await proofObject.json();
     if(proof.frame!==FRAME||proof.geometry_status!=="PASS"||proof.result_sha256!==o.sha||
-       !proof.after||Math.abs(Number(proof.after.median_slope||999))>=0.015)throw new NonRetryableError("geometry_proof_invalid");
+       !proof.after||Math.abs(Number(proof.after.median_slope ?? 999))>=0.015)throw new NonRetryableError("geometry_proof_invalid");
     await this.env.TROPICANA_EDITORIAL_R2.put(runRoot+"geometry_source_QA.json",JSON.stringify(proof),{httpMetadata:{contentType:"application/json"}});
     await this.env.TROPICANA_EDITORIAL_R2.put(runRoot+"source_manifest.json",JSON.stringify({
       project:PROJECT,frame:FRAME,source_key:sourceKey,source_sha256:o.sha,source_bytes:o.size,
