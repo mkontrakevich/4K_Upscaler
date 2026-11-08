@@ -63,6 +63,7 @@ jobs:
           print('Prepared RAW-derived source',image.size)
           PY
           python /tmp/create_preview.py
+      # One-shot preview: full 16-bit native RAW master remains unchanged.
       - name: Perspective Lock geometry transform before OpenRouter
         run: |
           python editorial_geometry.py prepare --source /tmp/editorial/DSC09818_technical_model_input.jpg --output /tmp/editorial/DSC09818_PERSPECTIVE_LOCK_V3_model_input.jpg --report /tmp/editorial/DSC09818_PERSPECTIVE_LOCK_QA.json
