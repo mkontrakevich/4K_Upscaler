@@ -1,9 +1,5 @@
 name: Editorial Photo one-shot input preparation
 on:
-  pull_request:
-    paths:
-      - 'editorial_lens_profile.py'
-      - '.github/workflows/editorial-photo-stage.yml'
   workflow_dispatch:
 permissions:
   contents: read
