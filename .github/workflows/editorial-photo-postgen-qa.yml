@@ -1,5 +1,8 @@
 name: Editorial Photo post-gen geometry audit
 on:
+  pull_request:
+    paths:
+      - '.github/workflows/editorial-photo-postgen-qa.yml'
   workflow_dispatch:
     inputs:
       job_id:
@@ -17,7 +20,7 @@ jobs:
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      EDITORIAL_JOB_ID: ${{ inputs.job_id }}
+      EDITORIAL_JOB_ID: ${{ inputs.job_id || '0737315d-b1cf-4159-86f8-6708b964ebe9' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -32,7 +35,7 @@ jobs:
           set -euo pipefail
           mkdir -p /tmp/editorial-postqa
           [[ "${EDITORIAL_JOB_ID}" =~ ^[0-9a-f-]{36}$ ]] || { echo "invalid job UUID"; exit 2; }
-          npx wrangler r2 object get "marins-tropicana-editorial-photo/tropicana-park/DSC09818/geometry_locked_model_input.jpg" --file /tmp/editorial-postqa/SOURCE_PERSPECTIVE_LOCK.jpg --remote
+          npx wrangler r2 object get "marins-tropicana-editorial-photo/tropicana-park/DSC09818/optically_locked_model_input.jpg" --file /tmp/editorial-postqa/SOURCE_PERSPECTIVE_LOCK.jpg --remote
           npx wrangler r2 object get "marins-tropicana-editorial-photo/runs/${EDITORIAL_JOB_ID}/editorial_candidate.png" --file /tmp/editorial-postqa/OPENROUTER_EDITORIAL.png --remote
       - name: Quantitative post-generation Perspective Lock QA
         shell: bash
