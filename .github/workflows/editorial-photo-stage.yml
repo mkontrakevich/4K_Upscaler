@@ -70,7 +70,7 @@ jobs:
           python editorial_lens_profile.py correct --source /tmp/editorial/DSC09818_technical_model_input.jpg --raw /tmp/DSC09818.ARW --output /tmp/editorial/DSC09818_optical_only.jpg --report /tmp/editorial/DSC09818_optical_QA.json
       - name: Perspective Lock geometry transform before OpenRouter
         run: |
-          python editorial_geometry.py prepare --source /tmp/editorial/DSC09818_optical_only.jpg --output /tmp/editorial/DSC09818_OPTICAL_PERSPECTIVE_model_input.jpg --report /tmp/editorial/DSC09818_OPTICAL_PERSPECTIVE_QA.json
+          python editorial_geometry.py prepare --source /tmp/editorial/DSC09818_optical_only.jpg --output /tmp/editorial/DSC09818_OPTICAL_PERSPECTIVE_model_input.jpg --report /tmp/editorial/DSC09818_OPTICAL_PERSPECTIVE_QA.json --optical-proof /tmp/editorial/DSC09818_optical_QA.json
           python - <<'PY'
           import json
           from pathlib import Path
