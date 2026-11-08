@@ -36,7 +36,7 @@ async function openrouter(env,path,payload){
  return data;
 }
 const EDIT_PROMPT=[
-"IMAGE-TO-IMAGE EDIT ONLY. The attached photograph is real DSC09818 taken on a narrow rooftop terrace above the bay. Never redesign the scene.",
+"IMAGE-TO-IMAGE EDIT ONLY. The attached real DSC09818 photo has already undergone calibrated 16mm radial lens distortion correction and measured architectural Perspective Lock. Preserve those corrections precisely; never redesign the scene.",
 "Preserve EXACT camera position and framing; same glass and metal railing, same door, bar stools, tables, floor tiles, brick, ceiling beams, plants, true skyline and harbor lights. Do not add furniture, decorative objects, lighting fixtures, railings or new buildings.",
 "Creative direction: premium European hospitality editorial at authentic late-night blue-hour. The real warm interior lighting should reveal brick, flooring, metal and glass textures without clipping; maintain the existing bay view and distant geography. Carefully correct muddy cyan cast, reduce chroma noise, protect natural black sky and glass reflections, refine controlled amber-vs-deep-blue balance.",
 "Do not synthesize a different sky or sunset, city layout, yachts, flowers, or people. Preserve original weather and honest night conditions. No fantasy architecture, no deformed typography or people. Do not repaint blurred areas into invented detail.",
@@ -48,16 +48,27 @@ export class EditorialPhotoWorkflow extends WorkflowEntrypoint{
   const params=typeof event.payload==="string"?JSON.parse(event.payload):event.payload||{};
   const id=String(params.job_id||"");
   const sourceKey=String(params.source_key||"");
-  if(!isId(id)||sourceKey!==ROOT+"geometry_locked_model_input.jpg")throw new NonRetryableError("perspective_locked_input_required");
+  if(!isId(id)||sourceKey!==ROOT+"optically_locked_model_input.jpg")throw new NonRetryableError("lens_plus_perspective_locked_input_required");
   const runRoot=fileKey(id,"");
   const source=await step.do("validate-source",async()=>{
     const o=await object(this.env,sourceKey);
-    const proofObject=await this.env.TROPICANA_EDITORIAL_R2.get(ROOT+"geometry_locked_QA.json");
+    const proofObject=await this.env.TROPICANA_EDITORIAL_R2.get(ROOT+"optically_locked_geometry_QA.json");
+    const opticalObject=await this.env.TROPICANA_EDITORIAL_R2.get(ROOT+"optical_lens_QA.json");
+    if(!opticalObject)throw new NonRetryableError("optical_proof_missing");
+    const opticalProof=await opticalObject.json();
     if(!proofObject)throw new NonRetryableError("geometry_proof_missing");
     const proof=await proofObject.json();
     if(proof.frame!==FRAME||proof.geometry_status!=="PASS"||proof.result_sha256!==o.sha||
        !proof.after||Math.abs(Number(proof.after.median_slope ?? 999))>=0.015)throw new NonRetryableError("geometry_proof_invalid");
+    if(opticalProof.frame!==FRAME||opticalProof.status!=="PROFILE_APPLIED"||opticalProof.output_sha256!==proof.source_sha256||
+       opticalProof.exif?.camera!=="ILCE-7M4"||
+       opticalProof.exif?.lens!=="FE 16-35mm F2.8 GM"||Number(opticalProof.exif?.focal_mm)!==16||
+       opticalProof.raw_sha256!=="1b4344f4b8ca629830254850fbcbaf2931c83c00a158ab87d84e5ee7722046d5"||
+       !Array.isArray(opticalProof.coefficients_abc)||
+       JSON.stringify(opticalProof.coefficients_abc)!==JSON.stringify([0.021,-0.052,-0.003]))
+       throw new NonRetryableError("optical_proof_invalid");
     await this.env.TROPICANA_EDITORIAL_R2.put(runRoot+"geometry_source_QA.json",JSON.stringify(proof),{httpMetadata:{contentType:"application/json"}});
+    await this.env.TROPICANA_EDITORIAL_R2.put(runRoot+"optical_source_QA.json",JSON.stringify(opticalProof),{httpMetadata:{contentType:"application/json"}});
     await this.env.TROPICANA_EDITORIAL_R2.put(runRoot+"source_manifest.json",JSON.stringify({
       project:PROJECT,frame:FRAME,source_key:sourceKey,source_sha256:o.sha,source_bytes:o.size,
       source_mime:o.mime,created_at:new Date().toISOString(),status:"INPUT_VALIDATED",
@@ -110,9 +121,9 @@ export class EditorialPhotoWorkflow extends WorkflowEntrypoint{
    project:PROJECT,frame:FRAME,job_id:id,status:"EDITORIAL_REVIEW",final:false,
    source_key:sourceKey,source_sha256:source.sha256,source_bytes:source.size,
    technical_raw_master:"RAW PerspectiveLock V3 is a geometric reference (full original 6536x4360 not yet transferred to Workflow)",
-   geometry_input:"PASS — measured homography against approved RAW V3; proof preserved in R2",
+   geometry_input:"LENS PTLens 16mm + verified PerspectiveLock V3; SHA-linked optical and geometric proofs in R2",
    candidate_key:candidate.key,candidate_sha256:candidate.sha256,
-   gates:{source_integrity:"PASS",pre_generation_geometry:"PASS",post_generation_geometry:"PENDING_NUMERIC_QA",editorial_visual:"REVIEW",geometry_fidelity:"REVIEW",manual_approval:"REQUIRED",full_resolution_master:"REQUIRED"},
+   gates:{source_integrity:"PASS",optical_distortion:"PROFILE_APPLIED_REQUIRES_REVIEW",pre_generation_geometry:"PASS",post_generation_geometry:"PENDING_NUMERIC_QA",editorial_visual:"REVIEW",geometry_fidelity:"REVIEW",manual_approval:"REQUIRED",full_resolution_master:"REQUIRED"},
    steps:{analysis,candidate,audit},skill:"MARINS Architectural RAW Photo v1.3",
    model:this.env.EDITORIAL_IMAGE_MODEL||MODEL,created_at:new Date().toISOString()
   };
@@ -152,9 +163,9 @@ export async function editorialApi(request,env,url,authorizeSession){
  }
  if(path==="/api/editorial/view"&&method==="GET"){
   const id=url.searchParams.get("job")||"",kind=url.searchParams.get("kind")||"manifest";
-  if(!isId(id)||!["manifest","candidate","analysis","qa","source","technical"].includes(kind))return j({error:"invalid_view_request"},400);
+  if(!isId(id)||!["manifest","candidate","analysis","qa","source","optical","technical"].includes(kind))return j({error:"invalid_view_request"},400);
   const map={manifest:"manifest.json",candidate:"editorial_candidate.png",analysis:"scene_analysis.json",qa:"fidelity_qa.json"};
-  let key=kind==="technical"?ROOT+"geometry_locked_model_input.jpg":fileKey(id,map[kind]||"manifest.json");
+  let key=kind==="technical"?ROOT+"optically_locked_model_input.jpg":kind==="optical"?ROOT+"optical_only_input.jpg":fileKey(id,map[kind]||"manifest.json");
   if(kind==="source"){
     const manifest=await env.TROPICANA_EDITORIAL_R2.get(fileKey(id,"manifest.json"));
     if(!manifest)return j({error:"not_found"},404);
@@ -164,7 +175,7 @@ export async function editorialApi(request,env,url,authorizeSession){
   }
   const o=await env.TROPICANA_EDITORIAL_R2.get(key);
   if(!o)return j({error:"not_found"},404);
-  const media=(kind==="source"||kind==="technical")?"image/jpeg":kind==="candidate"?"image/png":"application/json";
+  const media=(kind==="source"||kind==="technical"||kind==="optical")?"image/jpeg":kind==="candidate"?"image/png":"application/json";
   return new Response(o.body,{headers:{"content-type":media,"cache-control":"private,no-store","x-content-type-options":"nosniff"}});
  }
  return j({error:"editorial_api_not_found"},404);
