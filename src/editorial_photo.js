@@ -160,7 +160,7 @@ export async function editorialApi(request,env,url,authorizeSession){
     if(!manifest)return j({error:"not_found"},404);
     const info=await manifest.json();
     if(!sourceName(info.source_key))return j({error:"invalid_source"},400);
-    key=info.source_key;
+    key=ROOT+"technical_model_input.jpg"; // unrectified RAW-developed original, deliberately shown for before/after
   }
   const o=await env.TROPICANA_EDITORIAL_R2.get(key);
   if(!o)return j({error:"not_found"},404);
