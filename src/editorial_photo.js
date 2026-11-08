@@ -141,11 +141,20 @@ export async function editorialApi(request,env,url,authorizeSession){
  }
  if(path==="/api/editorial/view"&&method==="GET"){
   const id=url.searchParams.get("job")||"",kind=url.searchParams.get("kind")||"manifest";
-  if(!isId(id)||!["manifest","candidate","analysis","qa"].includes(kind))return j({error:"invalid_view_request"},400);
+  if(!isId(id)||!["manifest","candidate","analysis","qa","source","technical"].includes(kind))return j({error:"invalid_view_request"},400);
   const map={manifest:"manifest.json",candidate:"editorial_candidate.png",analysis:"scene_analysis.json",qa:"fidelity_qa.json"};
-  const o=await env.TROPICANA_EDITORIAL_R2.get(fileKey(id,map[kind]));
+  let key=kind==="technical"?ROOT+"technical_review.jpg":fileKey(id,map[kind]||"manifest.json");
+  if(kind==="source"){
+    const manifest=await env.TROPICANA_EDITORIAL_R2.get(fileKey(id,"manifest.json"));
+    if(!manifest)return j({error:"not_found"},404);
+    const info=await manifest.json();
+    if(!sourceName(info.source_key))return j({error:"invalid_source"},400);
+    key=info.source_key;
+  }
+  const o=await env.TROPICANA_EDITORIAL_R2.get(key);
   if(!o)return j({error:"not_found"},404);
-  return new Response(o.body,{headers:{"content-type":kind==="candidate"?"image/png":"application/json","cache-control":"private,no-store","x-content-type-options":"nosniff"}});
+  const media=(kind==="source"||kind==="technical")?"image/jpeg":kind==="candidate"?"image/png":"application/json";
+  return new Response(o.body,{headers:{"content-type":media,"cache-control":"private,no-store","x-content-type-options":"nosniff"}});
  }
  return j({error:"editorial_api_not_found"},404);
 }
