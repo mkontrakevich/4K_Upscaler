@@ -121,6 +121,13 @@ export async function editorialApi(request,env,url,authorizeSession){
   const limitKey="editorial:upload:"+session.id;
   const usage=Number(await env.SESSION_STATE_R7.get(limitKey)||0);
   if(usage>=2)return j({error:"upload_session_limit"},429);
+  const ip=String(request.headers.get("CF-Connecting-IP")||"unknown");
+  const hour=new Date().toISOString().slice(0,13);
+  const hashedIp=(await sha256(new TextEncoder().encode(ip))).slice(0,20);
+  const ipKey="editorial:upload:ip:"+hour+":"+hashedIp;
+  const globalKey="editorial:upload:global:"+hour;
+  const [ipCount,globalCount]=await Promise.all([env.SESSION_STATE_R7.get(ipKey),env.SESSION_STATE_R7.get(globalKey)]);
+  if(Number(ipCount||0)>=5||Number(globalCount||0)>=30)return j({error:"editorial_upload_hourly_limit"},429);
   let form;try{form=await request.formData()}catch{return j({error:"invalid_form"},400)}
   const file=form.get("file");
   if(!file||typeof file.arrayBuffer!=="function"||file.size<10000||file.size>MAX_SOURCE)return j({error:"image_required_max_8mb"},400);
@@ -129,6 +136,7 @@ export async function editorialApi(request,env,url,authorizeSession){
   const key=ROOT+"uploads/"+session.id+"/"+crypto.randomUUID()+"."+(file.type==="image/png"?"png":file.type==="image/webp"?"webp":"jpg");
   await env.TROPICANA_EDITORIAL_R2.put(key,bytes,{httpMetadata:{contentType:file.type},customMetadata:{sha256:sha,project:PROJECT,frame:FRAME}});
   await env.SESSION_STATE_R7.put(limitKey,String(usage+1),{expirationTtl:3600});
+  await Promise.all([env.SESSION_STATE_R7.put(ipKey,String(Number(ipCount||0)+1),{expirationTtl:7200}),env.SESSION_STATE_R7.put(globalKey,String(Number(globalCount||0)+1),{expirationTtl:7200})]);
   return j({ok:true,project:PROJECT,frame:FRAME,source_key:key,sha256:sha,bytes:bytes.byteLength,workflow_control:"manual",message:"Input stored. Paid editorial workflow requires authorized management launch."},201);
  }
  if(path==="/api/editorial/view"&&method==="GET"){
