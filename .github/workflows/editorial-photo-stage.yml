@@ -19,7 +19,7 @@ jobs:
       - name: Install RAW tools
         run: |
           npm install
-          python -m pip install --quiet rawpy pillow numpy opencv-python-headless
+          python -m pip install --quiet rawpy pillow numpy opencv-python-headless tifffile
       - name: Retrieve authentic isolated Tropicana ARW
         run: |
           set -euo pipefail
@@ -61,13 +61,18 @@ jobs:
           PY
           python /tmp/create_preview.py
       # One-shot preview: full 16-bit native RAW master remains unchanged.
+      - name: Identify Sony lens and apply real PTLens distortion map
+        run: |
+          python editorial_lens_profile.py correct --source /tmp/editorial/DSC09818_technical_model_input.jpg --raw /tmp/DSC09818.ARW --output /tmp/editorial/DSC09818_optical_only.jpg --report /tmp/editorial/DSC09818_optical_QA.json
       - name: Perspective Lock geometry transform before OpenRouter
         run: |
-          python editorial_geometry.py prepare --source /tmp/editorial/DSC09818_technical_model_input.jpg --output /tmp/editorial/DSC09818_PERSPECTIVE_LOCK_V3_model_input.jpg --report /tmp/editorial/DSC09818_PERSPECTIVE_LOCK_QA.json
+          python editorial_geometry.py prepare --source /tmp/editorial/DSC09818_optical_only.jpg --output /tmp/editorial/DSC09818_OPTICAL_PERSPECTIVE_model_input.jpg --report /tmp/editorial/DSC09818_OPTICAL_PERSPECTIVE_QA.json --optical-proof /tmp/editorial/DSC09818_optical_QA.json
           python - <<'PY'
           import json
           from pathlib import Path
-          q=json.loads(Path('/tmp/editorial/DSC09818_PERSPECTIVE_LOCK_QA.json').read_text())
+          q=json.loads(Path('/tmp/editorial/DSC09818_OPTICAL_PERSPECTIVE_QA.json').read_text())
+          lens=json.loads(Path('/tmp/editorial/DSC09818_optical_QA.json').read_text())
+          assert lens['status']=='PROFILE_APPLIED' and lens['output_sha256']==q['source_sha256'],(lens,q)
           assert q['geometry_status']=='PASS',q
           assert abs(q['after']['median_slope'])<0.015,q
           print('PerspectiveLock source QA: PASS')
@@ -76,8 +81,12 @@ jobs:
         run: |
           npx wrangler r2 object put "marins-tropicana-editorial-photo/tropicana-park/DSC09818/technical_model_input.jpg" --file /tmp/editorial/DSC09818_technical_model_input.jpg --remote --content-type image/jpeg
           npx wrangler r2 object put "marins-tropicana-editorial-photo/tropicana-park/DSC09818/technical_review.jpg" --file /tmp/editorial/DSC09818_technical_review.jpg --remote --content-type image/jpeg
-          npx wrangler r2 object put "marins-tropicana-editorial-photo/tropicana-park/DSC09818/geometry_locked_model_input.jpg" --file /tmp/editorial/DSC09818_PERSPECTIVE_LOCK_V3_model_input.jpg --remote --content-type image/jpeg
-          npx wrangler r2 object put "marins-tropicana-editorial-photo/tropicana-park/DSC09818/geometry_locked_QA.json" --file /tmp/editorial/DSC09818_PERSPECTIVE_LOCK_QA.json --remote --content-type application/json
+          # Previously approved pre-optics geometry-only result is immutable; no write here.
+          # Legacy geometry key retained for comparison; do NOT overwrite old version.
+          npx wrangler r2 object put "marins-tropicana-editorial-photo/tropicana-park/DSC09818/optical_only_input.jpg" --file /tmp/editorial/DSC09818_optical_only.jpg --remote --content-type image/jpeg
+          npx wrangler r2 object put "marins-tropicana-editorial-photo/tropicana-park/DSC09818/optical_lens_QA.json" --file /tmp/editorial/DSC09818_optical_QA.json --remote --content-type application/json
+          npx wrangler r2 object put "marins-tropicana-editorial-photo/tropicana-park/DSC09818/optically_locked_model_input.jpg" --file /tmp/editorial/DSC09818_OPTICAL_PERSPECTIVE_model_input.jpg --remote --content-type image/jpeg
+          npx wrangler r2 object put "marins-tropicana-editorial-photo/tropicana-park/DSC09818/optically_locked_geometry_QA.json" --file /tmp/editorial/DSC09818_OPTICAL_PERSPECTIVE_QA.json --remote --content-type application/json
       - name: QA proof
         uses: actions/upload-artifact@v4
         with:

@@ -35,7 +35,10 @@ def verticals(im):
    if abs(dy)>95 and abs(dx/dy)<.25:sl.append(float(dx/dy))
  return {"count":len(sl),"median_slope":float(np.median(sl)) if sl else None,"median_abs":float(np.median(np.abs(sl))) if sl else None}
 
-def prepare(src_path,out_path,report_path):
+def prepare(src_path,out_path,report_path,optical_proof_path):
+ if not optical_proof_path:raise RuntimeError('optical_proof_required_before_perspective')
+ proof=json.loads(pathlib.Path(optical_proof_path).read_text(encoding='utf8'))
+ if proof.get('status')!='PROFILE_APPLIED' or proof.get('output_sha256')!=sha(src_path):raise RuntimeError('optical_proof_invalid')
  src=read(src_path);h,w=src.shape[:2]
  S=np.diag([w/W0,w/W0,1.0]);H=S@M0@np.linalg.inv(S)
  lock=cv2.warpPerspective(src,H,(w,h),flags=cv2.INTER_LANCZOS4,borderMode=cv2.BORDER_CONSTANT)
@@ -44,7 +47,7 @@ def prepare(src_path,out_path,report_path):
  ok=(valid>.997 and before["count"]>=12 and after["count"]>=12 and after["median_slope"] is not None and abs(after["median_slope"])<.015)
  if not ok:raise RuntimeError("GEOMETRY_HOLD:"+json.dumps({"before":before,"after":after,"valid":valid}))
  if not cv2.imwrite(out_path,lock,[cv2.IMWRITE_JPEG_QUALITY,95]):raise RuntimeError("write_failed")
- obj={"project":"tropicana-park","frame":FRAME,"profile":PROFILE,"geometry_status":"PASS","reference":"approved RAW PerspectiveLock V3","reference_inliers":"732/771 SIFT+USAC_MAGSAC","source_sha256":sha(src_path),"result_sha256":sha(out_path),"source_dimensions":[w,h],"output_dimensions":[w,h],"homography":H.tolist(),"valid_fraction":valid,"before":before,"after":after,"lens":"lens-profile correction omitted because verified profile unavailable","rails":"preserve natural perspective convergence"}
+ obj={"project":"tropicana-park","frame":FRAME,"profile":PROFILE,"geometry_status":"PASS","reference":"approved RAW PerspectiveLock V3","reference_inliers":"732/771 SIFT+USAC_MAGSAC","source_sha256":sha(src_path),"result_sha256":sha(out_path),"source_dimensions":[w,h],"output_dimensions":[w,h],"homography":H.tolist(),"valid_fraction":valid,"before":before,"after":after,"lens":{"status":"PRE_CORRECTED","optical_qa_path":optical_proof_path,"profile":proof["profile"],"source_sha256":proof["source_sha256"],"output_sha256":proof["output_sha256"],"calibration_type":proof["calibration_type"]},"rails":"preserve natural perspective convergence"}
  pathlib.Path(report_path).write_text(json.dumps(obj,ensure_ascii=False,indent=2))
  print(json.dumps(obj,ensure_ascii=False))
 
@@ -75,6 +78,6 @@ def compare(reference,candidate,out_path):
  return 0 if status=="PASS" else 2
 
 if __name__=="__main__":
- p=argparse.ArgumentParser();p.add_argument("command",choices=["prepare","compare"]);p.add_argument("--source");p.add_argument("--output");p.add_argument("--report",required=True);p.add_argument("--reference");p.add_argument("--candidate");a=p.parse_args()
- if a.command=="prepare":prepare(a.source,a.output,a.report)
+ p=argparse.ArgumentParser();p.add_argument("command",choices=["prepare","compare"]);p.add_argument("--source");p.add_argument("--output");p.add_argument("--report",required=True);p.add_argument("--optical-proof");p.add_argument("--reference");p.add_argument("--candidate");a=p.parse_args()
+ if a.command=="prepare":prepare(a.source,a.output,a.report,a.optical_proof)
  else:sys.exit(compare(a.reference,a.candidate,a.report))
