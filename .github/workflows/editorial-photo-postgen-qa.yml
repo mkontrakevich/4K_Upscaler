@@ -1,0 +1,56 @@
+name: Editorial Photo post-gen geometry audit
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/editorial-photo-postgen-qa.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  post-gen-geometry:
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == 'mkontrakevich/4K_Upscaler'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Setup geometry tools
+        run: |
+          npm ci || npm install
+          python -m pip install --quiet numpy opencv-python-headless
+      - name: Download pixel-rectified source and actual OpenRouter result
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/editorial-postqa
+          npx wrangler r2 object get "marins-tropicana-editorial-photo/tropicana-park/DSC09818/geometry_locked_model_input.jpg" --file /tmp/editorial-postqa/SOURCE_PERSPECTIVE_LOCK.jpg --remote
+          npx wrangler r2 object get "marins-tropicana-editorial-photo/runs/5ac765bf-e2da-4366-9832-71019ab136c7/editorial_candidate.png" --file /tmp/editorial-postqa/OPENROUTER_EDITORIAL.png --remote
+      - name: Quantitative post-generation Perspective Lock QA
+        shell: bash
+        run: |
+          set +e
+          python editorial_geometry.py compare --reference /tmp/editorial-postqa/SOURCE_PERSPECTIVE_LOCK.jpg --candidate /tmp/editorial-postqa/OPENROUTER_EDITORIAL.png --report /tmp/editorial-postqa/POST_GENERATIVE_GEOMETRY_QA.json
+          EXIT_CODE=$?
+          echo "GEOMETRY_CHECK_EXIT=$EXIT_CODE" >> "$GITHUB_ENV"
+          if [ -f /tmp/editorial-postqa/POST_GENERATIVE_GEOMETRY_QA.json ]; then
+            cat /tmp/editorial-postqa/POST_GENERATIVE_GEOMETRY_QA.json
+            npx wrangler r2 object put "marins-tropicana-editorial-photo/runs/5ac765bf-e2da-4366-9832-71019ab136c7/post_generation_geometry_QA.json" --file /tmp/editorial-postqa/POST_GENERATIVE_GEOMETRY_QA.json --remote --content-type application/json
+          fi
+          exit 0
+      - name: Upload source/candidate evidence for human art-direction
+        uses: actions/upload-artifact@v4
+        with:
+          name: editorial-dsc09818-postgen-perspective-qa
+          path: /tmp/editorial-postqa/
+          retention-days: 14
+      - name: Hold publication when geometry changes
+        shell: bash
+        run: |
+          if [ "${GEOMETRY_CHECK_EXIT:-2}" != "0" ]; then
+            echo "::error::OPENROUTER_CANDIDATE_GEOMETRY_HOLD — do not approve or export as FINAL"
+            exit 2
+          fi
