@@ -24,6 +24,19 @@ jobs:
         run: |
           node --check src/worker.js
           node --check src/editorial_photo.js
+      - name: Validate geometry module
+        run: |
+          python -m py_compile editorial_geometry.py
+          python - <<'PY'
+          import ast
+          from pathlib import Path
+          p=Path('editorial_geometry.py').read_text()
+          assert 'USAC_MAGSAC' in p
+          assert 'FRAME="DSC09818"' in p
+          assert 'geometry_status' in p
+          assert '.015' in p
+          assert 'perspective' in Path('src/editorial_photo.js').read_text().lower()
+          PY
       - name: Validate architecture and safety
         run: |
           python - <<'PY'
@@ -35,6 +48,8 @@ jobs:
           s=Path('src/editorial_photo.js').read_text()
           assert 'input_references' in s and '/images' in s
           assert 'EDITORIAL_REVIEW' in s and 'final:false' in s
+          assert 'perspective_locked_input_required' in s
+          assert 'geometry_proof_missing' in s
           assert 'WorkflowEntrypoint' in s
           assert 'NonRetryableError' in s and 'retries:{limit:0}' not in s
           assert 'TROPICANA_EDITORIAL_R2' in s

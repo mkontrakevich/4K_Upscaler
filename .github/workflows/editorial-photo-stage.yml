@@ -5,7 +5,7 @@ permissions:
   contents: read
 jobs:
   stage-dsc09818:
-    if: github.event.pull_request.head.repo.full_name == 'mkontrakevich/4K_Upscaler'
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == 'mkontrakevich/4K_Upscaler'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
@@ -60,10 +60,24 @@ jobs:
           print('Prepared RAW-derived source',image.size)
           PY
           python /tmp/create_preview.py
+      # One-shot preview: full 16-bit native RAW master remains unchanged.
+      - name: Perspective Lock geometry transform before OpenRouter
+        run: |
+          python editorial_geometry.py prepare --source /tmp/editorial/DSC09818_technical_model_input.jpg --output /tmp/editorial/DSC09818_PERSPECTIVE_LOCK_V3_model_input.jpg --report /tmp/editorial/DSC09818_PERSPECTIVE_LOCK_QA.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          q=json.loads(Path('/tmp/editorial/DSC09818_PERSPECTIVE_LOCK_QA.json').read_text())
+          assert q['geometry_status']=='PASS',q
+          assert abs(q['after']['median_slope'])<0.015,q
+          print('PerspectiveLock source QA: PASS')
+          PY
       - name: Isolated R2 upload (never MG4K general storage)
         run: |
           npx wrangler r2 object put "marins-tropicana-editorial-photo/tropicana-park/DSC09818/technical_model_input.jpg" --file /tmp/editorial/DSC09818_technical_model_input.jpg --remote --content-type image/jpeg
           npx wrangler r2 object put "marins-tropicana-editorial-photo/tropicana-park/DSC09818/technical_review.jpg" --file /tmp/editorial/DSC09818_technical_review.jpg --remote --content-type image/jpeg
+          npx wrangler r2 object put "marins-tropicana-editorial-photo/tropicana-park/DSC09818/geometry_locked_model_input.jpg" --file /tmp/editorial/DSC09818_PERSPECTIVE_LOCK_V3_model_input.jpg --remote --content-type image/jpeg
+          npx wrangler r2 object put "marins-tropicana-editorial-photo/tropicana-park/DSC09818/geometry_locked_QA.json" --file /tmp/editorial/DSC09818_PERSPECTIVE_LOCK_QA.json --remote --content-type application/json
       - name: QA proof
         uses: actions/upload-artifact@v4
         with:
