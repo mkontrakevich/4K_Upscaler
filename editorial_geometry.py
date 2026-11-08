@@ -30,7 +30,7 @@ def verticals(im):
  lines=cv2.HoughLinesP(cv2.Canny(lab,50,130),1,np.pi/1800,50,minLineLength=95,maxLineGap=35)
  sl=[]
  if lines is not None:
-  for x1,y1,x2,y2 in lines[:,0]:
+  for x1,y1,x2,y2 in lines.reshape(-1,4):
    dy=y2-y1;dx=x2-x1
    if abs(dy)>95 and abs(dx/dy)<.25:sl.append(float(dx/dy))
  return {"count":len(sl),"median_slope":float(np.median(sl)) if sl else None,"median_abs":float(np.median(np.abs(sl))) if sl else None}
