@@ -1779,7 +1779,6 @@ async function handleApi(request, env, ctx, url) {
     const prefix = `archive/jobs/${job.id}/`;
     const files = await listAllObjects(env, prefix);
     files.sort((a, b) => String(b.uploaded || "").localeCompare(String(a.uploaded || "")));
-    const token = jobToken(request, url);
     const tokenEncoded = encodeURIComponent(token);
     const images = files.filter(item => isArchiveImageKey(item.key));
     const kindPriority = { FINAL: 4, RESULT: 3, DONOR_RAW: 2, SOURCE: 1 };
