@@ -44,7 +44,7 @@ const EDIT_PROMPT=[
 const AUDIT_PROMPT="Compare the provided REAL source photo (first image) with the EDITORIAL candidate (second). Respond as JSON object with keys changed_architecture (boolean), changed_furniture (boolean), changed_city_view (boolean), changed_geometry (boolean), exposure_quality (string), editorial_quality (string), issues (array strings), recommendation (PASS or HOLD). Be strict; anything unverified should be HOLD. Ignore prettier lighting and assess documentary identity.";
 export class EditorialPhotoWorkflow extends WorkflowEntrypoint{
  async run(event,step){
-  const params=event.payload||{};
+  const params=typeof event.payload==="string"?JSON.parse(event.payload):event.payload||{};
   const id=String(params.job_id||"");
   const sourceKey=String(params.source_key||"");
   if(!isId(id)||!sourceName(sourceKey))throw new Error("invalid_editorial_job_or_source");
