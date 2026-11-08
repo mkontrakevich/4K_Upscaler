@@ -72,7 +72,7 @@ export class EditorialPhotoWorkflow extends WorkflowEntrypoint{
     await this.env.TROPICANA_EDITORIAL_R2.put(runRoot+"source_manifest.json",JSON.stringify({
       project:PROJECT,frame:FRAME,source_key:sourceKey,source_sha256:o.sha,source_bytes:o.size,
       source_mime:o.mime,created_at:new Date().toISOString(),status:"INPUT_VALIDATED",
-      skill:"MARINS-Architectural-RAW-Photo-v1.3",geometry_lock:"HARD",fidelity_lock:"HARD"
+      skill:"MARINS-Architectural-RAW-Photo-v1.7",geometry_lock:"HARD",fidelity_lock:"HARD"
     }),{httpMetadata:{contentType:"application/json"}});
     return {sha256:o.sha,size:o.size,mime:o.mime};
   });
@@ -124,7 +124,7 @@ export class EditorialPhotoWorkflow extends WorkflowEntrypoint{
    geometry_input:"LENS PTLens 16mm + verified PerspectiveLock V3; SHA-linked optical and geometric proofs in R2",
    candidate_key:candidate.key,candidate_sha256:candidate.sha256,
    gates:{source_integrity:"PASS",optical_distortion:"PROFILE_APPLIED_REQUIRES_REVIEW",pre_generation_geometry:"PASS",post_generation_geometry:"PENDING_NUMERIC_QA",editorial_visual:"REVIEW",geometry_fidelity:"REVIEW",manual_approval:"REQUIRED",full_resolution_master:"REQUIRED"},
-   steps:{analysis,candidate,audit},skill:"MARINS Architectural RAW Photo v1.3",
+   steps:{analysis,candidate,audit},skill:"MARINS Architectural RAW Photo v1.7",
    model:this.env.EDITORIAL_IMAGE_MODEL||MODEL,created_at:new Date().toISOString()
   };
   await step.do("save-qa-manifest",async()=>{await this.env.TROPICANA_EDITORIAL_R2.put(runRoot+"manifest.json",JSON.stringify(manifest),{httpMetadata:{contentType:"application/json"}});return {stored:true}});
@@ -134,7 +134,7 @@ export class EditorialPhotoWorkflow extends WorkflowEntrypoint{
 export async function editorialApi(request,env,url,authorizeSession){
  const path=url.pathname,method=request.method.toUpperCase();
  if(path==="/api/editorial/health"&&method==="GET"){
-  return j({ok:true,project:PROJECT,frame:FRAME,module:"Editorial Photo",storage_isolated:!!env.TROPICANA_EDITORIAL_R2,openrouter_configured:!!env.OPENROUTER_API_KEY,job_control:"Cloudflare Workflows API only",skill:"v1.3",image_model:env.EDITORIAL_IMAGE_MODEL||MODEL,workflow:"mg4k-tropicana-editorial"});
+  return j({ok:true,project:PROJECT,frame:FRAME,module:"Editorial Photo",storage_isolated:!!env.TROPICANA_EDITORIAL_R2,openrouter_configured:!!env.OPENROUTER_API_KEY,job_control:"Cloudflare Workflows API only",skill:"v1.7",image_model:env.EDITORIAL_IMAGE_MODEL||MODEL,workflow:"mg4k-tropicana-editorial"});
  }
  if(path==="/api/editorial/upload"&&method==="POST"){
   const session=await authorizeSession(request,url,env);
@@ -175,6 +175,20 @@ export async function editorialApi(request,env,url,authorizeSession){
   }
   const o=await env.TROPICANA_EDITORIAL_R2.get(key);
   if(!o)return j({error:"not_found"},404);
+  if(kind==="manifest"){
+    const manifest=await o.json();
+    manifest.active_skill_version="v1.7";
+    // Historical persisted manifest is immutable; append a verified numeric QA view.
+    const latest=await env.TROPICANA_EDITORIAL_R2.get(fileKey(id,"post_generation_geometry_QA.json"));
+    if(latest){
+      const qa=await latest.json();
+      if(qa.source_sha256===manifest.source_sha256&&qa.candidate_sha256===manifest.candidate_sha256){
+        manifest.post_generation_geometry_QA=qa;
+        manifest.gates={...manifest.gates,post_generation_geometry:qa.status==="PASS"?"PASS":"HOLD"};
+      }
+    }
+    return j(manifest);
+  }
   const media=(kind==="source"||kind==="technical"||kind==="optical")?"image/jpeg":kind==="candidate"?"image/png":"application/json";
   return new Response(o.body,{headers:{"content-type":media,"cache-control":"private,no-store","x-content-type-options":"nosniff"}});
  }
