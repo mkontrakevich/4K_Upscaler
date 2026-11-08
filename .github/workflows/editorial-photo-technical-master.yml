@@ -1,9 +1,5 @@
 name: Editorial DSC09818 Technical RAW Master
 on:
-  pull_request:
-    paths:
-      - 'scripts/editorial_dsc09818_technical_master.py'
-      - '.github/workflows/editorial-photo-technical-master.yml'
   workflow_dispatch:
 permissions:
   contents: read
