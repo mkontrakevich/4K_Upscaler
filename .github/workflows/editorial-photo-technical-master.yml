@@ -1,0 +1,80 @@
+name: Editorial DSC09818 Technical RAW Master
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  raw-technical-v8:
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == 'mkontrakevich/4K_Upscaler'
+    runs-on: ubuntu-latest
+    timeout-minutes: 28
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      TROPICANA_TECH_DIR: /tmp/tropicana-technical-v8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install reproducible RAW processing dependencies
+        run: |
+          npm ci || npm install
+          python -m pip install --quiet numpy opencv-python-headless tifffile rawpy
+          python -m py_compile scripts/editorial_dsc09818_technical_master.py
+      - name: Download original protected Sony ARW only
+        run: |
+          set -euo pipefail
+          mkdir -p "$TROPICANA_TECH_DIR"
+          test -n "$CLOUDFLARE_API_TOKEN" && test -n "$CLOUDFLARE_ACCOUNT_ID"
+          npx wrangler r2 object get "marins-tropicana-photo-originals/originals/DSC09818.ARW" --file "$TROPICANA_TECH_DIR/DSC09818.ARW" --remote
+          python - <<'PY'
+          import hashlib,os
+          p=os.environ['TROPICANA_TECH_DIR']+'/DSC09818.ARW'
+          with open(p,'rb') as f: d=hashlib.sha256(f.read()).hexdigest()
+          assert d=='1b4344f4b8ca629830254850fbcbaf2931c83c00a158ab87d84e5ee7722046d5'
+          print('Original RAW integrity:',d)
+          PY
+      - name: Build optical+PerspectiveLock 16bit linear / single RAW tone / clean master
+        run: python scripts/editorial_dsc09818_technical_master.py
+      - name: Verify deliverables, full resolution, source lineage and HDR truth
+        run: |
+          python - <<'PY'
+          import json,os,tifffile,hashlib
+          from pathlib import Path
+          B=Path(os.environ['TROPICANA_TECH_DIR'])
+          q=json.loads((B/'DSC09818_TECH_QA.json').read_text())
+          assert q['technical_status']=='REVIEW' and not q['editorial_process_allowed']
+          assert q['source_sha256']=='1b4344f4b8ca629830254850fbcbaf2931c83c00a158ab87d84e5ee7722046d5'
+          assert q['valid_fraction']>.999 and q['HDR_bracketed'] is False
+          for p in ('DSC09818_TECH_LINEAR16.tif','DSC09818_TECH_CLEAN16.tif'):
+            f=B/p
+            with tifffile.TiffFile(f) as t:
+              page=t.pages[0];assert page.shape==(4360,6536,3) and page.dtype.name=='uint16'
+            assert f.stat().st_size>50_000_000,p
+          with open(B/'DSC09818_TECH_CLEAN16.tif','rb') as f:
+            h=hashlib.sha256()
+            for blk in iter(lambda:f.read(8*1024*1024),b''):h.update(blk)
+          assert h.hexdigest()==q['clean16_sha256']
+          print('TECHNICAL_QA:PASS; fullsize16; source integrity PASS; HDR NOT multi-shot; status REVIEW')
+          PY
+      - name: Publish immutable V8 to isolated Editorial R2, not global Upscaler
+        run: |
+          set -euo pipefail
+          ROOT="marins-tropicana-editorial-photo/tropicana-park/DSC09818/technical-v8"
+          npx wrangler r2 object put "$ROOT/DSC09818_TECH_LINEAR16.tif" --file "$TROPICANA_TECH_DIR/DSC09818_TECH_LINEAR16.tif" --remote --content-type image/tiff
+          npx wrangler r2 object put "$ROOT/DSC09818_TECH_CLEAN16.tif" --file "$TROPICANA_TECH_DIR/DSC09818_TECH_CLEAN16.tif" --remote --content-type image/tiff
+          npx wrangler r2 object put "$ROOT/DSC09818_TECH_NEUTRAL.jpg" --file "$TROPICANA_TECH_DIR/DSC09818_TECH_NEUTRAL.jpg" --remote --content-type image/jpeg
+          npx wrangler r2 object put "$ROOT/DSC09818_TECH_HDR_TEST.jpg" --file "$TROPICANA_TECH_DIR/DSC09818_TECH_HDR_TEST.jpg" --remote --content-type image/jpeg
+          npx wrangler r2 object put "$ROOT/DSC09818_TECH_CLEAN.jpg" --file "$TROPICANA_TECH_DIR/DSC09818_TECH_CLEAN.jpg" --remote --content-type image/jpeg
+          npx wrangler r2 object put "$ROOT/DSC09818_TECH_QA.json" --file "$TROPICANA_TECH_DIR/DSC09818_TECH_QA.json" --remote --content-type application/json
+      - name: Save small evidence for independent review
+        uses: actions/upload-artifact@v4
+        with:
+          name: tropicana-DSC09818-technical-v8-QA
+          path: |
+            /tmp/tropicana-technical-v8/DSC09818_TECH_QA.json
+            /tmp/tropicana-technical-v8/DSC09818_TECH_NEUTRAL.jpg
+            /tmp/tropicana-technical-v8/DSC09818_TECH_HDR_TEST.jpg
+            /tmp/tropicana-technical-v8/DSC09818_TECH_CLEAN.jpg
+          retention-days: 14

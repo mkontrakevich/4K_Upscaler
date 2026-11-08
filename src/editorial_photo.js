@@ -48,6 +48,20 @@ export class EditorialPhotoWorkflow extends WorkflowEntrypoint{
   const params=typeof event.payload==="string"?JSON.parse(event.payload):event.payload||{};
   const id=String(params.job_id||"");
   const sourceKey=String(params.source_key||"");
+  // HARD STOP: No more OpenRouter charges or images until a HUMAN accepts the
+  // full-resolution 16-bit technical master; approval must bind exact source SHA.
+  const qaObject=await this.env.TROPICANA_EDITORIAL_R2.get(ROOT+"technical-v8/DSC09818_TECH_QA.json");
+  if(!qaObject)throw new NonRetryableError("technical_master_v8_missing");
+  const masterQA=await qaObject.json();
+  const approvalObject=await this.env.TROPICANA_EDITORIAL_R2.get(ROOT+"technical-v8/editorial-approval.json");
+  if(!approvalObject)throw new NonRetryableError("technical_master_human_approval_required");
+  const approval=await approvalObject.json();
+  if(approval.approved!==true||
+     approval.frame!=="DSC09818"||
+     approval.original_raw_sha256!==masterQA.source_sha256||
+     approval.master_sha256!==masterQA.clean16_sha256||
+     masterQA.clean16_size<50000000)
+     throw new NonRetryableError("technical_master_approval_or_sha_invalid");
   if(!isId(id)||sourceKey!==ROOT+"optically_locked_model_input.jpg")throw new NonRetryableError("lens_plus_perspective_locked_input_required");
   const runRoot=fileKey(id,"");
   const source=await step.do("validate-source",async()=>{
@@ -163,9 +177,11 @@ export async function editorialApi(request,env,url,authorizeSession){
  }
  if(path==="/api/editorial/view"&&method==="GET"){
   const id=url.searchParams.get("job")||"",kind=url.searchParams.get("kind")||"manifest";
-  if(!isId(id)||!["manifest","candidate","analysis","qa","source","optical","technical"].includes(kind))return j({error:"invalid_view_request"},400);
+  if(!isId(id)||!["manifest","candidate","analysis","qa","source","optical","technical","tech_clean","tech_neutral","tech_hdr","tech_qa"].includes(kind))return j({error:"invalid_view_request"},400);
   const map={manifest:"manifest.json",candidate:"editorial_candidate.png",analysis:"scene_analysis.json",qa:"fidelity_qa.json"};
   let key=kind==="technical"?ROOT+"optically_locked_model_input.jpg":kind==="optical"?ROOT+"optical_only_input.jpg":fileKey(id,map[kind]||"manifest.json");
+  const technicalViews={tech_clean:"DSC09818_TECH_CLEAN.jpg",tech_neutral:"DSC09818_TECH_NEUTRAL.jpg",tech_hdr:"DSC09818_TECH_HDR_TEST.jpg",tech_qa:"DSC09818_TECH_QA.json"};
+  if(technicalViews[kind])key=ROOT+"technical-v8/"+technicalViews[kind];
   if(kind==="source"){
     const manifest=await env.TROPICANA_EDITORIAL_R2.get(fileKey(id,"manifest.json"));
     if(!manifest)return j({error:"not_found"},404);
@@ -177,7 +193,9 @@ export async function editorialApi(request,env,url,authorizeSession){
   if(!o)return j({error:"not_found"},404);
   if(kind==="manifest"){
     const manifest=await o.json();
-    manifest.active_skill_version="v1.7";
+    manifest.active_skill_version="v1.8";
+    manifest.technical_master_version="V8";
+    manifest.technical_master_art_gate="HOLD_UNTIL_USER_APPROVAL";
     // Historical persisted manifest is immutable; append a verified numeric QA view.
     const latest=await env.TROPICANA_EDITORIAL_R2.get(fileKey(id,"post_generation_geometry_QA.json"));
     if(latest){
@@ -189,7 +207,7 @@ export async function editorialApi(request,env,url,authorizeSession){
     }
     return j(manifest);
   }
-  const media=(kind==="source"||kind==="technical"||kind==="optical")?"image/jpeg":kind==="candidate"?"image/png":"application/json";
+  const media=(kind==="source"||kind==="technical"||kind==="optical"||kind==="tech_clean"||kind==="tech_neutral"||kind==="tech_hdr")?"image/jpeg":kind==="candidate"?"image/png":"application/json";
   return new Response(o.body,{headers:{"content-type":media,"cache-control":"private,no-store","x-content-type-options":"nosniff"}});
  }
  return j({error:"editorial_api_not_found"},404);
