@@ -1,0 +1,49 @@
+name: Editorial Photo CI
+on:
+  pull_request:
+    paths:
+      - 'src/editorial_photo.js'
+      - 'src/worker.js'
+      - 'site/editorial-photo.html'
+      - 'site/index.html'
+      - 'wrangler.jsonc'
+      - '.github/workflows/editorial-photo-ci.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  editorial-gates:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate JS modules
+        run: |
+          node --check src/worker.js
+          node --check src/editorial_photo.js
+      - name: Validate architecture and safety
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import json
+          c=json.loads(Path('wrangler.jsonc').read_text())
+          assert any(x.get('bucket_name')=='marins-tropicana-editorial-photo' and x.get('binding')=='TROPICANA_EDITORIAL_R2' for x in c['r2_buckets'])
+          assert any(x.get('name')=='mg4k-tropicana-editorial' for x in c['workflows'])
+          s=Path('src/editorial_photo.js').read_text()
+          assert 'input_references' in s and '/images' in s
+          assert 'EDITORIAL_REVIEW' in s and 'final:false' in s
+          assert 'WorkflowEntrypoint' in s
+          assert 'retries:{limit:0}' in s
+          assert 'TROPICANA_EDITORIAL_R2' in s
+          ui=Path('site/editorial-photo.html').read_text()
+          assert 'Editorial Photo' in ui and '/api/editorial' in ui
+          assert 'editorial-photo.html' in Path('site/index.html').read_text()
+          print('Editorial Photo contract: PASSED')
+          PY
+      - name: Build Worker without deployment
+        run: |
+          npm ci || npm install
+          npx wrangler deploy --dry-run --outdir /tmp/mg4k-editorial-dry-run --config wrangler.jsonc

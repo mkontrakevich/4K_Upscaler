@@ -1,4 +1,6 @@
 import { Container, ContainerProxy, getContainer } from "@cloudflare/containers";
+import { editorialApi, EditorialPhotoWorkflow } from "./editorial_photo.js";
+export { EditorialPhotoWorkflow };
 import { promptAssistantEnabled, promptAssistantModel, sanitizeAssistantContext, runPromptAssistant } from "./prompt_assistant.js";
 
 export { ContainerProxy };
@@ -1311,6 +1313,7 @@ MG4KProcessor.outboundByHost = {
 async function handleApi(request, env, ctx, url) {
   const path = url.pathname;
   const method = request.method.toUpperCase();
+  if (path.startsWith("/api/editorial/")) return editorialApi(request, env, url, authorizeSession);
 
   if (path === "/api/health" && method === "GET") {
     return json({
@@ -1776,7 +1779,6 @@ async function handleApi(request, env, ctx, url) {
     const prefix = `archive/jobs/${job.id}/`;
     const files = await listAllObjects(env, prefix);
     files.sort((a, b) => String(b.uploaded || "").localeCompare(String(a.uploaded || "")));
-    const token = jobToken(request, url);
     const tokenEncoded = encodeURIComponent(token);
     const images = files.filter(item => isArchiveImageKey(item.key));
     const kindPriority = { FINAL: 4, RESULT: 3, DONOR_RAW: 2, SOURCE: 1 };

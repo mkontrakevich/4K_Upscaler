@@ -111,6 +111,7 @@ jobs:
         run: |
           python - <<'PY'
           import json, os
+          from pathlib import Path
           import v8_safe_appearance as v
 
           os.environ.pop("MG4K_LOCK_PROFILE_JSON", None)
