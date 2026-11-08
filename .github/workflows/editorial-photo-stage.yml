@@ -1,0 +1,74 @@
+name: Editorial Photo one-shot input preparation
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/editorial-photo-stage.yml'
+permissions:
+  contents: read
+jobs:
+  stage-dsc09818:
+    if: github.event.pull_request.head.repo.full_name == 'mkontrakevich/4K_Upscaler'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install RAW tools
+        run: |
+          npm install
+          python -m pip install --quiet rawpy pillow numpy opencv-python-headless
+      - name: Retrieve authentic isolated Tropicana ARW
+        run: |
+          set -euo pipefail
+          test -n ""${CLOUDFLARE_API_TOKEN:-}""
+          test -n ""${CLOUDFLARE_ACCOUNT_ID:-}""
+          npx wrangler r2 object get "marins-tropicana-photo-originals/originals/DSC09818.ARW" --file /tmp/DSC09818.ARW --remote
+          python - <<'PY'
+          import hashlib
+          from pathlib import Path
+          b=Path('/tmp/DSC09818.ARW').read_bytes()
+          expected='1b4344f4b8ca629830254850fbcbaf2931c83c00a158ab87d84e5ee7722046d5'
+          assert len(b)==35155968,(len(b),'size mismatch')
+          assert hashlib.sha256(b).hexdigest()==expected,'SHA256 mismatch'
+          print('RAW SHA-256 validated',len(b))
+          PY
+      - name: Prepare faithful one-frame image input
+        run: |
+          mkdir -p /tmp/editorial
+          cat > /tmp/create_preview.py <<'PY'
+          from pathlib import Path
+          import numpy as np, rawpy, cv2
+          from PIL import Image
+          with rawpy.imread('/tmp/DSC09818.ARW') as raw:
+              rgb16=raw.postprocess(use_camera_wb=True,no_auto_bright=True,output_bps=16,gamma=(1,1),highlight_mode=rawpy.HighlightMode.Blend,output_color=rawpy.ColorSpace.sRGB)
+          h,w=rgb16.shape[:2]
+          frame=cv2.resize(rgb16,(2560,round(2560*h/w)),interpolation=cv2.INTER_AREA).astype(np.float32)/65535
+          v=np.maximum(0,frame*40)
+          v=v/(1+.85*v)
+          v=np.clip(v,0,1)**.95
+          rgb=np.uint8(np.round(v*255))
+          lab=cv2.cvtColor(rgb,cv2.COLOR_RGB2LAB)
+          l,a,b=cv2.split(lab)
+          l=cv2.fastNlMeansDenoising(l,None,8,7,21)
+          rgb=cv2.cvtColor(cv2.merge([l,a,b]),cv2.COLOR_LAB2RGB)
+          image=Image.fromarray(rgb)
+          for fn,q in [('DSC09818_technical_model_input.jpg',91),('DSC09818_technical_review.jpg',95)]:
+              image.save('/tmp/editorial/'+fn,quality=q,optimize=True)
+          print('Prepared RAW-derived source',image.size)
+          PY
+          python /tmp/create_preview.py
+      - name: Isolated R2 upload (never MG4K general storage)
+        run: |
+          npx wrangler r2 object put "marins-tropicana-editorial-photo/tropicana-park/DSC09818/technical_model_input.jpg" --file /tmp/editorial/DSC09818_technical_model_input.jpg --remote --content-type image/jpeg
+          npx wrangler r2 object put "marins-tropicana-editorial-photo/tropicana-park/DSC09818/technical_review.jpg" --file /tmp/editorial/DSC09818_technical_review.jpg --remote --content-type image/jpeg
+      - name: QA proof
+        uses: actions/upload-artifact@v4
+        with:
+          name: tropicana-dsc09818-editorial-seed
+          path: /tmp/editorial/
+          retention-days: 7
