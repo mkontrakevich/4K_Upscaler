@@ -1,4 +1,6 @@
 import { Container, ContainerProxy, getContainer } from "@cloudflare/containers";
+import { editorialApi, EditorialPhotoWorkflow } from "./editorial_photo.js";
+export { EditorialPhotoWorkflow };
 import { promptAssistantEnabled, promptAssistantModel, sanitizeAssistantContext, runPromptAssistant } from "./prompt_assistant.js";
 
 export { ContainerProxy };
@@ -1311,6 +1313,7 @@ MG4KProcessor.outboundByHost = {
 async function handleApi(request, env, ctx, url) {
   const path = url.pathname;
   const method = request.method.toUpperCase();
+  if (path.startsWith("/api/editorial/")) return editorialApi(request, env, url, authorizeSession);
 
   if (path === "/api/health" && method === "GET") {
     return json({
