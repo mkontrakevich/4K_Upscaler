@@ -1,14 +1,11 @@
 name: Editorial Photo post-gen geometry audit
 on:
-  pull_request:
-    paths:
-      - '.github/workflows/editorial-photo-postgen-qa.yml'
   workflow_dispatch:
     inputs:
       job_id:
         description: "Editorial Photo OpenRouter run UUID (Tropicana DSC09818)"
         required: true
-        default: "5ac765bf-e2da-4366-9832-71019ab136c7"
+        default: "0737315d-b1cf-4159-86f8-6708b964ebe9"
         type: string
 permissions:
   contents: read
@@ -20,7 +17,7 @@ jobs:
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      EDITORIAL_JOB_ID: ${{ inputs.job_id || '0737315d-b1cf-4159-86f8-6708b964ebe9' }}
+      EDITORIAL_JOB_ID: ${{ inputs.job_id }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
