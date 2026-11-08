@@ -8,13 +8,13 @@
 <header><div class="brand">MG <span>4K</span> / EDITORIAL PHOTO</div><nav><a href="/">4K Upscaler</a></nav></header>
 <main>
 <div class="eyebrow">MARINS OS / Architectural Editorial / Perspective Lock</div><h1>Editorial Photo</h1>
-<p class="lead">Техническая подготовка RAW, художественная обработка изображения через OpenRouter и независимый контроль достоверности. Не генерируем другое помещение вместо настоящей фотографии.</p>
+<p class="lead">Точная коррекция геометрии RAW относительно эталона V3, художественная обработка изображения через OpenRouter и независимый контроль достоверности. Не генерируем другое помещение вместо настоящей фотографии.</p>
 <div class="grid">
   <aside class="stack">
     <section class="panel">
       <div class="eyebrow">Активный проект</div><h2>Тропикана-парк</h2>
       <div class="metric"><span class="muted">Кадр</span><strong>DSC09818</strong></div>
-      <div class="metric"><span class="muted">Источник</span><strong>ARW / V3 master</strong></div>
+      <div class="metric"><span class="muted">Источник</span><strong>ARW → V3 Perspective Lock</strong></div>
       <div class="metric"><span class="muted">Skill</span><strong>v1.3</strong></div>
       <div class="metric"><span class="muted">Режим</span><strong>Editorial + Fidelity</strong></div>
       <div class="metric"><span class="muted">Статус</span><strong id="status" class="status">Проверка…</strong></div>
@@ -39,9 +39,9 @@
   <section class="stack">
     <div class="panel"><div class="flex" style="justify-content:space-between"><h2>Source / Technical / Editorial</h2><button class="btn mutebtn" id="refresh">Проверить задание</button></div>
       <div class="triptych">
-        <figure class="frame"><figcaption>01 / Источник</figcaption><div class="imagebox"><img id="source" alt="Исходник"><span id="source-label">Нет загруженного файла</span></div></figure>
-        <figure class="frame"><figcaption>02 / RAW technical master</figcaption><div class="imagebox"><img id="technical" alt="RAW technical master"><span id="technical-label">Ожидает загрузки</span></div></figure>
-        <figure class="frame"><figcaption>03 / Editorial candidate</figcaption><div class="imagebox"><img id="candidate" alt="Editorial candidate"><span id="candidate-label">Ожидает OpenRouter</span></div></figure>
+        <figure class="frame"><figcaption>01 / RAW проявка до геометрии</figcaption><div class="imagebox"><img id="source" alt="Исходник"><span id="source-label">Нет загруженного файла</span></div></figure>
+        <figure class="frame"><figcaption>02 / Perspective Lock — выпрямленный</figcaption><div class="imagebox"><img id="technical" alt="RAW technical master"><span id="technical-label">Ожидает загрузки</span></div></figure>
+        <figure class="frame"><figcaption>03 / Editorial candidate (после OpenRouter)</figcaption><div class="imagebox"><img id="candidate" alt="Editorial candidate"><span id="candidate-label">Ожидает OpenRouter</span></div></figure>
       </div>
       <p class="note">Оценка художественного качества и соответствие реальному объекту — два разных этапа. Изменение архитектуры, мебели, ограждений или панорамы блокирует финальное утверждение.</p>
       <div class="flex"><label for="job" class="muted">ID одноразового задания</label><input id="job" style="flex:1;min-width:180px;padding:10px;background:#07131f;border:1px solid #294055;color:#fff" placeholder="Workflow run UUID"><button id="load" class="btn" type="button">Открыть QA</button></div>
