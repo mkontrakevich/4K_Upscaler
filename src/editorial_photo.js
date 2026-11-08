@@ -48,10 +48,16 @@ export class EditorialPhotoWorkflow extends WorkflowEntrypoint{
   const params=typeof event.payload==="string"?JSON.parse(event.payload):event.payload||{};
   const id=String(params.job_id||"");
   const sourceKey=String(params.source_key||"");
-  if(!isId(id)||!sourceName(sourceKey))throw new Error("invalid_editorial_job_or_source");
+  if(!isId(id)||sourceKey!==ROOT+"geometry_locked_model_input.jpg")throw new NonRetryableError("perspective_locked_input_required");
   const runRoot=fileKey(id,"");
   const source=await step.do("validate-source",async()=>{
     const o=await object(this.env,sourceKey);
+    const proofObject=await this.env.TROPICANA_EDITORIAL_R2.get(ROOT+"geometry_locked_QA.json");
+    if(!proofObject)throw new NonRetryableError("geometry_proof_missing");
+    const proof=await proofObject.json();
+    if(proof.frame!==FRAME||proof.geometry_status!=="PASS"||proof.result_sha256!==o.sha||
+       !proof.after||Math.abs(Number(proof.after.median_slope||999))>=0.015)throw new NonRetryableError("geometry_proof_invalid");
+    await this.env.TROPICANA_EDITORIAL_R2.put(runRoot+"geometry_source_QA.json",JSON.stringify(proof),{httpMetadata:{contentType:"application/json"}});
     await this.env.TROPICANA_EDITORIAL_R2.put(runRoot+"source_manifest.json",JSON.stringify({
       project:PROJECT,frame:FRAME,source_key:sourceKey,source_sha256:o.sha,source_bytes:o.size,
       source_mime:o.mime,created_at:new Date().toISOString(),status:"INPUT_VALIDATED",
@@ -103,9 +109,10 @@ export class EditorialPhotoWorkflow extends WorkflowEntrypoint{
   const manifest={
    project:PROJECT,frame:FRAME,job_id:id,status:"EDITORIAL_REVIEW",final:false,
    source_key:sourceKey,source_sha256:source.sha256,source_bytes:source.size,
-   technical_raw_master:"DSC09818 RAW PerspectiveLock V3; 6536x4360",
+   technical_raw_master:"RAW PerspectiveLock V3 is a geometric reference (full original 6536x4360 not yet transferred to Workflow)",
+   geometry_input:"PASS — measured homography against approved RAW V3; proof preserved in R2",
    candidate_key:candidate.key,candidate_sha256:candidate.sha256,
-   gates:{source_integrity:"PASS",editorial_visual:"REVIEW",geometry_fidelity:"REVIEW",manual_approval:"REQUIRED",full_resolution_master:"REQUIRED"},
+   gates:{source_integrity:"PASS",pre_generation_geometry:"PASS",post_generation_geometry:"PENDING_NUMERIC_QA",editorial_visual:"REVIEW",geometry_fidelity:"REVIEW",manual_approval:"REQUIRED",full_resolution_master:"REQUIRED"},
    steps:{analysis,candidate,audit},skill:"MARINS Architectural RAW Photo v1.3",
    model:this.env.EDITORIAL_IMAGE_MODEL||MODEL,created_at:new Date().toISOString()
   };
@@ -147,7 +154,7 @@ export async function editorialApi(request,env,url,authorizeSession){
   const id=url.searchParams.get("job")||"",kind=url.searchParams.get("kind")||"manifest";
   if(!isId(id)||!["manifest","candidate","analysis","qa","source","technical"].includes(kind))return j({error:"invalid_view_request"},400);
   const map={manifest:"manifest.json",candidate:"editorial_candidate.png",analysis:"scene_analysis.json",qa:"fidelity_qa.json"};
-  let key=kind==="technical"?ROOT+"technical_review.jpg":fileKey(id,map[kind]||"manifest.json");
+  let key=kind==="technical"?ROOT+"geometry_locked_model_input.jpg":fileKey(id,map[kind]||"manifest.json");
   if(kind==="source"){
     const manifest=await env.TROPICANA_EDITORIAL_R2.get(fileKey(id,"manifest.json"));
     if(!manifest)return j({error:"not_found"},404);
