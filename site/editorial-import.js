@@ -27,7 +27,10 @@ const close=document.createElement("button");
 close.type="button";close.textContent="Закрыть";
 close.style.cssText="border:1px solid #3d738e;background:transparent;color:#fff;padding:8px;cursor:pointer";
 close.addEventListener("click",()=>panel.remove());
-footer.append(back,close);
+const use=document.createElement("button");
+use.type="button";use.textContent="Добавить в художественный MG 4K";
+use.disabled=true;use.style.cssText="border:1px solid #4d8cae;background:#163f55;color:#fff;padding:8px;cursor:pointer";
+footer.append(use,back,close);
 panel.append(title,description,details,footer);
 document.body.appendChild(panel);
 async function load(){
@@ -50,6 +53,27 @@ async function load(){
        body.master_bit_depth!==16||body.locked!==true)throw Error("invalid_import_state");
     description.textContent="Утверждённый 16-битный мастер находится в хранилище MG 4K. Генерация не запускалась.";
     const locks=Object.entries(body.mg4k_locks||{}).map(([k,v])=>k+": "+v).join("\n");
+    use.disabled=false;
+    use.onclick=async()=>{
+      use.disabled=true;
+      try{
+        const r=await fetch("/api/editorial/job/preview?job="+encodeURIComponent(id),{
+          cache:"no-store",headers:{"x-session-id":session?.id||"",
+            "x-session-token":session?.token||"","x-editorial-job-token":bearer}
+        });
+        if(!r.ok)throw Error("approved_preview_unavailable");
+        const blob=await r.blob();if(blob.type!=="image/jpeg")throw Error("invalid_model_input_type");
+        const name=String(body.filename||"editorial").replace(/\.[^.]+$/,"")+"_TECH_APPROVED.jpg";
+        const file=new File([blob],name,{type:"image/jpeg"});
+        if(typeof window.MG4KImportEditorial!=="function")throw Error("MG4K import adapter not loaded");
+        window.MG4KImportEditorial(file,{jobId:id,token:bearer});
+        description.textContent="Утверждённый снимок добавлен в очередь MG 4K. Выберите параметры и отдельно запустите художественную обработку.";
+        use.textContent="Добавлено в MG 4K";
+      }catch(error){
+        description.textContent="Не удалось открыть мастер: "+String(error?.message||error);
+        use.disabled=false;
+      }
+    };
     details.textContent=[
       "Проект: "+body.project,
       "Файл: "+body.filename,
