@@ -74,6 +74,29 @@ function state(job,a) {
   };
 }
 
+
+// MG4K holds the approved immutable master in its own R2 storage.  No paid
+// processor job is created and the imported TIFF is never passed to a model.
+async function importIntoMg4k(env,job,q) {
+  if(!env.TEMP_BUFFER_R7)return {error:"mg4k_storage_missing",code:503};
+  const dest="editorial-imports/"+job.job_id+"/approved-master16.tif";
+  const source=await env.TROPICANA_EDITORIAL_R2.get(q.master_key);
+  if(!source||source.size!==q.master_bytes||source.httpMetadata?.contentType!=="image/tiff"||
+    source.customMetadata?.sha256!==q.master_sha256)return {error:"technical_master_integrity_mismatch",code:409};
+  const metadata={source_project:job.project,editorial_job_id:job.job_id,source_sha256:job.source_sha256,
+    technical_master_sha256:q.master_sha256,qa_status:"APPROVED",generation_authorized:"false"};
+  const committed=await env.TEMP_BUFFER_R7.put(dest,source.body,{
+    onlyIf:new Headers({"If-None-Match":"*"}),
+    httpMetadata:{contentType:"image/tiff"},customMetadata:metadata
+  });
+  const target=await env.TEMP_BUFFER_R7.head(dest);
+  if(!target||target.size!==q.master_bytes||target.httpMetadata?.contentType!=="image/tiff"||
+      target.customMetadata?.technical_master_sha256!==q.master_sha256||
+      target.customMetadata?.editorial_job_id!==job.job_id)
+    return {error:"mg4k_import_verification_failed",code:409};
+  return {dest,size:target.size,created:!!committed};
+}
+
 export async function editorialJobApi(request,env,url,authorizeSession) {
   const path=url.pathname,method=request.method.toUpperCase();
   const id=url.searchParams.get("job")||"";
@@ -113,13 +136,17 @@ export async function editorialJobApi(request,env,url,authorizeSession) {
 
   if(path==="/api/editorial/job/handoff"&&method==="POST") {
     if(!a.approved)return json({error:"human_QA_approval_required"},409);
+    const transfer=await importIntoMg4k(env,job,a.q);
+    if(transfer.error)return json({error:transfer.error},transfer.code);
     const manifest={
-      schema:1,type:"MG4K_TECHNICAL_HANDOFF",job_id:id,project:job.project,
+      schema:2,type:"MG4K_TECHNICAL_HANDOFF",job_id:id,project:job.project,
       source_key:job.source_key,source_sha256:job.source_sha256,
       master_key:a.q.master_key,master_sha256:a.q.master_sha256,
       master_bytes:a.q.master_bytes,master_bit_depth:16,
       QA:{decision:"APPROVED",at:a.d.at,source_sha256:a.d.source_sha256,master_sha256:a.d.master_sha256},
-      locks:LOCKS,generation_authorized:false,stage:"READY_FOR_MG4K_IMPORT"
+      locks:LOCKS,mg4k_locks:{camera:"hard",composition:"hard",geometry:"hard",architecture:"hard",facade_details:"hard",textures:"hard",text_signage:"hard",interior:"hard",furniture:"hard"},
+      mg4k_master_key:transfer.dest,mg4k_master_bytes:transfer.size,
+      generation_authorized:false,stage:"MG4K_MASTER_IMPORTED"
     };
     const result=await env.TROPICANA_EDITORIAL_R2.put(key(id,"handoff.json"),JSON.stringify(manifest),{
       onlyIf:new Headers({"If-None-Match":"*"}),httpMetadata:{contentType:"application/json"}
@@ -131,8 +158,10 @@ export async function editorialJobApi(request,env,url,authorizeSession) {
       const existing=await old.json();
       if(existing.master_sha256!==manifest.master_sha256)return json({error:"handoff_hash_conflict"},409);
     }
-    return json({ok:true,job_id:id,stage:"READY_FOR_MG4K_IMPORT",
-      message:"Передаточный пакет сохранён. Запуск генерации не выполнен.",generation_started:false});
+    return json({ok:true,job_id:id,stage:"MG4K_MASTER_IMPORTED",
+      mg4k_import_url:"/?editorial_import="+encodeURIComponent(id),
+      message:"Утверждённый TIFF перенесён в хранилище MG 4K; художественная генерация не запускалась.",
+      generation_started:false});
   }
   return json({error:"job_api_not_found"},404);
 }
