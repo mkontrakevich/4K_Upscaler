@@ -1,6 +1,7 @@
 import { Container, ContainerProxy, getContainer } from "@cloudflare/containers";
 import { editorialApi, EditorialPhotoWorkflow } from "./editorial_photo.js";
 export { EditorialPhotoWorkflow };
+export { EditorialTechWorkflow } from "./editorial_tech_workflow.js";
 import { promptAssistantEnabled, promptAssistantModel, sanitizeAssistantContext, runPromptAssistant } from "./prompt_assistant.js";
 
 export { ContainerProxy };
