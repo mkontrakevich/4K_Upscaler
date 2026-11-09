@@ -17,8 +17,8 @@ def chunk(kind, data):
 
 def make_png(width=350,height=350):
     rnd=random.Random(987654321)
-    rows=b"".join(b"\\x00"+rnd.randbytes(width*3) for _ in range(height))
-    png=b"\\x89PNG\\r\\n\\x1a\\n"
+    rows=b"".join(b"\x00"+rnd.randbytes(width*3) for _ in range(height))
+    png=b"\x89PNG\r\n\x1a\n"
     png+=chunk(b"IHDR",struct.pack(">IIBBBBB",width,height,8,2,0,0,0))
     png+=chunk(b"IDAT",zlib.compress(rows,6))
     png+=chunk(b"IEND",b"")
@@ -47,8 +47,8 @@ def main():
     auth={"x-session-id":session["id"],"x-session-token":session["token"]}
     boundary="mg4kEditorialTechSmoke"
     image=make_png()
-    form=(f"--{boundary}\\r\\nContent-Disposition: form-data; name=\"file\"; filename=\"editorial_technical_smoke.png\"\\r\\n"
-          "Content-Type: image/png\\r\\n\\r\\n").encode()+image+f"\\r\\n--{boundary}--\\r\\n".encode()
+    form=(f"--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"editorial_technical_smoke.png\"\r\n"
+          "Content-Type: image/png\r\n\r\n").encode()+image+f"\r\n--{boundary}--\r\n".encode()
     status,_,raw=request(root+"/api/editorial/upload","POST",
                          {**auth,"content-type":"multipart/form-data; boundary="+boundary},form,timeout=60)
     assert status==201,(status,raw[:600])
