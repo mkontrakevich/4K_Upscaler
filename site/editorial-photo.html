@@ -49,7 +49,7 @@
       <div class="metric"><span>Доступ к OpenRouter</span><strong style="color:#e8b672">Разрешён один художественный тест после V9 QA</strong></div>
       <p class="note">Исходник, прежняя геометрия и OpenRouter-итерации сохранены. Это новая техническая версия, технический источник, не художественный финал. Ограничения: высокий шум от ISO 3200, отсутствует реальная HDR-вилка, точность калибровки объектива требует визуальной проверки.</p>
     </div>
-    <div class="panel"><div class="flex" style="justify-content:space-between"><h2>Editorial 01 / Split Compare</h2><div class="flex"><button class="btn" id="open-compare" disabled title="Сравнить Technical V9 и OpenRouter оригинал в масштабируемом полноэкранном просмотрщике">ОТКРЫТЬ SPLIT · FULLSCREEN</button><button class="btn mutebtn" id="refresh">Проверить задание</button></div></div><p class="muted">Просмотрщик показывает технический RAW V9 в полном пиксельном размере (8-битный экранный JPEG из 16-битного TIFF) и настоящий оригинал результата OpenRouter. 100% TECH — 1:1 пиксели технического RAW, EDITORIAL может быть существенно меньше.</p>
+    <div class="panel"><div class="flex" style="justify-content:space-between"><h2>Проверка RAW / Technical / Editorial</h2><div class="flex"><button class="btn" id="open-compare" disabled title="Исходный ARW до коррекции геометрии против технического мастера V9, без изменения оригинала">SPLIT · RAW / TECH</button><button class="btn mutebtn" id="open-editorial" disabled title="TECH V9 против результата OpenRouter в том же просмотрщике">TECH / EDITORIAL</button><button class="btn mutebtn" id="refresh">Проверить задание</button></div></div><p class="muted">Первый режим сравнивает нейтральную проявку исходного Sony ARW (7028 × 4688, без коррекции дисторсии и перспективы) с TECH V9 (6536 × 4360). Второй — TECH V9 с результатом OpenRouter. Для честного сравнения геометрии исходный RAW совмещается с техническим кадром по центру поля зрения, без выпрямления оригинала. Доступны Fullscreen, Split, Side, Blink и 100% увеличение.</p>
       <div class="triptych">
         <figure class="frame"><figcaption>01 / RAW проявка до геометрии</figcaption><div class="imagebox"><img id="source" alt="Исходник"><span id="source-label">Нет загруженного файла</span></div></figure>
         <figure class="frame"><figcaption>02 / Lens Distortion — PTLens 16 мм</figcaption><div class="imagebox"><img id="optical" alt="Lens distortion corrected"><span id="optical-label">Требуется оптическая коррекция</span></div></figure>
@@ -78,13 +78,22 @@ for(const [kind,element] of [["tech_neutral","tech-neutral"],["tech_hdr","tech-h
 e("technical").src=base+"/view?job="+encodeURIComponent(id)+"&kind=technical";e("technical").classList.add("ready");e("technical-label").hidden=true;
 if(data.candidate_key){e("candidate").src=base+"/view?job="+encodeURIComponent(id)+"&kind=candidate";e("candidate").classList.add("ready");e("candidate-label").hidden=true;
 e("open-compare").disabled=data.source_key!=="tropicana-park/DSC09818/technical-v9/DSC09818_EDITORIAL_INPUT.jpg";
-if(!e("open-compare").disabled && hash.get("compare")==="1")window.EditorialCompare?.open(id).catch(err=>say(String(err)));
-}else e("open-compare").disabled=true}
+e("open-editorial").disabled=e("open-compare").disabled;
+if(!e("open-compare").disabled && ["1","raw-tech","tech-editorial"].includes(hash.get("compare"))){
+ const pair=hash.get("compare")==="raw-tech"?"raw-tech":"tech-editorial";
+ if(window.EditorialCompare)window.EditorialCompare.open(id,pair).catch(err=>say(String(err)));
+ else window.addEventListener("load",()=>window.EditorialCompare?.open(id,pair).catch(err=>say(String(err))),{once:true});
+}
+}else {e("open-compare").disabled=true;e("open-editorial").disabled=true}}
 e("open-compare").addEventListener("click",()=>{
  const id=e("job").value.trim();
  if(!id)return say("Не указан ID задания.");
  if(!window.EditorialCompare)return say("Split viewer не загружен.");
- window.EditorialCompare.open(id).catch(err=>say(String(err)));
+ window.EditorialCompare.open(id,"raw-tech").catch(err=>say(String(err)));
+});
+e("open-editorial").addEventListener("click",()=>{
+ const id=e("job").value.trim();if(!id)return say("Не указан ID задания.");
+ window.EditorialCompare?.open(id,"tech-editorial").catch(err=>say(String(err)));
 });
 e("upload").addEventListener("click",()=>upload().catch(err=>say(String(err))));e("load").addEventListener("click",()=>load().catch(err=>say(String(err))));e("refresh").addEventListener("click",()=>load().catch(err=>health().catch(e=>say(String(e)))));const hash=new URLSearchParams(location.hash.slice(1));if(hash.get("job")){e("job").value=hash.get("job");load().catch(err=>say(String(err)))}else health().catch(err=>say(String(err)));
 </script><script src="/editorial-compare.js" defer></script></body></html>
