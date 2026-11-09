@@ -15,7 +15,7 @@ def chunk(kind, data):
     return struct.pack(">I",len(data))+payload+struct.pack(">I",zlib.crc32(payload)&0xffffffff)
 
 
-def make_png(width=350,height=350):
+def make_png(width=500,height=500):
     rnd=random.Random(987654321)
     rows=b"".join(b"\x00"+rnd.randbytes(width*3) for _ in range(height))
     png=b"\x89PNG\r\n\x1a\n"
