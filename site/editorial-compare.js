@@ -1,12 +1,13 @@
 /* MG4K Editorial Photo / native-resolution linked viewer.
- * Source: exact real RAW technical V9 image. Editorial: original OpenRouter PNG at its real output resolution.
+ * Pair 1: full genuine unrectified Sony ARW neutral screen image versus 16-bit-derived TECH V9.
+ * Pair 2: TECH V9 versus untouched original OpenRouter PNG.
  * No generated image, implicit upscaling, or source reassignment takes place here.
  */
 (function(){
 "use strict";
 const prefix="/api/editorial/view?";
 let root=null,stage=null,canvas=null,ctx=null,dialog=null,activeJob="";
-const S={source:null,result:null,meta:null,open:false,mode:"split",zoom:"fit",scale:1,panX:0,panY:0,split:.5,swap:false,labels:true,single:"result",blinkResult:false,blinkTimer:null,drag:false,dragMode:"pan",lastX:0,lastY:0,loading:false,renderQueued:false,fullNative:false};
+const S={source:null,result:null,images:{raw:null,technical:null,editorial:null},pair:"raw-tech",meta:null,open:false,mode:"split",zoom:"fit",scale:1,panX:0,panY:0,split:.5,swap:false,labels:true,single:"result",blinkResult:false,blinkTimer:null,drag:false,dragMode:"pan",lastX:0,lastY:0,loading:false,renderQueued:false,fullNative:false};
 const $=(id)=>document.getElementById(id);
 const by=(job,kind)=>prefix+"job="+encodeURIComponent(job)+"&kind="+encodeURIComponent(kind);
 function mount(){
@@ -16,7 +17,11 @@ function mount(){
  '<dialog id="ec-dialog" class="ec-dialog" aria-label="MG 4K Editorial Photo Split Compare">',
  '<div class="ec-shell">',
  '<div class="ec-toolbar">',
- '<div class="ec-title"><strong>DSC09818 / TECH V9 ↔ EDITORIAL 01</strong><span class="ec-subtitle" id="ec-dimensions">Проверка оригинального разрешения…</span></div>',
+ '<div class="ec-title"><strong id="ec-pair-title">DSC09818 / ORIGINAL RAW ↔ TECH V9</strong><span class="ec-subtitle" id="ec-dimensions">Проверка исходных размеров…</span></div>',
+ '<div class="ec-controls" aria-label="Выбор пары для проверки">',
+ '<button data-ec-pair="raw-tech" class="active" title="Оригинальный RAW без коррекций vs технический RAW V9">01 · RAW / TECH</button>',
+ '<button data-ec-pair="tech-editorial" title="Технический мастер V9 vs художественный результат OpenRouter">02 · TECH / EDITORIAL</button>',
+ '</div>',
  '<div class="ec-controls" aria-label="Режимы сравнения">',
  '<button data-ec-mode="split" class="active" title="Наложение с перетаскиваемым разделителем">SPLIT</button>',
  '<button data-ec-mode="side" title="Два синхронных изображения рядом">SIDE</button>',
@@ -24,7 +29,7 @@ function mount(){
  '<button data-ec-mode="blink" title="Мигание с интервалом 700 мс">BLINK</button>',
  '<span class="ec-control-separator"></span>',
  '<button data-ec-action="swap" title="Поменять местами RAW и EDITORIAL">SWAP</button>',
- '<button data-ec-action="single" title="Переключить одну версию">TECH / EDIT</button>',
+ '<button data-ec-action="single" title="Переключить левую и правую версии">LEFT / RIGHT</button>',
  '<button data-ec-action="labels" title="Включить и выключить названия">LABELS</button>',
  '</div>',
  '<div class="ec-controls" aria-label="Масштаб">',
@@ -32,7 +37,7 @@ function mount(){
  '<button data-ec-zoom="0.5">50%</button>',
  '<button data-ec-zoom="1">100%</button>',
  '<button data-ec-zoom="2">200%</button>',
- '<button data-ec-zoom="editorial" title="Пиксель результата OpenRouter соответствует пикселю экрана">1:1 EDIT</button>',
+ '<button data-ec-zoom="editorial" title="1 пиксель правой версии = 1 пиксель экрана">1:1 RIGHT</button>',
  '<span class="ec-zoom" id="ec-zoom-label">FIT</span>',
  '</div>',
  '<div class="ec-controls">',
@@ -54,6 +59,7 @@ function mount(){
  ].join("");
  root=wrap.firstElementChild;document.body.appendChild(root);
  dialog=root;stage=$("ec-stage");canvas=$("ec-canvas");ctx=canvas.getContext("2d",{alpha:false});
+ root.querySelectorAll("[data-ec-pair]").forEach(b=>b.addEventListener("click",()=>setPair(b.dataset.ecPair)));
  root.querySelectorAll("[data-ec-mode]").forEach(b=>b.addEventListener("click",()=>setMode(b.dataset.ecMode)));
  root.querySelectorAll("[data-ec-zoom]").forEach(b=>b.addEventListener("click",()=>setZoom(b.dataset.ecZoom)));
  root.querySelectorAll("[data-ec-action]").forEach(b=>b.addEventListener("click",()=>action(b.dataset.ecAction)));
@@ -81,27 +87,45 @@ function image(url){
   const im=new Image();im.decoding="async";im.onload=()=>resolve(im);im.onerror=()=>reject(new Error("Не удалось получить изображение: "+url));im.src=url;
  });
 }
-async function open(job){
+async function open(job,requestedPair="raw-tech"){
  mount();
  if(!/^[0-9a-f-]{36}$/i.test(String(job||"")))throw new Error("Некорректный ID задания");
  if(!dialog.open)dialog.showModal();
- S.open=true;S.loading=true;activeJob=job;S.mode="split";S.split=.5;S.swap=false;S.zoom="fit";S.panX=0;S.panY=0;S.labels=true;S.source=null;S.result=null;
- stopBlink();setLoading("Загружаются RAW Technical V9 и оригинальный результат OpenRouter…");updateUI();
+ S.open=true;S.loading=true;activeJob=job;S.mode="split";S.pair=requestedPair==="tech-editorial"?"tech-editorial":"raw-tech";
+ S.split=.5;S.swap=false;S.zoom="fit";S.panX=0;S.panY=0;S.labels=true;S.source=null;S.result=null;
+ S.images={raw:null,technical:null,editorial:null};S.single="result";
+ stopBlink();setLoading("Загружаются исходный Sony RAW, технический мастер V9 и оригинал OpenRouter…");updateUI();
  try{
   const response=await fetch(by(job,"compare_info"),{cache:"no-store"});
-  if(!response.ok)throw new Error("Не удалось получить параметры сравнения");
+  if(!response.ok)throw new Error("Не удалось получить параметры сравнения ("+response.status+")");
   const info=await response.json();
   if(activeJob!==job||!S.open)return;
   S.meta=info;
-  const native=info.fullres_preview?.ready===true;
-  const leftKind=native?"tech_full":"tech_clean";
-  const urls=[by(job,leftKind),by(job,"candidate")];
-  const [source,result]=await Promise.all(urls.map(image));
+  if(info.original_raw_preview?.ready!==true)throw new Error("Не готов полноразмерный исходный ARW: нейтральная проявка должна быть подготовлена без коррекции");
+  if(info.fullres_preview?.ready!==true)throw new Error("Не готов полноразмерный RAW Technical V9");
+  const [raw,technical,editorial]=await Promise.all([
+   image(by(job,"raw_original")),image(by(job,"tech_full")),image(by(job,"candidate"))
+  ]);
   if(activeJob!==job||!S.open)return;
-  S.source=source;S.result=result;S.fullNative=native&&source.naturalWidth===6536&&source.naturalHeight===4360;S.loading=false;
-  $("ec-loading").hidden=true;
-  setZoom("fit");updateUI();scheduleDraw();stage.focus({preventScroll:true});
+  if(raw.naturalWidth!==7028||raw.naturalHeight!==4688)throw new Error("Неверный размер оригинального RAW");
+  if(technical.naturalWidth!==6536||technical.naturalHeight!==4360)throw new Error("Неверный размер технического TIFF proxy");
+  S.images={raw,technical,editorial};
+  S.fullNative=true;S.loading=false;$("ec-loading").hidden=true;
+  applyPair();setZoom("fit");updateUI();scheduleDraw();stage.focus({preventScroll:true});
  }catch(err){S.loading=false;setLoading("Ошибка загрузки: "+String(err.message||err));$("ec-resolution-warning").textContent="Сравнение не открыто: "+String(err.message||err)}
+}
+function applyPair(){
+ if(S.pair==="raw-tech"){S.source=S.images.raw;S.result=S.images.technical}
+ else{S.source=S.images.technical;S.result=S.images.editorial}
+}
+function setPair(pair){
+ if(pair!=="raw-tech"&&pair!=="tech-editorial")return;
+ if(S.pair===pair)return;
+ S.pair=pair;S.swap=false;S.single="result";applyPair();stopBlink();
+ if(S.mode==="blink")setMode("blink");
+ if(S.zoom==="fit"){S.scale=fitScale();S.panX=0;S.panY=0}
+ else if(S.zoom==="editorial")S.scale=S.result.naturalWidth/6536;
+ updateUI();scheduleDraw();
 }
 function scaleLimits(){return {min:.015,max:4}}
 function view(){const r=stage?.getBoundingClientRect();return {w:Math.max(1,r?.width||1),h:Math.max(1,r?.height||1)}}
