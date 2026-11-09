@@ -1,6 +1,8 @@
 import { Container, ContainerProxy, getContainer } from "@cloudflare/containers";
 import { editorialApi, EditorialPhotoWorkflow } from "./editorial_photo.js";
+import { verifyEditorialArtisticInput } from "./editorial_jobs.js";
 export { EditorialPhotoWorkflow };
+export { EditorialTechWorkflow } from "./editorial_tech_workflow.js";
 import { promptAssistantEnabled, promptAssistantModel, sanitizeAssistantContext, runPromptAssistant } from "./prompt_assistant.js";
 
 export { ContainerProxy };
@@ -1513,12 +1515,29 @@ async function handleApi(request, env, ctx, url) {
     }
 
     const mode = String(form.get("mode") || "generative");
-    const promptOverride = String(form.get("prompt") || "").trim();
+    let promptOverride = String(form.get("prompt") || "").trim();
     if (promptOverride.length > 30000) return json({ error: "prompt_too_long", max_chars: 30000 }, 413);
     const filename = cleanName(file.name || "source-image");
     const sourceKey = `sessions/${session.id}/jobs/${id}/source/${filename}`;
 
     const sourceBytes = await file.arrayBuffer();
+    let editorialLineage=null;
+    const editorialJobId=String(request.headers.get("x-editorial-job-id")||"");
+    if(editorialJobId){
+      if(mode!=="generative"||type!=="image/jpeg")
+        return json({error:"editorial_import_mode_or_type_invalid"},409);
+      try{
+        editorialLineage=await verifyEditorialArtisticInput(
+          env,editorialJobId,String(request.headers.get("x-editorial-job-token")||""),sourceBytes
+        );
+      }catch(error){
+        return json({error:"editorial_import_contract_failed",
+          reason:String(error?.message||error).slice(0,180)},409);
+      }
+      locks={...locks,...editorialLineage.locks};
+      const constraint="MG4K EDITORIAL IMPORT: Preserve exact approved architecture, camera/perspective, composition, materials, text/signage, identity and scene geometry. No HDR, fabricated architectural detail, invented sky, added fixtures or changed objects. User hard locks are mandatory.";
+      promptOverride=(promptOverride+"\\n\\n"+constraint).slice(0,30000);
+    }
     await env.TEMP_BUFFER_R7.put(sourceKey, sourceBytes, {
       httpMetadata: { contentType: type },
       customMetadata: {
@@ -1567,6 +1586,7 @@ async function handleApi(request, env, ctx, url) {
       bytes: Number(file.size || 0),
       mode,
       locks,
+      editorial_lineage: editorialLineage,
       prompt_override: promptOverride || null,
       prompt_sha256: promptOverride ? await sha256(promptOverride) : null,
       source_key: sourceKey,

@@ -9,6 +9,10 @@ on:
       - 'VERSION.json'
       - 'v8_safe_appearance.py'
       - 'cloud_processor_service.py'
+      - 'editorial_tech_service.py'
+      - 'scripts/editorial_raster_technical_master.py'
+      - 'scripts/editorial_cloud_smoke.py'
+      - 'requirements.txt'
       - 'cloudflare_bridge.py'
       - 'site/**'
       - 'src/**'
@@ -59,6 +63,7 @@ jobs:
         run: |
           python -m py_compile v8_safe_appearance.py
           python -m py_compile cloud_processor_service.py
+          python -m py_compile editorial_tech_service.py scripts/editorial_raster_technical_master.py scripts/editorial_cloud_smoke.py
           python -m py_compile cloudflare_bridge.py
 
       - name: Confirm Nano Banana Pro routing contract
@@ -100,3 +105,10 @@ jobs:
           done
           echo "::error::Public health did not recover after deployment."
           exit 4
+
+      - name: Confirm editorial tech pipeline without generative activity
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/editorial_cloud_smoke.py --url "https://4k-upscaler.kontrakevich.workers.dev" --timeout 240
+

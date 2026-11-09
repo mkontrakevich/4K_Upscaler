@@ -26,6 +26,36 @@
       <p id="upload-result" class="key"></p>
       <p class="muted">Платный запуск OpenRouter управляется отдельно через одноразовую задачу Cloudflare Workflows. Публичных неконтролируемых запусков нет.</p>
     </section>
+    <section class="panel" aria-label="Прогресс и приемка нового снимка">
+      <div class="eyebrow">Новое изображение / собственное задание</div>
+      <h2>Tech Master → QA → MG 4K</h2>
+      <div class="metric"><span class="muted">Задание</span><strong id="intake-id" class="key">Не создано</strong></div>
+      <div class="metric"><span class="muted">Состояние</span><strong id="intake-status" class="status" aria-live="polite">Ожидание загрузки</strong></div>
+      <div class="metric"><span class="muted">Этап</span><strong id="intake-stage">—</strong></div>
+      <progress id="intake-progress" max="100" style="width:100%;height:12px"></progress>
+      <p id="intake-message" class="muted" role="status">Прогресс отображается только из серверных состояний, без искусственного таймера.</p>
+      <figure class="frame" id="intake-preview-frame" hidden style="margin:14px 0">
+        <figcaption>Проверка нового Tech Master · full resolution preview</figcaption>
+        <div class="imagebox" style="aspect-ratio:auto;min-height:260px">
+          <img id="intake-preview" alt="Технический мастер для визуального QA" style="display:block;max-height:65vh;object-fit:contain">
+        </div>
+        <p><a id="intake-preview-native" href="#" target="_blank" rel="noopener" hidden>Открыть техническое превью в 100% масштабе</a></p>
+        <p class="muted">Браузер показывает 8-битное представление 16-битного TIFF. Масштабирование и проверка реальной геометрии остаются обязанностью визуального QA.</p>
+      </figure>
+      <div id="intake-visual-checks" class="fields" hidden>
+        <label><input type="checkbox" id="intake-check-preview"> Изображение рассмотрено в полном разрешении</label>
+        <label><input type="checkbox" id="intake-check-geometry"> Геометрия, перспектива и архитектура соответствуют исходнику</label>
+        <label><input type="checkbox" id="intake-check-materials"> Материалы, свет и идентичность объектов сохранены; HDR отсутствует</label>
+      </div>
+      <div class="flex">
+        <button class="btn" id="intake-approve" disabled type="button">Утвердить Tech Master</button>
+        <button class="btn mutebtn" id="intake-reject" disabled type="button">Отклонить QA</button>
+        <button class="btn mutebtn" id="intake-download" disabled type="button">Скачать 16-bit TIFF</button>
+        <button class="btn" id="intake-handoff" disabled type="button">Подготовить передачу в MG 4K</button>
+      </div>
+      <p><a id="intake-import-link" href="#" hidden>Открыть импортированный мастер в MG 4K</a></p>
+      <p class="note">Для JPEG/PNG/WebP автоматически формируется нейтральный 16-битный TIFF без HDR. Если источник был 8-битным, дополнительная информация не возникает. Художественная генерация разрешается только отдельно после QA.</p>
+    </section>
     <section class="panel">
       <h2>Протокол</h2>
       <div class="metric"><span class="muted">1. Верификация источника</span><strong>SHA-256</strong></div>
@@ -65,11 +95,133 @@
 </div></main>
 <script>
 const base="/api/editorial";let session=null,sourceURL=null;
+let intakeId="",intakeProof=null,intakePoll=null,intakeBusy=false,intakeState=null;
+let intakePreviewURL=null,intakePreviewFor="",intakePreviewReady=false;
+const sessionStore="mg4k-editorial-session-v1";
+const jobAccessStore="mg4k-editorial-job-access-v1";
+function jobToken(id){
+ try{return JSON.parse(localStorage.getItem(jobAccessStore)||"{}")[id]?.token||""}catch{return ""}
+}
+function persistJobToken(id,token){
+ if(!/^[a-f0-9-]{36}$/i.test(id)||!/^[a-f0-9]{64}$/.test(token))return;
+ let current={};try{current=JSON.parse(localStorage.getItem(jobAccessStore)||"{}")}catch{}
+ const now=Date.now();
+ for(const [k,v] of Object.entries(current)){if(!v||now-Number(v.at||0)>30*24*3600*1000)delete current[k]}
+ current[id]={token,at:now};localStorage.setItem(jobAccessStore,JSON.stringify(current));
+}
+const readableStatus={AWAITING_TECH_PROCESSING:"Ожидает технической обработки",AWAITING_HUMAN_QA:"Ожидает визуального QA",TECH_MASTER_APPROVED:"Мастер утверждён",REJECTED:"QA отклонён"};
+function sessionHeaders(extra={}){return {...extra,"x-session-id":session?.id||"","x-session-token":session?.token||"","x-editorial-job-token":jobToken(intakeId)}}
+function reviewChecksPass(){
+ return intakePreviewReady&&["intake-check-preview","intake-check-geometry","intake-check-materials"].every(id=>e(id).checked);
+}
+function updateIntakeActions(){
+ const data=intakeState||{};
+ for(const [id,flag] of [["intake-approve","can_approve"],["intake-reject","can_reject"],["intake-download","can_download"],["intake-handoff","can_handoff"]])
+   e(id).disabled=intakeBusy||data[flag]!==true||(id==="intake-approve"&&!reviewChecksPass());
+}
+async function loadIntakePreview(id,sha){
+ if(intakePreviewFor===id+sha)return;
+ intakePreviewFor=id+sha;intakePreviewReady=false;
+ const r=await fetch(base+"/job/preview?job="+encodeURIComponent(id),{
+  headers:sessionHeaders(),cache:"no-store"});
+ if(!r.ok){intakePreviewFor="";throw Error("Превью технического мастера пока недоступно")}
+ const blob=await r.blob();if(blob.type!=="image/jpeg")throw Error("Некорректный формат превью");
+ if(intakePreviewURL)URL.revokeObjectURL(intakePreviewURL);
+ intakePreviewURL=URL.createObjectURL(blob);
+ e("intake-preview").src=intakePreviewURL;
+ e("intake-preview-native").href=intakePreviewURL;e("intake-preview-native").hidden=false;
+ e("intake-preview-frame").hidden=false;
+ e("intake-visual-checks").hidden=false;
+ intakePreviewReady=true;updateIntakeActions();
+}
+function setIntake(data){
+ intakeState=data;
+ intakeProof=data.technical_qa||null;
+ e("intake-id").textContent=data.job_id||"—";
+ e("intake-status").textContent=readableStatus[data.status]||data.status||"Неизвестно";
+ e("intake-stage").textContent=data.stage||"—";
+ const bar=e("intake-progress");
+ if(typeof data.progress==="number"&&Number.isFinite(data.progress)){bar.value=data.progress;bar.title=data.progress+"% только технического этапа"}
+ else {bar.removeAttribute("value");bar.title="Процент неизвестен; техническая обработка не начата"}
+ e("intake-message").textContent=data.error?"Ошибка: "+String(data.error).slice(0,500):
+   data.mg4k_imported?"Утверждённый TIFF находится в MG 4K. Генерация не запускалась.":data.message||"";
+ const link=e("intake-import-link");if(link){
+   link.hidden=!data.mg4k_imported;link.href=data.mg4k_import_url||"#";
+ }
+ updateIntakeActions();
+}
+async function intakeStatus(){
+ if(!intakeId)return;
+ const s=await sessionStart();
+ const r=await fetch(base+"/job/status?job="+encodeURIComponent(intakeId),{headers:sessionHeaders(),cache:"no-store"});
+ const d=await r.json().catch(()=>({error:"invalid_response"}));
+ if(!r.ok){e("intake-status").textContent="Ошибка "+r.status;e("intake-message").textContent=d.error||"Нет доступа к заданию";return}
+ setIntake(d);
+ if(d.technical_master_ready&&d.technical_qa?.master_sha256)
+  loadIntakePreview(id,d.technical_qa.master_sha256).catch(err=>{
+   e("intake-message").textContent=String(err);updateIntakeActions();
+  });
+}
+function activateIntake(id){
+ if(!/^[0-9a-f-]{36}$/i.test(id))return;
+ intakeId=id;location.hash="intake="+encodeURIComponent(id);
+ intakePreviewFor="";intakePreviewReady=false;intakeState=null;
+ ["intake-check-preview","intake-check-geometry","intake-check-materials"].forEach(k=>e(k).checked=false);
+ e("intake-visual-checks").hidden=true;e("intake-preview-frame").hidden=true;
+ if(intakePoll)clearInterval(intakePoll);
+ intakeStatus().catch(err=>{e("intake-message").textContent=String(err)});
+ intakePoll=setInterval(()=>intakeStatus().catch(err=>{e("intake-message").textContent=String(err)}),5000);
+}
+async function intakeDecision(decision){
+ if(!intakeProof?.master_sha256||!intakeId)return;
+ if(decision==="APPROVED"&&!reviewChecksPass())return e("intake-message").textContent="Проверьте полный размер и подтвердите все три пункта QA.";
+ intakeBusy=true;
+ e("intake-approve").disabled=e("intake-reject").disabled=true;
+ try{
+  const r=await fetch(base+"/job/decision?job="+encodeURIComponent(intakeId),{
+   method:"POST",headers:sessionHeaders({"content-type":"application/json"}),body:JSON.stringify({decision,master_sha256:intakeProof.master_sha256,
+    checks:decision==="APPROVED"?{preview_reviewed:true,geometry:true,materials:true,no_hdr:true}:null})
+  });
+  const d=await r.json();if(!r.ok)throw Error(d.error||"QA decision failed");
+  await intakeStatus();
+ }catch(err){e("intake-message").textContent=String(err)}
+ finally{intakeBusy=false}
+}
+async function intakeDownload(){
+ if(!intakeId)return;
+ e("intake-download").disabled=true;
+ try{
+  const r=await fetch(base+"/job/download?job="+encodeURIComponent(intakeId),{headers:sessionHeaders()});
+  if(!r.ok){const d=await r.json().catch(()=>({}));throw Error(d.error||"Download failed")}
+  const blob=await r.blob();
+  if(blob.type!=="image/tiff")throw Error("Server returned non-TIFF master");
+  const url=URL.createObjectURL(blob),a=document.createElement("a");
+  a.href=url;a.download="MG4K_TECH_MASTER_"+intakeId+".tif";a.click();
+  setTimeout(()=>URL.revokeObjectURL(url),60000);
+ }catch(err){e("intake-message").textContent=String(err)}finally{await intakeStatus().catch(()=>{})}
+}
+async function intakeHandoff(){
+ if(!intakeId)return;
+ e("intake-handoff").disabled=true;
+ try{
+  const r=await fetch(base+"/job/handoff?job="+encodeURIComponent(intakeId),{method:"POST",headers:sessionHeaders()});
+  const d=await r.json();if(!r.ok)throw Error(d.error||"Handoff failed");
+  e("intake-message").textContent="16-битный TIFF перенесён в MG 4K. Генерация не запускалась.";
+  if(d.mg4k_import_url){e("intake-import-link").href=d.mg4k_import_url;e("intake-import-link").hidden=false;}
+ }catch(err){e("intake-message").textContent=String(err)}finally{await intakeStatus().catch(()=>{})}
+}
+
 const e=id=>document.getElementById(id);
 function say(s){e("report").textContent=typeof s==="string"?s:JSON.stringify(s,null,2)}
-async function sessionStart(){if(session)return session;const r=await fetch("/api/session/start",{method:"POST"});if(!r.ok)throw Error("MG4K session error");session=await r.json();return session}
-async function health(){const r=await fetch(base+"/health");const h=await r.json();e("status").textContent=h.ok&&h.storage_isolated&&h.openrouter_configured?"Контур доступен":"Требуется настройка";say(h)}
-async function upload(){const file=e("file").files[0];if(!file)throw Error("Выберите JPG/PNG/WebP");if(file.size>8*1024*1024)throw Error("Лимит 8 МБ");const s=await sessionStart();const f=new FormData();f.append("file",file);const r=await fetch(base+"/upload",{method:"POST",headers:{"x-session-id":s.id,"x-session-token":s.token},body:f});const data=await r.json();if(!r.ok)throw Error(JSON.stringify(data));e("upload-result").textContent=data.source_key+" · "+data.sha256.slice(0,16);say(data);if(sourceURL)URL.revokeObjectURL(sourceURL);sourceURL=URL.createObjectURL(file);e("source").src=sourceURL;e("source").classList.add("ready");e("source-label").hidden=true}
+async function sessionStart(){
+ if(session)return session;
+ try{const cached=JSON.parse(sessionStorage.getItem(sessionStore)||"null");if(cached?.id&&cached?.token){session=cached;return session}}catch{}
+ const r=await fetch("/api/session/start",{method:"POST"});
+ if(!r.ok)throw Error("MG4K session error");
+ session=await r.json();sessionStorage.setItem(sessionStore,JSON.stringify(session));return session
+}
+async function health(){const r=await fetch(base+"/health");const h=await r.json();e("status").textContent=h.ok&&h.storage_isolated&&h.technical_workflow_configured?"Tech Master доступен":"Технический контур требует настройки";say(h)}
+async function upload(){const file=e("file").files[0];if(!file)throw Error("Выберите JPG/PNG/WebP");if(file.size>8*1024*1024)throw Error("Лимит 8 МБ");const s=await sessionStart();const f=new FormData();f.append("file",file);const r=await fetch(base+"/upload",{method:"POST",headers:{"x-session-id":s.id,"x-session-token":s.token},body:f});const data=await r.json();if(!r.ok)throw Error(JSON.stringify(data));e("upload-result").textContent=data.source_key+" · "+data.sha256.slice(0,16);say(data);if(data.job_id){persistJobToken(data.job_id,data.job_token);activateIntake(data.job_id)}if(sourceURL)URL.revokeObjectURL(sourceURL);sourceURL=URL.createObjectURL(file);e("source").src=sourceURL;e("source").classList.add("ready");e("source-label").hidden=true}
 async function load(){const id=e("job").value.trim();if(!/^[0-9a-f-]{36}$/i.test(id))return say("Укажите UUID задания");const r=await fetch(base+"/view?job="+encodeURIComponent(id)+"&kind=manifest");const data=await r.json();if(!r.ok)return say(data);e("status").textContent=data.status||"REVIEW";say(data);e("source").src=base+"/view?job="+encodeURIComponent(id)+"&kind=source";e("source").classList.add("ready");e("source-label").hidden=true;
 e("optical").src=base+"/view?job="+encodeURIComponent(id)+"&kind=optical";e("optical").classList.add("ready");e("optical-label").hidden=true;
 for(const [kind,element] of [["tech_v10_neutral","tech-neutral"],["tech_v10_clean","tech-clean"]]){
@@ -96,5 +248,13 @@ e("open-editorial").addEventListener("click",()=>{
  const id=e("job").value.trim();if(!id)return say("Не указан ID задания.");
  window.EditorialCompare?.open(id,"tech-editorial").catch(err=>say(String(err)));
 });
-e("upload").addEventListener("click",()=>upload().catch(err=>say(String(err))));e("load").addEventListener("click",()=>load().catch(err=>say(String(err))));e("refresh").addEventListener("click",()=>load().catch(err=>health().catch(e=>say(String(e)))));const hash=new URLSearchParams(location.hash.slice(1));if(hash.get("job")){e("job").value=hash.get("job");load().catch(err=>say(String(err)))}else health().catch(err=>say(String(err)));
+e("upload").addEventListener("click",()=>upload().catch(err=>say(String(err))));e("load").addEventListener("click",()=>load().catch(err=>say(String(err))));e("refresh").addEventListener("click",()=>load().catch(err=>health().catch(e=>say(String(e)))));["intake-check-preview","intake-check-geometry","intake-check-materials"].forEach(id=>
+ e(id).addEventListener("change",updateIntakeActions));
+e("intake-approve").addEventListener("click",()=>intakeDecision("APPROVED"));
+e("intake-reject").addEventListener("click",()=>intakeDecision("REJECTED"));
+e("intake-download").addEventListener("click",intakeDownload);
+e("intake-handoff").addEventListener("click",intakeHandoff);
+const hash=new URLSearchParams(location.hash.slice(1));
+if(hash.get("intake")){activateIntake(hash.get("intake"));health().catch(err=>say(String(err)))}
+else if(hash.get("job")){e("job").value=hash.get("job");load().catch(err=>say(String(err)))}else health().catch(err=>say(String(err)));
 </script><script src="/editorial-compare.js" defer></script></body></html>

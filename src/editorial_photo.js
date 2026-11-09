@@ -1,3 +1,4 @@
+import { editorialJobApi, createEditorialIntakeJob } from "./editorial_jobs.js";
 import { WorkflowEntrypoint } from "cloudflare:workers";
 import { NonRetryableError } from "cloudflare:workflows";
 
@@ -158,8 +159,9 @@ export class EditorialPhotoWorkflow extends WorkflowEntrypoint{
 }
 export async function editorialApi(request,env,url,authorizeSession){
  const path=url.pathname,method=request.method.toUpperCase();
+ if(path.startsWith("/api/editorial/job/"))return editorialJobApi(request,env,url,authorizeSession);
  if(path==="/api/editorial/health"&&method==="GET"){
-  return j({ok:true,project:PROJECT,frame:FRAME,module:"Editorial Photo",storage_isolated:!!env.TROPICANA_EDITORIAL_R2,openrouter_configured:!!env.OPENROUTER_API_KEY,job_control:"Cloudflare Workflows API only",skill:"v1.13",technical_master_policy:"V10_NEUTRAL_NO_HDR",generation_guard:"HUMAN_QA_APPROVAL_REQUIRED",image_model:env.EDITORIAL_IMAGE_MODEL||MODEL,workflow:"mg4k-tropicana-editorial"});
+  return j({ok:true,project:PROJECT,frame:FRAME,module:"Editorial Photo",storage_isolated:!!env.TROPICANA_EDITORIAL_R2,openrouter_configured:!!env.OPENROUTER_API_KEY,job_control:"Cloudflare Workflows API only",skill:"v1.13",technical_master_policy:"V10_NEUTRAL_NO_HDR",generation_guard:"HUMAN_QA_APPROVAL_REQUIRED",image_model:env.EDITORIAL_IMAGE_MODEL||MODEL,workflow:"mg4k-tropicana-editorial",technical_workflow_configured:!!env.TROPICANA_TECH_WORKFLOW});
  }
  if(path==="/api/editorial/upload"&&method==="POST"){
   const session=await authorizeSession(request,url,env);
@@ -180,11 +182,30 @@ export async function editorialApi(request,env,url,authorizeSession){
   if(!file||typeof file.arrayBuffer!=="function"||file.size<10000||file.size>MAX_SOURCE)return j({error:"image_required_max_8mb"},400);
   if(!["image/jpeg","image/png","image/webp"].includes(String(file.type)))return j({error:"unsupported_image_type"},415);
   const bytes=await file.arrayBuffer();const sha=await sha256(bytes);
-  const key=ROOT+"uploads/"+session.id+"/"+crypto.randomUUID()+"."+(file.type==="image/png"?"png":file.type==="image/webp"?"webp":"jpg");
+  const key=PROJECT+"/editorial-inbox/"+session.id+"/"+crypto.randomUUID()+"."+(file.type==="image/png"?"png":file.type==="image/webp"?"webp":"jpg");
   await env.TROPICANA_EDITORIAL_R2.put(key,bytes,{httpMetadata:{contentType:file.type},customMetadata:{sha256:sha,project:PROJECT,frame:FRAME}});
   await env.SESSION_STATE_R7.put(limitKey,String(usage+1),{expirationTtl:3600});
   await Promise.all([env.SESSION_STATE_R7.put(ipKey,String(Number(ipCount||0)+1),{expirationTtl:7200}),env.SESSION_STATE_R7.put(globalKey,String(Number(globalCount||0)+1),{expirationTtl:7200})]);
-  return j({ok:true,project:PROJECT,frame:FRAME,source_key:key,sha256:sha,bytes:bytes.byteLength,workflow_control:"manual",message:"Input stored. Paid editorial workflow requires authorized management launch."},201);
+  const intake=await createEditorialIntakeJob(env,session,{filename:file.name,mime:file.type,source_key:key,source_sha256:sha,bytes:bytes.byteLength});
+  let started=false,workflow_error=null;
+  if(env.TROPICANA_TECH_WORKFLOW){
+    try{
+      await env.TROPICANA_TECH_WORKFLOW.create({id:intake.job_id,params:{job_id:intake.job_id}});
+      started=true;
+    }catch(err){
+      workflow_error=String(err?.message||err).slice(0,250);
+      console.error("EDITORIAL_TECH_WORKFLOW_DISPATCH",intake.job_id,workflow_error);
+      await env.TROPICANA_EDITORIAL_R2.put("tropicana-park/editorial-jobs/"+intake.job_id+"/processing-state.json",
+        JSON.stringify({job_id:intake.job_id,status:"FAILED",stage:"workflow_dispatch_failed",
+          progress:null,message:"Технический процессор не запущен.",error:workflow_error}),
+        {httpMetadata:{contentType:"application/json"}});
+    }
+  }else workflow_error="technical_workflow_not_configured";
+  return j({ok:true,project:PROJECT,frame:"NEW_UPLOAD",job_id:intake.job_id,job_token:intake.job_token,
+    status:started?"QUEUED":workflow_error?"FAILED":intake.status,stage:started?"technical_queued":intake.stage,progress:null,
+    source_key:key,sha256:sha,bytes:bytes.byteLength,workflow_control:"automatic_free_technical_only",
+    message:started?"Исходник сохранён; технический процессор запущен без HDR и OpenRouter.":"Технический процессор недоступен.",
+    workflow_error},201);
  }
  if(path==="/api/editorial/view"&&method==="GET"){
   const id=url.searchParams.get("job")||"",kind=url.searchParams.get("kind")||"manifest";

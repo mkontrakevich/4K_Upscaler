@@ -16,6 +16,7 @@ from urllib.parse import unquote
 from typing import Any
 
 import cloudflare_bridge as bridge
+import editorial_tech_service
 
 
 STARTED_AT = time.time()
@@ -562,6 +563,8 @@ class ProcessorHandler(BaseHTTPRequestHandler):
         return None
 
     def do_GET(self) -> None:
+        if editorial_tech_service.route(self, "GET"):
+            return
         if self.path == "/healthz":
             self._json(200, {
                 "status": "ok",
@@ -612,6 +615,8 @@ class ProcessorHandler(BaseHTTPRequestHandler):
         self._json(404, {"error": "not_found"})
 
     def do_POST(self) -> None:
+        if editorial_tech_service.route(self, "POST"):
+            return
         job_id = self._job_id("start")
         if job_id:
             length = int(self.headers.get("content-length") or self.headers.get("x-mg4k-source-size") or "0")

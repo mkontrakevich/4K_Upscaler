@@ -906,7 +906,7 @@ jobs:
           assert 'job.review_detached_from_container = true;' in worker
           assert 'job.container_review_released_at = now();' in worker
           assert 'MG4K_REVIEW_DECISION_CONTAINER_NOTIFY_WARNING' in worker
-          assert cfg["containers"][0]["max_instances"] == 1
+          assert cfg["containers"][0]["max_instances"] == 2  # paid main + isolated offline technical
           print("Persisted REVIEW -> R2 authority / Container slot release: PASSED")
           PY
 
@@ -942,7 +942,7 @@ jobs:
           worker = Path("src/worker.js").read_text(encoding="utf-8")
           cfg = json.loads(Path("wrangler.jsonc").read_text(encoding="utf-8"))
 
-          assert cfg["containers"][0]["max_instances"] == 1, "Paid processor concurrency must remain single-instance"
+          assert cfg["containers"][0]["max_instances"] == 2, "Only two fixed container slots: existing paid processor and isolated offline technical processor"
           assert "async shutdownContainer(reason" in worker
           assert "this.ctx.container.destroy" in worker
           assert "async function hasInFlightProcessorJob(env, instanceNames)" in worker
@@ -993,7 +993,7 @@ jobs:
           worker = Path("src/worker.js").read_text(encoding="utf-8")
           cfg = json.loads(Path("wrangler.jsonc").read_text(encoding="utf-8"))
 
-          assert cfg["containers"][0]["max_instances"] == 1
+          assert cfg["containers"][0]["max_instances"] == 2
           assert 'const CONTAINER_BUILD_ID = "result-persist-r11b";' in worker
           assert "const assertSafeToRecycleCurrentInstance = async (reason) =>" in worker
           assert "const recycleCurrentInstance = async (reason) =>" in worker
@@ -1028,7 +1028,7 @@ jobs:
           worker = Path("src/worker.js").read_text(encoding="utf-8")
           cfg = json.loads(Path("wrangler.jsonc").read_text(encoding="utf-8"))
 
-          assert cfg["containers"][0]["max_instances"] == 1
+          assert cfg["containers"][0]["max_instances"] == 2
           assert 'const CONTAINER_INSTANCE_NAME = "primary-result-persist-r11b";' in worker
           assert '"primary-result-persist-r10a"' in worker, "Previous R11a instance must remain in legacy retirement list"
           assert "const startConfig = {" in worker

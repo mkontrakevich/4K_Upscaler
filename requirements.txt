@@ -4,3 +4,4 @@ numpy>=2.0,<3
 opencv-python-headless>=4.10,<5
 fastapi>=0.115,<1
 uvicorn>=0.34,<1
+tifffile>=2025.1,<2028
