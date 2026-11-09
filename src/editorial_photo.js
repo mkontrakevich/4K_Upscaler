@@ -181,6 +181,52 @@ export async function editorialApi(request,env,url,authorizeSession){
  }
  if(path==="/api/editorial/view"&&method==="GET"){
   const id=url.searchParams.get("job")||"",kind=url.searchParams.get("kind")||"manifest";
+  if((kind==="compare_info"||kind==="tech_full")&&isId(id)){
+    const manifestObject=await env.TROPICANA_EDITORIAL_R2.get(fileKey(id,"manifest.json"));
+    if(!manifestObject)return j({error:"editorial_job_not_found"},404);
+    const manifest=await manifestObject.json();
+    if(manifest.project!==PROJECT||manifest.frame!==FRAME||
+       manifest.source_key!==ROOT+"technical-v9/DSC09818_EDITORIAL_INPUT.jpg"||
+       !manifest.candidate_key||manifest.final!==false)
+      return j({error:"only_genuine_V9_source_compare_supported"},409);
+    const [proofObject,previewManifestObject]=await Promise.all([
+      env.TROPICANA_EDITORIAL_R2.get(ROOT+"technical-v9/DSC09818_TECH_QA.json"),
+      env.TROPICANA_EDITORIAL_R2.get(ROOT+"technical-v9/fullres-preview-manifest.json")
+    ]);
+    if(!proofObject)return j({error:"technical_source_lineage_missing"},404);
+    const q=await proofObject.json();
+    if(q.source_sha256!=="1b4344f4b8ca629830254850fbcbaf2931c83c00a158ab87d84e5ee7722046d5"||
+       q.technical_status!=="TECHNICAL_QA_PASS"||
+       q.editorial_input_sha256!==manifest.source_sha256)
+      return j({error:"technical_source_sha_or_status_mismatch"},409);
+    let fullKey=null,preview=null;
+    if(previewManifestObject){
+      const p=await previewManifestObject.json();
+      const allowed=new RegExp("^tropicana-park/DSC09818/technical-v9/fullres-review-[a-f0-9]{16}\\.jpg$");
+      if(p.master16_sha256===q.clean16_sha256&&
+         p.original_arw_sha256===q.source_sha256&&
+         p.native_width===6536&&p.native_height===4360&&
+         p.display_bit_depth===8&&p.master_bit_depth===16&&allowed.test(p.preview_key)){
+         const head=await env.TROPICANA_EDITORIAL_R2.head(p.preview_key);
+         if(head&&head.size===p.preview_bytes){fullKey=p.preview_key;preview=p}
+      }
+    }
+    if(kind==="tech_full"){
+      if(!fullKey)return j({error:"full_resolution_preview_not_ready"},404);
+      const obj=await env.TROPICANA_EDITORIAL_R2.get(fullKey);
+      if(!obj)return j({error:"full_resolution_preview_missing"},404);
+      return new Response(obj.body,{headers:{"content-type":"image/jpeg","cache-control":"private,max-age=3600","x-content-type-options":"nosniff","content-disposition":"inline"}});
+    }
+    return j({ok:true,project:PROJECT,frame:FRAME,job_id:id,source:"verified genuine ARW -> 16-bit TIFF TECH V9",
+      technical_master_sha256:q.clean16_sha256,technical_master_dimensions:{width:6536,height:4360,bit_depth:16},
+      technical_preview_kind:"8-bit full-pixel-resolution browser representation (NOT the 16-bit TIFF itself)",
+      fullres_preview:{ready:!!fullKey,key:fullKey?undefined:null,width:preview?.native_width||null,height:preview?.native_height||null,
+        sha256:preview?.preview_sha256||null},
+      editorial_native_dimensions:"Read from actual OpenRouter PNG in browser; no false claims about source resolution",
+      editorial_candidate_sha256:manifest.candidate_sha256,
+      post_generation_geometry:"Refer to independent numeric QA under manifest; visual authenticity remains REVIEW",
+      publication_approved:false});
+  }
   if(!isId(id)||!["manifest","candidate","analysis","qa","source","optical","technical","tech_clean","tech_neutral","tech_hdr","tech_qa"].includes(kind))return j({error:"invalid_view_request"},400);
   const map={manifest:"manifest.json",candidate:"editorial_candidate.png",analysis:"scene_analysis.json",qa:"fidelity_qa.json"};
   let key=kind==="technical"?ROOT+"optically_locked_model_input.jpg":kind==="optical"?ROOT+"optical_only_input.jpg":fileKey(id,map[kind]||"manifest.json");

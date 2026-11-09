@@ -5,6 +5,10 @@ on:
       - 'src/editorial_photo.js'
       - 'src/worker.js'
       - 'site/editorial-photo.html'
+      - 'site/editorial-compare.js'
+      - 'site/editorial-compare.css'
+      - 'scripts/editorial_fullres_review.py'
+      - '.github/workflows/editorial-fullres-review.yml'
       - 'site/index.html'
       - 'wrangler.jsonc'
       - '.github/workflows/editorial-photo-ci.yml'
@@ -24,6 +28,8 @@ jobs:
         run: |
           node --check src/worker.js
           node --check src/editorial_photo.js
+          node --check site/editorial-compare.js
+          python -m py_compile scripts/editorial_fullres_review.py
       - name: Validate geometry module
         run: |
           python -m py_compile editorial_geometry.py editorial_lens_profile.py
@@ -66,6 +72,15 @@ jobs:
           ui=Path('site/editorial-photo.html').read_text()
           assert 'Editorial Photo' in ui and '/api/editorial' in ui
           assert 'editorial-photo.html' in Path('site/index.html').read_text()
+          compare=Path('site/editorial-compare.js').read_text()
+          assert 'drawImage' in compare and 'pointerDown' in compare and 'pointerMove' in compare
+          assert 'data-ec-mode="split"' in compare and 'data-ec-zoom="editorial"' in compare
+          assert 'ec-dialog' in compare and 'requestFullscreen' in compare
+          assert 'compare_info' in s and 'tech_full' in s
+          assert 'technical_master_sha256' in s and 'fullres-preview-manifest.json' in s
+          assert 'editorial-compare.js' in ui and 'id="open-compare"' in ui
+          assert 'technical-v9' in Path('.github/workflows/editorial-fullres-review.yml').read_text() and 'DSC09818_TECH_CLEAN16.tif' in Path('.github/workflows/editorial-fullres-review.yml').read_text()
+          assert 'qa["clean16_sha256"]' in Path('scripts/editorial_fullres_review.py').read_text()
           print('Editorial Photo contract: PASSED')
           PY
       - name: Build Worker without deployment
