@@ -4,7 +4,7 @@
 <style>
 :root{--bg:#07121d;--panel:#0e2030;--line:#294055;--txt:#f2f6fb;--muted:#9cafc1;--cyan:#16c5f4;--gold:#bba582}
 *{box-sizing:border-box}html,body{margin:0;background:var(--bg);color:var(--txt);font:15px/1.5 Inter,Arial,sans-serif}body{min-height:100vh;background:radial-gradient(ellipse at 30% 0%,#183147 0%,#07121d 56%)}a{color:#a9e4fc;text-decoration:none}header{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:20px max(18px,calc((100vw - 1440px)/2));border-bottom:1px solid var(--line)}.brand{font-size:22px;font-weight:700;letter-spacing:-.04em}.brand span{color:var(--cyan)}main{max-width:1440px;margin:auto;padding:30px 18px 65px}.eyebrow{font-size:11px;letter-spacing:.16em;color:var(--gold);text-transform:uppercase}h1{font-weight:350;font-size:clamp(36px,6vw,70px);letter-spacing:-.05em;margin:8px 0 8px}h2{font-size:20px;font-weight:550;margin:0 0 12px}.lead{font-size:16px;color:var(--muted);max-width:850px;margin-bottom:26px}.grid{display:grid;grid-template-columns:320px 1fr;gap:18px}.panel{border:1px solid var(--line);background:rgba(14,32,48,.84);padding:20px;border-radius:4px}.metric{display:grid;grid-template-columns:1fr auto;gap:8px;border-bottom:1px solid var(--line);padding:11px 0}.muted,small{color:var(--muted)}.status{color:#ffe1a0}.stack{display:grid;gap:15px}.fields{display:grid;gap:9px}.fields input{padding:10px;width:100%;max-width:100%;background:#07131f;color:var(--txt);border:1px solid var(--line);border-radius:3px}.btn{background:#193d52;color:#fff;border:1px solid #4d8cae;border-radius:3px;cursor:pointer;padding:10px 16px}.btn:disabled{opacity:.5;cursor:default}.mutebtn{background:#122a3b}.triptych{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.frame{margin:0;display:grid;grid-template-rows:auto 1fr;gap:8px;min-width:0}.frame figcaption{font-size:12px;color:var(--muted);letter-spacing:.12em;text-transform:uppercase}.frame .imagebox{background:#06121c;min-height:190px;aspect-ratio:3/2;border:1px solid #284359;display:grid;place-items:center;color:#7793a8;overflow:hidden}.frame img{width:100%;height:100%;object-fit:contain;display:none}.frame img.ready{display:block}.note{padding:12px 14px;border-left:2px solid var(--gold);background:#152838;color:#c9d4de}.report{margin-top:16px;background:#081923;border:1px solid var(--line);padding:14px;font:12px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace;white-space:pre-wrap;overflow-wrap:anywhere;max-height:280px;overflow:auto}.flex{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.key{font:12px Consolas,monospace;color:#a1b8cd;overflow-wrap:anywhere}@media(max-width:920px){.grid{grid-template-columns:1fr}.triptych{grid-template-columns:1fr}.frame .imagebox{min-height:150px}header{padding:15px 18px}}
-</style></head><body>
+</style><link rel="stylesheet" href="/editorial-compare.css"></head><body>
 <header><div class="brand">MG <span>4K</span> / EDITORIAL PHOTO</div><nav><a href="/">4K Upscaler</a></nav></header>
 <main>
 <div class="eyebrow">MARINS OS / Architectural Editorial / Perspective Lock</div><h1>Editorial Photo</h1>
@@ -49,7 +49,7 @@
       <div class="metric"><span>Доступ к OpenRouter</span><strong style="color:#e8b672">Разрешён один художественный тест после V9 QA</strong></div>
       <p class="note">Исходник, прежняя геометрия и OpenRouter-итерации сохранены. Это новая техническая версия, технический источник, не художественный финал. Ограничения: высокий шум от ISO 3200, отсутствует реальная HDR-вилка, точность калибровки объектива требует визуальной проверки.</p>
     </div>
-    <div class="panel"><div class="flex" style="justify-content:space-between"><h2>Previous Editorial / История</h2><button class="btn mutebtn" id="refresh">Проверить задание</button></div>
+    <div class="panel"><div class="flex" style="justify-content:space-between"><h2>Editorial 01 / Split Compare</h2><div class="flex"><button class="btn" id="open-compare" disabled title="Сравнить Technical V9 и OpenRouter оригинал в масштабируемом полноэкранном просмотрщике">ОТКРЫТЬ SPLIT · FULLSCREEN</button><button class="btn mutebtn" id="refresh">Проверить задание</button></div></div><p class="muted">Просмотрщик показывает технический RAW V9 в полном пиксельном размере (8-битный экранный JPEG из 16-битного TIFF) и настоящий оригинал результата OpenRouter. 100% TECH — 1:1 пиксели технического RAW, EDITORIAL может быть существенно меньше.</p>
       <div class="triptych">
         <figure class="frame"><figcaption>01 / RAW проявка до геометрии</figcaption><div class="imagebox"><img id="source" alt="Исходник"><span id="source-label">Нет загруженного файла</span></div></figure>
         <figure class="frame"><figcaption>02 / Lens Distortion — PTLens 16 мм</figcaption><div class="imagebox"><img id="optical" alt="Lens distortion corrected"><span id="optical-label">Требуется оптическая коррекция</span></div></figure>
@@ -76,6 +76,15 @@ for(const [kind,element] of [["tech_neutral","tech-neutral"],["tech_hdr","tech-h
  e(element).classList.add("ready");e(element+"-label").hidden=true;
 }
 e("technical").src=base+"/view?job="+encodeURIComponent(id)+"&kind=technical";e("technical").classList.add("ready");e("technical-label").hidden=true;
-if(data.candidate_key){e("candidate").src=base+"/view?job="+encodeURIComponent(id)+"&kind=candidate";e("candidate").classList.add("ready");e("candidate-label").hidden=true}}
+if(data.candidate_key){e("candidate").src=base+"/view?job="+encodeURIComponent(id)+"&kind=candidate";e("candidate").classList.add("ready");e("candidate-label").hidden=true;
+e("open-compare").disabled=data.source_key!=="tropicana-park/DSC09818/technical-v9/DSC09818_EDITORIAL_INPUT.jpg";
+if(!e("open-compare").disabled && hash.get("compare")==="1")window.EditorialCompare?.open(id).catch(err=>say(String(err)));
+}else e("open-compare").disabled=true}
+e("open-compare").addEventListener("click",()=>{
+ const id=e("job").value.trim();
+ if(!id)return say("Не указан ID задания.");
+ if(!window.EditorialCompare)return say("Split viewer не загружен.");
+ window.EditorialCompare.open(id).catch(err=>say(String(err)));
+});
 e("upload").addEventListener("click",()=>upload().catch(err=>say(String(err))));e("load").addEventListener("click",()=>load().catch(err=>say(String(err))));e("refresh").addEventListener("click",()=>load().catch(err=>health().catch(e=>say(String(e)))));const hash=new URLSearchParams(location.hash.slice(1));if(hash.get("job")){e("job").value=hash.get("job");load().catch(err=>say(String(err)))}else health().catch(err=>say(String(err)));
-</script></body></html>
+</script><script src="/editorial-compare.js" defer></script></body></html>
