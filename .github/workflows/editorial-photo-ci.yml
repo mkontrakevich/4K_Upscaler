@@ -3,6 +3,8 @@ on:
   pull_request:
     paths:
       - 'src/editorial_photo.js'
+      - 'src/editorial_jobs.js'
+      - 'tests/editorial-jobs.test.mjs'
       - 'src/worker.js'
       - 'site/editorial-photo.html'
       - 'site/editorial-compare.js'
@@ -33,6 +35,8 @@ jobs:
         run: |
           node --check src/worker.js
           node --check src/editorial_photo.js
+          node --check src/editorial_jobs.js
+          node --experimental-default-type=module --test tests/editorial-jobs.test.mjs
           node --check site/editorial-compare.js
           python -m py_compile scripts/editorial_fullres_review.py scripts/editorial_original_raw_review.py scripts/editorial_dsc09818_technical_master_v10.py scripts/editorial_fullres_review_v10.py
       - name: Validate geometry module
