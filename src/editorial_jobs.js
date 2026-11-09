@@ -12,26 +12,34 @@ const hex=bytes=>[...new Uint8Array(bytes)].map(v=>v.toString(16).padStart(2,"0"
 
 export async function createEditorialIntakeJob(env,session,{filename,mime,source_key,source_sha256,bytes}) {
   const id=crypto.randomUUID();
+  const token=crypto.randomUUID().replaceAll("-","")+crypto.randomUUID().replaceAll("-","");
   const stamp=new Date().toISOString();
   const record={
-    schema:1,job_id:id,owner_session_id:session.id,project:"tropicana-park",filename:String(filename||"image").slice(0,128),
+    schema:1,job_id:id,owner_session_id:session.id,
+    access_hash:await hash(new TextEncoder().encode(token)),
+    project:"tropicana-park",filename:String(filename||"image").slice(0,128),
     mime,source_key,source_sha256,source_bytes:bytes,created_at:stamp,
     status:"AWAITING_TECH_PROCESSING",stage:"source_stored",progress:null,
     message:"Файл сохранён. Техническая обработка ещё не запущена.",
     locks:LOCKS,auto_generation:false,technical_master_ready:false
   };
   await env.TROPICANA_EDITORIAL_R2.put(key(id,"job.json"),JSON.stringify(record),{httpMetadata:{contentType:"application/json"}});
-  return record;
+  return {...record,job_token:token};
 }
 
 async function owned(request,env,url,authorizeSession,id) {
-  const session=await authorizeSession(request,url,env);
-  if(!session||!idOK(id))return null;
+  if(!idOK(id))return null;
   const obj=await env.TROPICANA_EDITORIAL_R2.get(key(id,"job.json"));
   if(!obj)return null;
   const job=await obj.json();
-  if(job.owner_session_id!==session.id||job.job_id!==id)return null;
-  return {job,session};
+  if(job.job_id!==id)return null;
+  const session=await authorizeSession(request,url,env);
+  const sameSession=!!session&&job.owner_session_id===session.id;
+  const bearer=String(request.headers.get("x-editorial-job-token")||"");
+  const tokenOK=/^[a-f0-9]{64}$/.test(bearer)&&!!job.access_hash&&
+    (await hash(new TextEncoder().encode(bearer)))===job.access_hash;
+  if(!sameSession&&!tokenOK)return null;
+  return {job,session:session&&sameSession?session:{id:job.owner_session_id}};
 }
 
 // Only a trusted technical processor with R2 write access can publish QA evidence.
