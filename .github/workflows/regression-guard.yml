@@ -906,7 +906,7 @@ jobs:
           assert 'job.review_detached_from_container = true;' in worker
           assert 'job.container_review_released_at = now();' in worker
           assert 'MG4K_REVIEW_DECISION_CONTAINER_NOTIFY_WARNING' in worker
-          assert cfg["containers"][0]["max_instances"] == 1
+          assert cfg["containers"][0]["max_instances"] == 2  # paid main + isolated offline technical
           print("Persisted REVIEW -> R2 authority / Container slot release: PASSED")
           PY
 
