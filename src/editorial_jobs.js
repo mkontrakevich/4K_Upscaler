@@ -162,11 +162,15 @@ export async function editorialJobApi(request,env,url,authorizeSession) {
   if(path==="/api/editorial/job/decision"&&method==="POST") {
     let input;try{input=await request.json()}catch{return json({error:"invalid_json"},400)}
     if(!["APPROVED","REJECTED"].includes(input?.decision))return json({error:"invalid_decision"},400);
+    if(input.decision==="APPROVED"&&
+      !["preview_reviewed","geometry","materials","no_hdr"].every(k=>input.checks?.[k]===true))
+      return json({error:"visual_QA_checklist_required"},400);
     if(a.d)return json(a.d.decision===input.decision?{ok:true,idempotent:true,decision:a.d.decision}:{error:"decision_already_recorded"},a.d.decision===input.decision?200:409);
     if(!a.q)return json({error:"technical_master_not_ready_or_failed_QA"},409);
     if(input.master_sha256!==a.q.master_sha256)return json({error:"master_hash_mismatch"},409);
     const d={schema:1,job_id:id,decision:input.decision,source_sha256:job.source_sha256,
-      master_sha256:a.q.master_sha256,at:new Date().toISOString(),owner_session_id:owner.session.id};
+      master_sha256:a.q.master_sha256,at:new Date().toISOString(),owner_session_id:owner.session.id,
+      visual_qa_checks:input.decision==="APPROVED"?input.checks:null};
     const result=await env.TROPICANA_EDITORIAL_R2.put(key(id,"technical/decision.json"),JSON.stringify(d),{
       onlyIf:new Headers({"If-None-Match":"*"}),httpMetadata:{contentType:"application/json"}
     });
