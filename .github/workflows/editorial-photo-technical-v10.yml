@@ -1,9 +1,5 @@
 name: Editorial DSC09818 V10 neutral NO HDR technical
 on:
-  pull_request:
-    paths:
-      - 'scripts/editorial_dsc09818_technical_master_v10.py'
-      - '.github/workflows/editorial-photo-technical-v10.yml'
   workflow_dispatch:
 permissions:
   contents: read
