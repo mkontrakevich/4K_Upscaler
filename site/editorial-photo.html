@@ -50,12 +50,14 @@
       <p class="note">Исходник, прежняя геометрия и OpenRouter-итерации сохранены. Это новая техническая версия, технический источник, не художественный финал. Ограничения: высокий шум от ISO 3200, отсутствует реальная HDR-вилка, точность калибровки объектива требует визуальной проверки.</p>
     </div>
     <div class="panel"><div class="flex" style="justify-content:space-between"><h2>Проверка RAW / Technical / Editorial</h2><div class="flex"><button class="btn" id="open-compare" disabled title="Исходный ARW до коррекции геометрии против технического мастера V9, без изменения оригинала">SPLIT · RAW / TECH</button><button class="btn mutebtn" id="open-editorial" disabled title="TECH V9 против результата OpenRouter в том же просмотрщике">TECH / EDITORIAL</button><button class="btn mutebtn" id="refresh">Проверить задание</button></div></div><p class="muted">Первый режим сравнивает нейтральную проявку исходного Sony ARW (7028 × 4688, без коррекции дисторсии и перспективы) с TECH V9 (6536 × 4360). Второй — TECH V9 с результатом OpenRouter. Для честного сравнения геометрии исходный RAW совмещается с техническим кадром по центру поля зрения, без выпрямления оригинала. Доступны Fullscreen, Split, Side, Blink и 100% увеличение.</p>
-      <div class="triptych">
+      <details class="panel" style="margin:14px 0;background:#0b1a28;border-color:#294055"><summary style="cursor:pointer;color:#b7ccdc">Архивные стадии прежнего контура (не используются для приёмки RAW / TECH V9)</summary>
+      <div class="triptych" style="margin-top:14px">
         <figure class="frame"><figcaption>01 / RAW проявка до геометрии</figcaption><div class="imagebox"><img id="source" alt="Исходник"><span id="source-label">Нет загруженного файла</span></div></figure>
         <figure class="frame"><figcaption>02 / Lens Distortion — PTLens 16 мм</figcaption><div class="imagebox"><img id="optical" alt="Lens distortion corrected"><span id="optical-label">Требуется оптическая коррекция</span></div></figure>
         <figure class="frame"><figcaption>03 / Perspective Lock — выпрямленный</figcaption><div class="imagebox"><img id="technical" alt="RAW technical master"><span id="technical-label">Ожидает загрузки</span></div></figure>
         <figure class="frame"><figcaption>04 / Editorial candidate (после OpenRouter)</figcaption><div class="imagebox"><img id="candidate" alt="Editorial candidate"><span id="candidate-label">Ожидает OpenRouter</span></div></figure>
       </div>
+      </details>
       <p class="note">Оценка художественного качества и соответствие реальному объекту — два разных этапа. Изменение архитектуры, мебели, ограждений или панорамы блокирует финальное утверждение.</p>
       <div class="flex"><label for="job" class="muted">ID одноразового задания</label><input id="job" style="flex:1;min-width:180px;padding:10px;background:#07131f;border:1px solid #294055;color:#fff" placeholder="Workflow run UUID"><button id="load" class="btn" type="button">Открыть QA</button></div>
       <pre class="report" id="report">Загрузка состояния…</pre>
