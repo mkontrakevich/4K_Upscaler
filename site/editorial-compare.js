@@ -168,14 +168,15 @@ function updateUI(){
  const sl=$("ec-split-range");sl.value=String(Math.round(S.split*100));sl.disabled=S.mode!=="split";
  $("ec-split-percent").textContent=Math.round(S.split*100)+"%";
  const isRaw=S.pair==="raw-tech";
- $("ec-pair-title").textContent=isRaw?"DSC09818 / ORIGINAL RAW ↔ TECH V10 (NO HDR)":"DSC09818 / TECH V9 (АРХИВ) ↔ EDITORIAL 01";
+ const isNewArt=S.meta?.candidate_source_version==="V10";
+ $("ec-pair-title").textContent=isRaw?"DSC09818 / ORIGINAL RAW ↔ TECH V10 (NO HDR)":isNewArt?"DSC09818 / TECH V10 ↔ GENERATIVE REVIEW":"DSC09818 / TECH V9 (АРХИВ) ↔ EDITORIAL 01";
  $("ec-zoom-label").textContent=S.zoom==="fit"?"FIT":S.zoom==="editorial"?"1:1 RIGHT":Math.round(S.scale*100)+"% REF";
  if(S.source&&S.result){
   const a=S.source,b=S.result;
-  $("ec-dimensions").textContent=(isRaw?"ORIGINAL ARW ":"TECH V9 (АРХИВ) ")+a.naturalWidth+"×"+a.naturalHeight+" · "+(isRaw?"TECH V10 без HDR ":"EDITORIAL (АРХИВ) ")+b.naturalWidth+"×"+b.naturalHeight;
+  $("ec-dimensions").textContent=(isRaw?"ORIGINAL ARW ":isNewArt?"TECH V10 ":"TECH V9 (АРХИВ) ")+a.naturalWidth+"×"+a.naturalHeight+" · "+(isRaw?"TECH V10 без HDR ":isNewArt?"GENERATIVE REVIEW ":"EDITORIAL (АРХИВ) ")+b.naturalWidth+"×"+b.naturalHeight;
   $("ec-resolution-warning").textContent=isRaw?
     "RAW: 7028×4688 до коррекции. TECH V10: 6536×4360 без HDR. Совмещение центральной области без деформации оригинала. Проверьте оптику, шум и фактуры.":
-    "АРХИВ: TECH V9 содержит HDR, EDITORIAL создан из V9. Это НЕ актуальный технический V10. Новый генеративный этап заблокирован до утверждения QA V10.";
+    (isNewArt?"Текущая пара TECH V10 (NO HDR) / генеративный кандидат; выход модели "+b.naturalWidth+"×"+b.naturalHeight+" не является полноразмерным техническим TIFF.":"АРХИВ: TECH V9 содержит HDR, EDITORIAL создан из V9. Это НЕ актуальный технический V10. Новый генеративный этап заблокирован до утверждения QA V10.");
  }else $("ec-dimensions").textContent="Ожидание исходных размеров…";
  $("ec-help").textContent=S.mode==="split"?"Перетащите линию — Split · drag кадра — pan · колесо — zoom":S.mode==="side"?"Две версии, синхронные pan и zoom. Q: RAW/TECH · W: TECH/EDIT":
  S.mode==="blink"?"Blink: переключение версий каждые 700 мс":"Single: LEFT/RIGHT переключает версии";
@@ -227,8 +228,8 @@ function draw(){
  ctx.fillStyle="#02080d";ctx.fillRect(0,0,w,h);
  if(!S.source||!S.result)return;
  const A=S.swap?S.result:S.source,B=S.swap?S.source:S.result;
- const leftLabel=S.pair==="raw-tech"?"ORIGINAL RAW · БЕЗ КОРРЕКЦИИ":"TECH V9 · АРХИВ HDR";
- const rightLabel=S.pair==="raw-tech"?"TECH MASTER V10 · NO HDR":"EDITORIAL 01 · АРХИВ V9";
+ const leftLabel=S.pair==="raw-tech"?"ORIGINAL RAW · БЕЗ КОРРЕКЦИИ":S.meta?.candidate_source_version==="V10"?"TECH V10 · NO HDR":"TECH V9 · АРХИВ HDR";
+ const rightLabel=S.pair==="raw-tech"?"TECH MASTER V10 · NO HDR":S.meta?.candidate_source_version==="V10"?"GEN REVIEW · V10":"EDITORIAL 01 · АРХИВ V9";
  const an=S.swap?rightLabel:leftLabel,bn=S.swap?leftLabel:rightLabel;
  const full={x:0,y:0,w,h};
  if(S.mode==="split"){
