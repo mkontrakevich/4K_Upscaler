@@ -231,28 +231,32 @@ export async function editorialApi(request,env,url,authorizeSession){
     const manifestObject=await env.TROPICANA_EDITORIAL_R2.get(fileKey(id,"manifest.json"));
     if(!manifestObject)return j({error:"editorial_job_not_found"},404);
     const manifest=await manifestObject.json();
-    if(manifest.project!==PROJECT||manifest.frame!==FRAME||
-       manifest.source_key!==ROOT+"technical-v9/DSC09818_EDITORIAL_INPUT.jpg"||
+    const sourceVersion=manifest.source_key===ROOT+"technical-v10/DSC09818_EDITORIAL_INPUT.jpg"?"V10":
+      manifest.source_key===ROOT+"technical-v9/DSC09818_EDITORIAL_INPUT.jpg"?"V9":null;
+    if(manifest.project!==PROJECT||manifest.frame!==FRAME||!sourceVersion||
        !manifest.candidate_key||manifest.final!==false)
-      return j({error:"only_genuine_V9_source_compare_supported"},409);
+      return j({error:"only_original_RAW_derived_Tech_V9_or_V10_supported"},409);
+    const jobTechnicalRoot=ROOT+(sourceVersion==="V10"?"technical-v10/":"technical-v9/");
     const [proofObject,previewManifestObject]=await Promise.all([
-      env.TROPICANA_EDITORIAL_R2.get(ROOT+"technical-v9/DSC09818_TECH_QA.json"),
-      env.TROPICANA_EDITORIAL_R2.get(ROOT+"technical-v9/fullres-preview-manifest.json")
+      env.TROPICANA_EDITORIAL_R2.get(jobTechnicalRoot+"DSC09818_TECH_QA.json"),
+      env.TROPICANA_EDITORIAL_R2.get(jobTechnicalRoot+"fullres-preview-manifest.json")
     ]);
     if(!proofObject)return j({error:"technical_source_lineage_missing"},404);
     const q=await proofObject.json();
     if(q.source_sha256!=="1b4344f4b8ca629830254850fbcbaf2931c83c00a158ab87d84e5ee7722046d5"||
        q.technical_status!=="TECHNICAL_QA_PASS"||
-       q.editorial_input_sha256!==manifest.source_sha256)
+       q.editorial_input_sha256!==manifest.source_sha256||
+       (sourceVersion==="V10"&&(q.technical_version!=="V10_NEUTRAL_NO_HDR"||
+         q.HDR_applied!==false||q.virtual_exposures!==false||q.qa_checks?.HDR_ABSENT!=="PASS")))
       return j({error:"technical_source_sha_or_status_mismatch"},409);
     let fullKey=null,preview=null;
     if(previewManifestObject){
       const p=await previewManifestObject.json();
-      const allowed=new RegExp("^tropicana-park/DSC09818/technical-v9/fullres-review-[a-f0-9]{16}\\.jpg$");
-      if(p.master16_sha256===q.clean16_sha256&&
+      const expected=jobTechnicalRoot+"fullres-review-"+q.clean16_sha256.slice(0,16)+".jpg";
+      if(p.preview_key===expected&&p.master16_sha256===q.clean16_sha256&&
          p.original_arw_sha256===q.source_sha256&&
          p.native_width===6536&&p.native_height===4360&&
-         p.display_bit_depth===8&&p.master_bit_depth===16&&allowed.test(p.preview_key)){
+         p.display_bit_depth===8&&p.master_bit_depth===16&&p.no_upscale===true){
          const head=await env.TROPICANA_EDITORIAL_R2.head(p.preview_key);
          if(head&&head.size===p.preview_bytes){fullKey=p.preview_key;preview=p}
       }
@@ -304,7 +308,9 @@ export async function editorialApi(request,env,url,authorizeSession){
           v10Info={...v10Info,ready:true,width:6536,height:4360,master_sha256:nq.clean16_sha256};
       }
     }
-    return j({ok:true,project:PROJECT,frame:FRAME,job_id:id,source:"verified genuine ARW -> 16-bit TIFF TECH V9",
+    return j({ok:true,project:PROJECT,frame:FRAME,job_id:id,
+      candidate_source_version:sourceVersion,archive_history:sourceVersion==="V9",
+      source:"verified genuine ARW -> 16-bit TIFF TECH "+sourceVersion,
       technical_master_sha256:q.clean16_sha256,technical_master_dimensions:{width:6536,height:4360,bit_depth:16},
       technical_preview_kind:"8-bit full-pixel-resolution browser representation (NOT the 16-bit TIFF itself)",
       fullres_preview:{ready:!!fullKey,key:fullKey?undefined:null,width:preview?.native_width||null,height:preview?.native_height||null,
