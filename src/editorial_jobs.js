@@ -79,16 +79,21 @@ async function availability(env,job) {
         imported=m;
     }
   }
-  return {q,d,approved,imported};
+  const processObject=await env.TROPICANA_EDITORIAL_R2.get(key(job.job_id,"processing-state.json"));
+  let processing=null;
+  if(processObject){try{processing=await processObject.json()}catch{}}
+  return {q,d,approved,imported,processing};
 }
 function state(job,a) {
-  const status=a.d?.decision==="REJECTED"?"REJECTED":a.imported?"MG4K_MASTER_IMPORTED":a.approved?"TECH_MASTER_APPROVED":a.q?"AWAITING_HUMAN_QA":job.status;
+  const status=a.d?.decision==="REJECTED"?"REJECTED":a.imported?"MG4K_MASTER_IMPORTED":a.approved?"TECH_MASTER_APPROVED":a.q?"AWAITING_HUMAN_QA":a.processing?.status||job.status;
   return {
     ok:true,job_id:job.job_id,filename:job.filename,project:job.project,
     source_sha256:job.source_sha256,source_bytes:job.source_bytes,
-    status,stage:a.q?"technical_qa":job.stage,progress:a.q?100:job.progress,
-    progress_kind:a.q?"TECHNICAL_STAGE_COMPLETE":"NOT_MEASURED",
-    message:a.q?"Технический мастер готов; требуется визуальное утверждение QA.":job.message,
+    status,stage:a.q?"technical_qa_ready":a.processing?.stage||job.stage,
+    progress:a.q?100:typeof a.processing?.progress==="number"?a.processing.progress:null,
+    progress_kind:a.q?"TECHNICAL_STAGE_COMPLETE":a.processing?.status==="PROCESSING"?"TECHNICAL_STAGE_MEASURED":"NOT_MEASURED",
+    message:a.q?"Технический мастер готов; требуется визуальное утверждение QA.":a.processing?.message||job.message,
+    error:a.processing?.error||null,
     technical_master_ready:!!a.q,technical_qa:a.q?{master_sha256:a.q.master_sha256,master_bytes:a.q.master_bytes,bit_depth:16,HDR_applied:false}:null,
     locks:job.locks,approval:a.d?{decision:a.d.decision,at:a.d.at}:null,
     can_approve:!!a.q&&!a.d,can_reject:!!a.q&&!a.d,
@@ -132,6 +137,16 @@ export async function editorialJobApi(request,env,url,authorizeSession) {
   const a=await availability(env,job);
 
   if(path==="/api/editorial/job/status"&&method==="GET")return json(state(job,a));
+  if(path==="/api/editorial/job/preview"&&method==="GET"){
+    if(!a.q)return json({error:"technical_preview_not_ready"},409);
+    const obj=await env.TROPICANA_EDITORIAL_R2.get(key(id,"technical/fullres-preview.jpg"));
+    if(!obj||obj.httpMetadata?.contentType!=="image/jpeg"||
+       obj.size!==a.q.preview_bytes||obj.customMetadata?.sha256!==a.q.preview_sha256||
+       !obj.checksums?.sha256||hex(obj.checksums.sha256)!==a.q.preview_sha256)
+      return json({error:"technical_preview_integrity_HOLD"},409);
+    return new Response(obj.body,{headers:{"content-type":"image/jpeg",
+      "cache-control":"private,no-store","x-content-type-options":"nosniff"}});
+  }
   if(path==="/api/editorial/job/import-status"&&method==="GET") {
     if(!a.imported)return json({error:"mg4k_import_not_ready"},409);
     const m=a.imported;
