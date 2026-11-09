@@ -36,9 +36,9 @@ async function openrouter(env,path,payload){
  return data;
 }
 const EDIT_PROMPT=[
-"IMAGE-TO-IMAGE EDIT ONLY. The attached real DSC09818 photo has already undergone calibrated 16mm radial lens distortion correction and measured architectural Perspective Lock. Preserve those corrections precisely; never redesign the scene.",
+"IMAGE-TO-IMAGE EDIT ONLY. The attached DSC09818 source is the technically finished 16bit real Sony RAW derivative V9: lens corrected, PerspectiveLock, conservative single-RAW HDR signal extraction and noise cleanup. Preserve this scene and its geometry precisely. Do not redesign any object.",
 "Preserve EXACT camera position and framing; same glass and metal railing, same door, bar stools, tables, floor tiles, brick, ceiling beams, plants, true skyline and harbor lights. Do not add furniture, decorative objects, lighting fixtures, railings or new buildings.",
-"Creative direction: premium European hospitality editorial at authentic late-night blue-hour. The real warm interior lighting should reveal brick, flooring, metal and glass textures without clipping; maintain the existing bay view and distant geography. Carefully correct muddy cyan cast, reduce chroma noise, protect natural black sky and glass reflections, refine controlled amber-vs-deep-blue balance.",
+"Creative direction: premium European hospitality editorial at authentic late-night blue-hour. Retouch only the original recorded warm interior light and the real faint distant city/bay lights. Do not brighten pure-black sky into invented scenery. Keep physically plausible shadow signal and metal, brick and glass detail. Correct muddy cyan cast, reduce chroma noise, protect natural black sky and glass reflections, refine controlled amber-vs-deep-blue balance.",
 "Do not synthesize a different sky or sunset, city layout, yachts, flowers, or people. Preserve original weather and honest night conditions. No fantasy architecture, no deformed typography or people. Do not repaint blurred areas into invented detail.",
 "Keep physically consistent vanishing lines and original architectural verticals, no new viewpoint. Output a conservative editorial candidate for comparison and manual fidelity QA, NOT a new illustration."
 ].join("\n");
@@ -48,47 +48,45 @@ export class EditorialPhotoWorkflow extends WorkflowEntrypoint{
   const params=typeof event.payload==="string"?JSON.parse(event.payload):event.payload||{};
   const id=String(params.job_id||"");
   const sourceKey=String(params.source_key||"");
-  // HARD STOP: No more OpenRouter charges or images until a HUMAN accepts the
-  // full-resolution 16-bit technical master; approval must bind exact source SHA.
-  const qaObject=await this.env.TROPICANA_EDITORIAL_R2.get(ROOT+"technical-v8/DSC09818_TECH_QA.json");
-  if(!qaObject)throw new NonRetryableError("technical_master_v8_missing");
+  // Editorial V9 release is limited to one UUID and binds RAW, master and model input hashes.
+  if(!isId(id)||sourceKey!==ROOT+"technical-v9/DSC09818_EDITORIAL_INPUT.jpg")
+    throw new NonRetryableError("technical_v9_master_required");
+  const qaObject=await this.env.TROPICANA_EDITORIAL_R2.get(ROOT+"technical-v9/DSC09818_TECH_QA.json");
+  if(!qaObject)throw new NonRetryableError("technical_v9_QA_missing");
   const masterQA=await qaObject.json();
-  const approvalObject=await this.env.TROPICANA_EDITORIAL_R2.get(ROOT+"technical-v8/editorial-approval.json");
-  if(!approvalObject)throw new NonRetryableError("technical_master_human_approval_required");
-  const approval=await approvalObject.json();
-  if(approval.approved!==true||
-     approval.frame!=="DSC09818"||
-     approval.original_raw_sha256!==masterQA.source_sha256||
-     approval.master_sha256!==masterQA.clean16_sha256||
-     masterQA.clean16_size<50000000)
-     throw new NonRetryableError("technical_master_approval_or_sha_invalid");
-  if(!isId(id)||sourceKey!==ROOT+"optically_locked_model_input.jpg")throw new NonRetryableError("lens_plus_perspective_locked_input_required");
+  if(masterQA.source_sha256!=="1b4344f4b8ca629830254850fbcbaf2931c83c00a158ab87d84e5ee7722046d5"||
+     masterQA.technical_status!=="TECHNICAL_QA_PASS"||masterQA.city_signal_qa!=="PASS"||
+     masterQA.HDR_bracketed!==false||masterQA.no_generated_pixels!==true||
+     Number(masterQA.roi_city_median_pct?.clean)<.97*Number(masterQA.roi_city_median_pct?.neutral))
+    throw new NonRetryableError("technical_v9_QA_invalid");
+  const releaseObject=await this.env.TROPICANA_EDITORIAL_R2.get(ROOT+"technical-v9/editorial-transition-release.json");
+  if(!releaseObject)throw new NonRetryableError("owner_transition_authorization_missing");
+  const release=await releaseObject.json();
+  if(release.authorized_job_id!==id||
+     release.owner_direction!=="proceed_after_technical_QA"||
+     release.scope!=="ONE_ARTISTIC_OPENROUTER_CANDIDATE_ONLY"||
+     release.approved_for_publishing!==false||
+     release.original_raw_sha256!==masterQA.source_sha256||
+     release.technical_master_sha256!==masterQA.clean16_sha256||
+     release.editorial_input_sha256!==masterQA.editorial_input_sha256)
+    throw new NonRetryableError("technical_release_or_lineage_invalid");
+  const masterHead=await this.env.TROPICANA_EDITORIAL_R2.head(ROOT+"technical-v9/DSC09818_TECH_CLEAN16.tif");
+  if(!masterHead||masterHead.size!==masterQA.clean16_size||masterHead.size<50000000)
+    throw new NonRetryableError("technical_v9_fullsize_master_missing");
   const runRoot=fileKey(id,"");
-  const source=await step.do("validate-source",async()=>{
+  const source=await step.do("validate-source-v9",async()=>{
     const o=await object(this.env,sourceKey);
-    const proofObject=await this.env.TROPICANA_EDITORIAL_R2.get(ROOT+"optically_locked_geometry_QA.json");
-    const opticalObject=await this.env.TROPICANA_EDITORIAL_R2.get(ROOT+"optical_lens_QA.json");
-    if(!opticalObject)throw new NonRetryableError("optical_proof_missing");
-    const opticalProof=await opticalObject.json();
-    if(!proofObject)throw new NonRetryableError("geometry_proof_missing");
-    const proof=await proofObject.json();
-    if(proof.frame!==FRAME||proof.geometry_status!=="PASS"||proof.result_sha256!==o.sha||
-       !proof.after||Math.abs(Number(proof.after.median_slope ?? 999))>=0.015)throw new NonRetryableError("geometry_proof_invalid");
-    if(opticalProof.frame!==FRAME||opticalProof.status!=="PROFILE_APPLIED"||opticalProof.output_sha256!==proof.source_sha256||
-       opticalProof.exif?.camera!=="ILCE-7M4"||
-       opticalProof.exif?.lens!=="FE 16-35mm F2.8 GM"||Number(opticalProof.exif?.focal_mm)!==16||
-       opticalProof.raw_sha256!=="1b4344f4b8ca629830254850fbcbaf2931c83c00a158ab87d84e5ee7722046d5"||
-       !Array.isArray(opticalProof.coefficients_abc)||
-       JSON.stringify(opticalProof.coefficients_abc)!==JSON.stringify([0.021,-0.052,-0.003]))
-       throw new NonRetryableError("optical_proof_invalid");
-    await this.env.TROPICANA_EDITORIAL_R2.put(runRoot+"geometry_source_QA.json",JSON.stringify(proof),{httpMetadata:{contentType:"application/json"}});
-    await this.env.TROPICANA_EDITORIAL_R2.put(runRoot+"optical_source_QA.json",JSON.stringify(opticalProof),{httpMetadata:{contentType:"application/json"}});
+    if(o.sha!==masterQA.editorial_input_sha256)throw new NonRetryableError("editorial_model_input_sha_mismatch");
+    await this.env.TROPICANA_EDITORIAL_R2.put(runRoot+"technical_master_QA.json",JSON.stringify(masterQA),{httpMetadata:{contentType:"application/json"}});
+    await this.env.TROPICANA_EDITORIAL_R2.put(runRoot+"editorial_transition_release.json",JSON.stringify(release),{httpMetadata:{contentType:"application/json"}});
     await this.env.TROPICANA_EDITORIAL_R2.put(runRoot+"source_manifest.json",JSON.stringify({
-      project:PROJECT,frame:FRAME,source_key:sourceKey,source_sha256:o.sha,source_bytes:o.size,
+      project:PROJECT,frame:FRAME,technical_master:"TECH_V9",source_key:sourceKey,source_sha256:o.sha,source_bytes:o.size,
+      clean_16bit_master_sha256:masterQA.clean16_sha256,original_RAW_sha256:masterQA.source_sha256,
       source_mime:o.mime,created_at:new Date().toISOString(),status:"INPUT_VALIDATED",
-      skill:"MARINS-Architectural-RAW-Photo-v1.7",geometry_lock:"HARD",fidelity_lock:"HARD"
+      skill:"MARINS-Architectural-RAW-Photo-v1.10",geometry_lock:"HARD",fidelity_lock:"HARD",
+      single_RAW_HDR:true,owner_authorized_one_candidate:true
     }),{httpMetadata:{contentType:"application/json"}});
-    return {sha256:o.sha,size:o.size,mime:o.mime};
+    return {sha256:o.sha,size:o.size,mime:o.mime,master_sha256:masterQA.clean16_sha256};
   });
   const analysis=await step.do("scene-editorial-analysis",async()=>{try{
     const o=await object(this.env,sourceKey);
@@ -134,11 +132,11 @@ export class EditorialPhotoWorkflow extends WorkflowEntrypoint{
   const manifest={
    project:PROJECT,frame:FRAME,job_id:id,status:"EDITORIAL_REVIEW",final:false,
    source_key:sourceKey,source_sha256:source.sha256,source_bytes:source.size,
-   technical_raw_master:"RAW PerspectiveLock V3 is a geometric reference (full original 6536x4360 not yet transferred to Workflow)",
-   geometry_input:"LENS PTLens 16mm + verified PerspectiveLock V3; SHA-linked optical and geometric proofs in R2",
+   technical_raw_master:"Actual 16bit 6536x4360 real RAW technical V9 stored in isolated R2",
+   geometry_input:"One-pass combined PTLens 16mm + V3 PerspectiveLock from 16bit original RAW; SHA-linked TECH V9",
    candidate_key:candidate.key,candidate_sha256:candidate.sha256,
-   gates:{source_integrity:"PASS",optical_distortion:"PROFILE_APPLIED_REQUIRES_REVIEW",pre_generation_geometry:"PASS",post_generation_geometry:"PENDING_NUMERIC_QA",editorial_visual:"REVIEW",geometry_fidelity:"REVIEW",manual_approval:"REQUIRED",full_resolution_master:"REQUIRED"},
-   steps:{analysis,candidate,audit},skill:"MARINS Architectural RAW Photo v1.7",
+   gates:{source_integrity:"PASS",raw_technical_v9:"PASS",single_raw_hdr_city_signal:"PASS",optical_distortion:"PROFILE_APPLIED_REQUIRES_REVIEW",pre_generation_geometry:"PASS",post_generation_geometry:"PENDING_NUMERIC_QA",editorial_visual:"REVIEW",geometry_fidelity:"REVIEW",manual_approval:"REQUIRED",full_resolution_master:"REQUIRED"},
+   steps:{analysis,candidate,audit},skill:"MARINS Architectural RAW Photo v1.10",
    model:this.env.EDITORIAL_IMAGE_MODEL||MODEL,created_at:new Date().toISOString()
   };
   await step.do("save-qa-manifest",async()=>{await this.env.TROPICANA_EDITORIAL_R2.put(runRoot+"manifest.json",JSON.stringify(manifest),{httpMetadata:{contentType:"application/json"}});return {stored:true}});
@@ -148,7 +146,7 @@ export class EditorialPhotoWorkflow extends WorkflowEntrypoint{
 export async function editorialApi(request,env,url,authorizeSession){
  const path=url.pathname,method=request.method.toUpperCase();
  if(path==="/api/editorial/health"&&method==="GET"){
-  return j({ok:true,project:PROJECT,frame:FRAME,module:"Editorial Photo",storage_isolated:!!env.TROPICANA_EDITORIAL_R2,openrouter_configured:!!env.OPENROUTER_API_KEY,job_control:"Cloudflare Workflows API only",skill:"v1.7",image_model:env.EDITORIAL_IMAGE_MODEL||MODEL,workflow:"mg4k-tropicana-editorial"});
+  return j({ok:true,project:PROJECT,frame:FRAME,module:"Editorial Photo",storage_isolated:!!env.TROPICANA_EDITORIAL_R2,openrouter_configured:!!env.OPENROUTER_API_KEY,job_control:"Cloudflare Workflows API only",skill:"v1.10",image_model:env.EDITORIAL_IMAGE_MODEL||MODEL,workflow:"mg4k-tropicana-editorial"});
  }
  if(path==="/api/editorial/upload"&&method==="POST"){
   const session=await authorizeSession(request,url,env);
@@ -181,7 +179,7 @@ export async function editorialApi(request,env,url,authorizeSession){
   const map={manifest:"manifest.json",candidate:"editorial_candidate.png",analysis:"scene_analysis.json",qa:"fidelity_qa.json"};
   let key=kind==="technical"?ROOT+"optically_locked_model_input.jpg":kind==="optical"?ROOT+"optical_only_input.jpg":fileKey(id,map[kind]||"manifest.json");
   const technicalViews={tech_clean:"DSC09818_TECH_CLEAN.jpg",tech_neutral:"DSC09818_TECH_NEUTRAL.jpg",tech_hdr:"DSC09818_TECH_HDR_TEST.jpg",tech_qa:"DSC09818_TECH_QA.json"};
-  if(technicalViews[kind])key=ROOT+"technical-v8/"+technicalViews[kind];
+  if(technicalViews[kind])key=ROOT+"technical-v9/"+technicalViews[kind];
   if(kind==="source"){
     const manifest=await env.TROPICANA_EDITORIAL_R2.get(fileKey(id,"manifest.json"));
     if(!manifest)return j({error:"not_found"},404);
@@ -193,9 +191,9 @@ export async function editorialApi(request,env,url,authorizeSession){
   if(!o)return j({error:"not_found"},404);
   if(kind==="manifest"){
     const manifest=await o.json();
-    manifest.active_skill_version="v1.8";
-    manifest.technical_master_version="V8";
-    manifest.technical_master_art_gate="HOLD_UNTIL_USER_APPROVAL";
+    manifest.active_skill_version="v1.10";
+    manifest.technical_master_version="V9";
+    manifest.technical_master_art_gate="ONE_AUTHORIZED_CANDIDATE_ONLY";
     // Historical persisted manifest is immutable; append a verified numeric QA view.
     const latest=await env.TROPICANA_EDITORIAL_R2.get(fileKey(id,"post_generation_geometry_QA.json"));
     if(latest){
