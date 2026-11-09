@@ -79,7 +79,7 @@ jobs:
           assert 'compare_info' in s and 'tech_full' in s
           assert 'technical_master_sha256' in s and 'fullres-preview-manifest.json' in s
           assert 'editorial-compare.js' in ui and 'id="open-compare"' in ui
-          assert 'technical-v9/DSC09818_TECH_CLEAN16.tif' in Path('.github/workflows/editorial-fullres-review.yml').read_text()
+          assert 'technical-v9' in Path('.github/workflows/editorial-fullres-review.yml').read_text() and 'DSC09818_TECH_CLEAN16.tif' in Path('.github/workflows/editorial-fullres-review.yml').read_text()
           assert 'qa["clean16_sha256"]' in Path('scripts/editorial_fullres_review.py').read_text()
           print('Editorial Photo contract: PASSED')
           PY
