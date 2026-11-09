@@ -1425,6 +1425,21 @@ function addSourceFile(file,source="Системный файловый мене
   $("upload-plus").classList.add("hidden");
   selectSource(sourceItems.length-1);
 }
+window.MG4KImportEditorial=(file,meta)=>{
+ if(!file||file.type!=="image/jpeg"||!/^[0-9a-f-]{36}$/i.test(meta?.jobId||"")||
+   !/^[a-f0-9]{64}$/i.test(meta?.token||""))throw Error("invalid_editorial_import");
+ addSourceFile(file,"Editorial Photo · QA-approved Tech Master");
+ const item=currentSourceItem();
+ if(!item)throw Error("mg4k_import_queue_missing");
+ item.editorialImport={jobId:meta.jobId,token:meta.token};
+ const lockedIds=["camera","composition","geometry","architecture","facade_details","textures",
+   "text_signage","interior","furniture"];
+ for(const id of lockedIds)if(lockCatalogById[id])locks[id]="hard";
+ item.locks={...locks};
+ renderLocks();syncPromptFromLocks(true);
+ setStatus("Технический мастер загружен из Editorial Photo, локеры HARD активированы. Для художественной генерации нажмите «Обработать» и подтвердите расходы.","ok");
+ log("info","Editorial import "+meta.jobId+": approved master + server-locked scene profile");
+};
 let sourcePickerIntent="add";
 function openPicker(intent="add"){sourcePickerIntent=intent;$("file-input").value="";$("file-input").click()}
 $("upload-plus").addEventListener("click",()=>openPicker("add"));
@@ -2107,6 +2122,10 @@ async function prepareJob(forceNew=false){
     if(!health.ok)throw new Error("cloud_api_unavailable");
     const session=await startCloudSession();
     const headers={"X-Session-Id":session.id,"X-Session-Token":session.token,"X-MG4K-Request-Id":requestId};
+    if(item?.editorialImport){
+      headers["X-Editorial-Job-Id"]=item.editorialImport.jobId;
+      headers["X-Editorial-Job-Token"]=item.editorialImport.token;
+    }
     if(billingPermit)headers["X-MG4K-Entitlement"]=billingPermit;
     const r=await fetchNetworkRetry("/api/jobs",{method:"POST",headers,body:form},3);
     const d=await r.json().catch(()=>({}));
