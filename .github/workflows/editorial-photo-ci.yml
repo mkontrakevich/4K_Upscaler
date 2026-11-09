@@ -45,6 +45,13 @@ jobs:
           node --check src/editorial_photo.js
           node --check src/editorial_jobs.js
           node --check src/editorial_tech_workflow.js
+          python - <<'PY'
+          from pathlib import Path
+          src=Path('src/editorial_tech_workflow.js').read_text()
+          assert 'typeof event.payload==="string"?JSON.parse(event.payload)' in src
+          assert 'const id=String(payload.job_id||"")' in src
+          print('Cloudflare Workflow JSON string API input accepted')
+          PY
           node --experimental-default-type=module --test tests/editorial-jobs.test.mjs
           node --check site/editorial-compare.js
           node --check site/editorial-import.js
