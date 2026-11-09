@@ -1,8 +1,5 @@
 name: Editorial DSC09818 V9 post-gen numeric QA
 on:
-  pull_request:
-    paths:
-      - '.github/workflows/editorial-photo-v9-postgen-qa.yml'
   workflow_dispatch:
     inputs:
       job_id:
@@ -20,7 +17,7 @@ jobs:
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      EDITORIAL_JOB_ID: ${{ inputs.job_id || '01e86a25-e3e6-4ba6-b826-a65e25cf0a3f' }}
+      EDITORIAL_JOB_ID: ${{ inputs.job_id }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
