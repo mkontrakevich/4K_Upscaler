@@ -74,6 +74,12 @@ export class EditorialPhotoWorkflow extends WorkflowEntrypoint{
   if(!masterHead||masterHead.size!==masterQA.clean16_size||masterHead.size<50000000)
     throw new NonRetryableError("technical_v9_fullsize_master_missing");
   const runRoot=fileKey(id,"");
+  // Enforce exactly one paid candidate; an already saved result must never be purchased again.
+  const [priorManifest,priorCandidate]=await Promise.all([
+    this.env.TROPICANA_EDITORIAL_R2.head(runRoot+"manifest.json"),
+    this.env.TROPICANA_EDITORIAL_R2.head(runRoot+"editorial_candidate.png")
+  ]);
+  if(priorManifest||priorCandidate)throw new NonRetryableError("one_candidate_already_generated");
   const source=await step.do("validate-source-v9",async()=>{
     const o=await object(this.env,sourceKey);
     if(o.sha!==masterQA.editorial_input_sha256)throw new NonRetryableError("editorial_model_input_sha_mismatch");
