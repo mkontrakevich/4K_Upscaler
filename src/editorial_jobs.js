@@ -56,10 +56,21 @@ async function decision(env,id) {
 async function availability(env,job) {
   const q=await verifiedTech(env,job),d=await decision(env,job.job_id);
   const approved=!!(q&&d&&d.decision==="APPROVED"&&d.master_sha256===q.master_sha256&&d.source_sha256===q.source_sha256);
-  return {q,d,approved};
+  let imported=null;
+  if(approved&&env.TEMP_BUFFER_R7){
+    const record=await env.TROPICANA_EDITORIAL_R2.get(key(job.job_id,"handoff.json"));
+    if(record){
+      const m=await record.json();
+      const target=m.schema===2&&m.master_sha256===q.master_sha256&&m.generation_authorized===false
+        ?await env.TEMP_BUFFER_R7.head(m.mg4k_master_key):null;
+      if(target&&target.size===q.master_bytes&&target.customMetadata?.technical_master_sha256===q.master_sha256)
+        imported=m;
+    }
+  }
+  return {q,d,approved,imported};
 }
 function state(job,a) {
-  const status=a.d?.decision==="REJECTED"?"REJECTED":a.approved?"TECH_MASTER_APPROVED":a.q?"AWAITING_HUMAN_QA":job.status;
+  const status=a.d?.decision==="REJECTED"?"REJECTED":a.imported?"MG4K_MASTER_IMPORTED":a.approved?"TECH_MASTER_APPROVED":a.q?"AWAITING_HUMAN_QA":job.status;
   return {
     ok:true,job_id:job.job_id,filename:job.filename,project:job.project,
     source_sha256:job.source_sha256,source_bytes:job.source_bytes,
@@ -69,7 +80,9 @@ function state(job,a) {
     technical_master_ready:!!a.q,technical_qa:a.q?{master_sha256:a.q.master_sha256,master_bytes:a.q.master_bytes,bit_depth:16,HDR_applied:false}:null,
     locks:job.locks,approval:a.d?{decision:a.d.decision,at:a.d.at}:null,
     can_approve:!!a.q&&!a.d,can_reject:!!a.q&&!a.d,
-    can_download:a.approved,can_handoff:a.approved,
+    can_download:a.approved,can_handoff:a.approved&&!a.imported,
+    mg4k_imported:!!a.imported,
+    mg4k_import_url:a.imported?"/?editorial_import="+encodeURIComponent(job.job_id):null,
     auto_generation:false
   };
 }
@@ -107,6 +120,17 @@ export async function editorialJobApi(request,env,url,authorizeSession) {
   const a=await availability(env,job);
 
   if(path==="/api/editorial/job/status"&&method==="GET")return json(state(job,a));
+  if(path==="/api/editorial/job/import-status"&&method==="GET") {
+    if(!a.imported)return json({error:"mg4k_import_not_ready"},409);
+    const m=a.imported;
+    return json({ok:true,job_id:id,project:job.project,filename:job.filename,
+      stage:"MG4K_MASTER_IMPORTED",source_sha256:job.source_sha256,
+      master_sha256:m.master_sha256,master_bytes:m.master_bytes,
+      master_bit_depth:m.master_bit_depth,locked:true,
+      locks:m.locks,mg4k_locks:m.mg4k_locks,
+      human_QA_at:m.QA.at,generation_started:false,
+      message:"Файл в хранилище MG 4K. Художественная генерация не запускалась."});
+  }
 
   if(path==="/api/editorial/job/decision"&&method==="POST") {
     let input;try{input=await request.json()}catch{return json({error:"invalid_json"},400)}
