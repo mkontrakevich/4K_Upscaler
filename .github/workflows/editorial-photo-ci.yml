@@ -6,6 +6,8 @@ on:
       - 'src/worker.js'
       - 'site/editorial-photo.html'
       - 'site/editorial-compare.js'
+      - 'scripts/editorial_original_raw_review.py'
+      - '.github/workflows/editorial-original-raw-review.yml'
       - 'site/editorial-compare.css'
       - 'scripts/editorial_fullres_review.py'
       - '.github/workflows/editorial-fullres-review.yml'
@@ -29,7 +31,7 @@ jobs:
           node --check src/worker.js
           node --check src/editorial_photo.js
           node --check site/editorial-compare.js
-          python -m py_compile scripts/editorial_fullres_review.py
+          python -m py_compile scripts/editorial_fullres_review.py scripts/editorial_original_raw_review.py
       - name: Validate geometry module
         run: |
           python -m py_compile editorial_geometry.py editorial_lens_profile.py
@@ -77,6 +79,19 @@ jobs:
           assert 'data-ec-mode="split"' in compare and 'data-ec-zoom="editorial"' in compare
           assert 'ec-dialog' in compare and 'requestFullscreen' in compare
           assert 'compare_info' in s and 'tech_full' in s
+          assert 'raw_original' in s and 'original-raw-manifest.json' in s
+          assert 'fullres-neutral-' in s and 'q.source_sha256' in s
+          assert 'data-ec-pair="raw-tech"' in compare and 'data-ec-pair="tech-editorial"' in compare
+          assert 'reference_center_crop_xywh' in compare and 'img===S.images.raw' in compare
+          assert 'S.pair==="raw-tech"' in compare and 'applyPair()' in compare
+          assert 'open-editorial' in ui and 'SPLIT · RAW / TECH' in ui
+          raw=Path('scripts/editorial_original_raw_review.py').read_text()
+          assert 'optical_distortion_corrected=False' in raw and 'perspective_corrected=False' in raw
+          assert 'HDR_applied=False' in raw and 'no_spatial_resize=True' in raw
+          assert 'rawpy.imread' in raw and 'SOURCE_SHA=' in raw
+          workflow=Path('.github/workflows/editorial-original-raw-review.yml').read_text()
+          assert 'DSC09818.ARW' in workflow and 'editorial_original_raw_review.py' in workflow
+          assert 'openrouter' not in workflow.lower()
           assert 'technical_master_sha256' in s and 'fullres-preview-manifest.json' in s
           assert 'editorial-compare.js' in ui and 'id="open-compare"' in ui
           assert 'technical-v9' in Path('.github/workflows/editorial-fullres-review.yml').read_text() and 'DSC09818_TECH_CLEAN16.tif' in Path('.github/workflows/editorial-fullres-review.yml').read_text()

@@ -181,7 +181,7 @@ export async function editorialApi(request,env,url,authorizeSession){
  }
  if(path==="/api/editorial/view"&&method==="GET"){
   const id=url.searchParams.get("job")||"",kind=url.searchParams.get("kind")||"manifest";
-  if((kind==="compare_info"||kind==="tech_full")&&isId(id)){
+  if((kind==="compare_info"||kind==="tech_full"||kind==="raw_original")&&isId(id)){
     const manifestObject=await env.TROPICANA_EDITORIAL_R2.get(fileKey(id,"manifest.json"));
     if(!manifestObject)return j({error:"editorial_job_not_found"},404);
     const manifest=await manifestObject.json();
@@ -211,9 +211,33 @@ export async function editorialApi(request,env,url,authorizeSession){
          if(head&&head.size===p.preview_bytes){fullKey=p.preview_key;preview=p}
       }
     }
-    if(kind==="tech_full"){
-      if(!fullKey)return j({error:"full_resolution_preview_not_ready"},404);
-      const obj=await env.TROPICANA_EDITORIAL_R2.get(fullKey);
+    // ORIGINAL and TECH must have identical SHA-backed original Sony ARW provenance.
+    // The original is demosaiced and neutrally toned ONLY, no geometric remapping,
+    // no HDR, no denoise, no creative or generative processing.
+    let rawPreview=null,rawKey=null;
+    const rawManifestObject=await env.TROPICANA_EDITORIAL_R2.get(ROOT+"original-raw/original-raw-manifest.json");
+    if(rawManifestObject){
+      const p=await rawManifestObject.json();
+      const expectedPrefix=ROOT+"original-raw/fullres-neutral-"+q.source_sha256.slice(0,16)+"-"+p.display_sha256.slice(0,16)+".jpg";
+      if(p.project===PROJECT&&p.frame===FRAME&&
+         p.original_raw_sha256===q.source_sha256&&p.display_key===expectedPrefix&&
+         p.original_sensor_width===7028&&p.original_sensor_height===4688&&
+         p.display_width===7028&&p.display_height===4688&&
+         JSON.stringify(p.reference_center_crop_xywh)===JSON.stringify([246,164,6536,4360])&&
+         p.optical_distortion_corrected===false&&p.perspective_corrected===false&&
+         p.HDR_applied===false&&p.denoise_applied===false&&
+         p.no_spatial_resize===true&&p.no_creative_processing===true&&
+         /^[0-9a-f]{64}$/.test(p.display_sha256)){
+        const head=await env.TROPICANA_EDITORIAL_R2.head(p.display_key);
+        if(head&&head.size===p.display_bytes&&head.size>1000000){
+          rawPreview=p;rawKey=p.display_key;
+        }
+      }
+    }
+    if(kind==="tech_full"||kind==="raw_original"){
+      const key=kind==="tech_full"?fullKey:rawKey;
+      if(!key)return j({error:kind==="raw_original"?"original_raw_fullres_preview_not_ready":"full_resolution_preview_not_ready"},404);
+      const obj=await env.TROPICANA_EDITORIAL_R2.get(key);
       if(!obj)return j({error:"full_resolution_preview_missing"},404);
       return new Response(obj.body,{headers:{"content-type":"image/jpeg","cache-control":"private,max-age=3600","x-content-type-options":"nosniff","content-disposition":"inline"}});
     }
@@ -222,6 +246,12 @@ export async function editorialApi(request,env,url,authorizeSession){
       technical_preview_kind:"8-bit full-pixel-resolution browser representation (NOT the 16-bit TIFF itself)",
       fullres_preview:{ready:!!fullKey,key:fullKey?undefined:null,width:preview?.native_width||null,height:preview?.native_height||null,
         sha256:preview?.preview_sha256||null},
+      original_raw_preview:{ready:!!rawKey,width:rawPreview?.display_width||null,height:rawPreview?.display_height||null,
+        sha256:rawPreview?.display_sha256||null,original_raw_sha256:q.source_sha256,
+        reference_center_crop_xywh:rawPreview?.reference_center_crop_xywh||[246,164,6536,4360],
+        geometry_corrected:false,hdr_applied:false,denoise_applied:false,
+        description:"Original Sony ARW full-pixel neutral display: 7028×4688, NO lens or perspective correction"},
+      supported_pairs:["raw-tech","tech-editorial"],
       editorial_native_dimensions:"Read from actual OpenRouter PNG in browser; no false claims about source resolution",
       editorial_candidate_sha256:manifest.candidate_sha256,
       post_generation_geometry:"Refer to independent numeric QA under manifest; visual authenticity remains REVIEW",
