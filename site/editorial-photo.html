@@ -34,6 +34,18 @@
       <div class="metric"><span class="muted">Этап</span><strong id="intake-stage">—</strong></div>
       <progress id="intake-progress" max="100" style="width:100%;height:12px"></progress>
       <p id="intake-message" class="muted" role="status">Прогресс отображается только из серверных состояний, без искусственного таймера.</p>
+      <figure class="frame" id="intake-preview-frame" hidden style="margin:14px 0">
+        <figcaption>Проверка нового Tech Master · full resolution preview</figcaption>
+        <div class="imagebox" style="aspect-ratio:auto;min-height:260px">
+          <img id="intake-preview" alt="Технический мастер для визуального QA" style="display:block;max-height:65vh;object-fit:contain">
+        </div>
+        <p class="muted">Браузер показывает 8-битное представление 16-битного TIFF. Масштабирование и проверка реальной геометрии остаются обязанностью визуального QA.</p>
+      </figure>
+      <div id="intake-visual-checks" class="fields" hidden>
+        <label><input type="checkbox" id="intake-check-preview"> Изображение рассмотрено в полном разрешении</label>
+        <label><input type="checkbox" id="intake-check-geometry"> Геометрия, перспектива и архитектура соответствуют исходнику</label>
+        <label><input type="checkbox" id="intake-check-materials"> Материалы, свет и идентичность объектов сохранены; HDR отсутствует</label>
+      </div>
       <div class="flex">
         <button class="btn" id="intake-approve" disabled type="button">Утвердить Tech Master</button>
         <button class="btn mutebtn" id="intake-reject" disabled type="button">Отклонить QA</button>
@@ -41,7 +53,7 @@
         <button class="btn" id="intake-handoff" disabled type="button">Подготовить передачу в MG 4K</button>
       </div>
       <p><a id="intake-import-link" href="#" hidden>Открыть импортированный мастер в MG 4K</a></p>
-      <p class="note">Для нового JPG/PNG/WebP загрузка пока означает сохранение в R2, а не создание 16-битного RAW-мастера. До проверки технического результата утверждение, скачивание и передача закрыты. HDR запрещён.</p>
+      <p class="note">Для JPEG/PNG/WebP автоматически формируется нейтральный 16-битный TIFF без HDR. Если источник был 8-битным, дополнительная информация не возникает. Художественная генерация разрешается только отдельно после QA.</p>
     </section>
     <section class="panel">
       <h2>Протокол</h2>
@@ -82,7 +94,8 @@
 </div></main>
 <script>
 const base="/api/editorial";let session=null,sourceURL=null;
-let intakeId="",intakeProof=null,intakePoll=null,intakeBusy=false;
+let intakeId="",intakeProof=null,intakePoll=null,intakeBusy=false,intakeState=null;
+let intakePreviewURL=null,intakePreviewFor="",intakePreviewReady=false;
 const sessionStore="mg4k-editorial-session-v1";
 const jobAccessStore="mg4k-editorial-job-access-v1";
 function jobToken(id){
@@ -97,7 +110,30 @@ function persistJobToken(id,token){
 }
 const readableStatus={AWAITING_TECH_PROCESSING:"Ожидает технической обработки",AWAITING_HUMAN_QA:"Ожидает визуального QA",TECH_MASTER_APPROVED:"Мастер утверждён",REJECTED:"QA отклонён"};
 function sessionHeaders(extra={}){return {...extra,"x-session-id":session?.id||"","x-session-token":session?.token||"","x-editorial-job-token":jobToken(intakeId)}}
+function reviewChecksPass(){
+ return intakePreviewReady&&["intake-check-preview","intake-check-geometry","intake-check-materials"].every(id=>e(id).checked);
+}
+function updateIntakeActions(){
+ const data=intakeState||{};
+ for(const [id,flag] of [["intake-approve","can_approve"],["intake-reject","can_reject"],["intake-download","can_download"],["intake-handoff","can_handoff"]])
+   e(id).disabled=intakeBusy||data[flag]!==true||(id==="intake-approve"&&!reviewChecksPass());
+}
+async function loadIntakePreview(id,sha){
+ if(intakePreviewFor===id+sha)return;
+ intakePreviewFor=id+sha;intakePreviewReady=false;
+ const r=await fetch(base+"/job/preview?job="+encodeURIComponent(id),{
+  headers:sessionHeaders(),cache:"no-store"});
+ if(!r.ok){intakePreviewFor="";throw Error("Превью технического мастера пока недоступно")}
+ const blob=await r.blob();if(blob.type!=="image/jpeg")throw Error("Некорректный формат превью");
+ if(intakePreviewURL)URL.revokeObjectURL(intakePreviewURL);
+ intakePreviewURL=URL.createObjectURL(blob);
+ e("intake-preview").src=intakePreviewURL;
+ e("intake-preview-frame").hidden=false;
+ e("intake-visual-checks").hidden=false;
+ intakePreviewReady=true;updateIntakeActions();
+}
 function setIntake(data){
+ intakeState=data;
  intakeProof=data.technical_qa||null;
  e("intake-id").textContent=data.job_id||"—";
  e("intake-status").textContent=readableStatus[data.status]||data.status||"Неизвестно";
@@ -110,8 +146,7 @@ function setIntake(data){
  const link=e("intake-import-link");if(link){
    link.hidden=!data.mg4k_imported;link.href=data.mg4k_import_url||"#";
  }
- for(const [id,flag] of [["intake-approve","can_approve"],["intake-reject","can_reject"],["intake-download","can_download"],["intake-handoff","can_handoff"]])
-   e(id).disabled=intakeBusy||data[flag]!==true;
+ updateIntakeActions();
 }
 async function intakeStatus(){
  if(!intakeId)return;
@@ -120,21 +155,30 @@ async function intakeStatus(){
  const d=await r.json().catch(()=>({error:"invalid_response"}));
  if(!r.ok){e("intake-status").textContent="Ошибка "+r.status;e("intake-message").textContent=d.error||"Нет доступа к заданию";return}
  setIntake(d);
+ if(d.technical_master_ready&&d.technical_qa?.master_sha256)
+  loadIntakePreview(id,d.technical_qa.master_sha256).catch(err=>{
+   e("intake-message").textContent=String(err);updateIntakeActions();
+  });
 }
 function activateIntake(id){
  if(!/^[0-9a-f-]{36}$/i.test(id))return;
  intakeId=id;location.hash="intake="+encodeURIComponent(id);
+ intakePreviewFor="";intakePreviewReady=false;intakeState=null;
+ ["intake-check-preview","intake-check-geometry","intake-check-materials"].forEach(k=>e(k).checked=false);
+ e("intake-visual-checks").hidden=true;e("intake-preview-frame").hidden=true;
  if(intakePoll)clearInterval(intakePoll);
  intakeStatus().catch(err=>{e("intake-message").textContent=String(err)});
  intakePoll=setInterval(()=>intakeStatus().catch(err=>{e("intake-message").textContent=String(err)}),5000);
 }
 async function intakeDecision(decision){
  if(!intakeProof?.master_sha256||!intakeId)return;
+ if(decision==="APPROVED"&&!reviewChecksPass())return e("intake-message").textContent="Проверьте полный размер и подтвердите все три пункта QA.";
  intakeBusy=true;
  e("intake-approve").disabled=e("intake-reject").disabled=true;
  try{
   const r=await fetch(base+"/job/decision?job="+encodeURIComponent(intakeId),{
-   method:"POST",headers:sessionHeaders({"content-type":"application/json"}),body:JSON.stringify({decision,master_sha256:intakeProof.master_sha256})
+   method:"POST",headers:sessionHeaders({"content-type":"application/json"}),body:JSON.stringify({decision,master_sha256:intakeProof.master_sha256,
+    checks:decision==="APPROVED"?{preview_reviewed:true,geometry:true,materials:true,no_hdr:true}:null})
   });
   const d=await r.json();if(!r.ok)throw Error(d.error||"QA decision failed");
   await intakeStatus();
@@ -202,7 +246,9 @@ e("open-editorial").addEventListener("click",()=>{
  const id=e("job").value.trim();if(!id)return say("Не указан ID задания.");
  window.EditorialCompare?.open(id,"tech-editorial").catch(err=>say(String(err)));
 });
-e("upload").addEventListener("click",()=>upload().catch(err=>say(String(err))));e("load").addEventListener("click",()=>load().catch(err=>say(String(err))));e("refresh").addEventListener("click",()=>load().catch(err=>health().catch(e=>say(String(e)))));e("intake-approve").addEventListener("click",()=>intakeDecision("APPROVED"));
+e("upload").addEventListener("click",()=>upload().catch(err=>say(String(err))));e("load").addEventListener("click",()=>load().catch(err=>say(String(err))));e("refresh").addEventListener("click",()=>load().catch(err=>health().catch(e=>say(String(e)))));["intake-check-preview","intake-check-geometry","intake-check-materials"].forEach(id=>
+ e(id).addEventListener("change",updateIntakeActions));
+e("intake-approve").addEventListener("click",()=>intakeDecision("APPROVED"));
 e("intake-reject").addEventListener("click",()=>intakeDecision("REJECTED"));
 e("intake-download").addEventListener("click",intakeDownload);
 e("intake-handoff").addEventListener("click",intakeHandoff);
