@@ -1,0 +1,102 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import {createEditorialIntakeJob,editorialJobApi} from "../src/editorial_jobs.js";
+
+function mockR2(){
+ const map=new Map();
+ const toBytes=x=>typeof x==="string"?new TextEncoder().encode(x):x instanceof Uint8Array?x:new Uint8Array(x);
+ return {
+   map,
+   async put(key,body,opts={}){
+     if(opts.onlyIf?.get?.("If-None-Match")==="*"&&map.has(key))return null;
+     const bytes=toBytes(body);
+     map.set(key,{bytes,httpMetadata:opts.httpMetadata||{},customMetadata:opts.customMetadata||{}});
+     return {key,size:bytes.length};
+   },
+   async head(key){const obj=map.get(key);return obj?{size:obj.bytes.length,httpMetadata:obj.httpMetadata,customMetadata:obj.customMetadata}:null},
+   async get(key){const obj=map.get(key);return obj?{
+     size:obj.bytes.length,body:obj.bytes,httpMetadata:obj.httpMetadata,
+     async json(){return JSON.parse(new TextDecoder().decode(obj.bytes))}
+   }:null}
+ };
+}
+function harness(){
+ const r2=mockR2(),env={TROPICANA_EDITORIAL_R2:r2};
+ const session={id:"session-allow"};
+ const authorize=async request=>request.headers.get("x-session-id")==="session-allow"&&request.headers.get("x-session-token")==="secret"?session:null;
+ const call=(path,method="GET",body,allow=true)=> {
+   const url=new URL("https://app.example"+path);
+   const headers=allow?{"x-session-id":"session-allow","x-session-token":"secret"}:{"x-session-id":"intruder","x-session-token":"wrong"};
+   if(body)headers["content-type"]="application/json";
+   const request=new Request(url,{method,headers,body:body?JSON.stringify(body):undefined});
+   return editorialJobApi(request,env,url,authorize);
+ };
+ return {r2,env,session,call};
+}
+async function intake(h){
+ return createEditorialIntakeJob(h.env,h.session,{filename:"New_photo.jpg",mime:"image/jpeg",source_key:"tropicana-park/DSC09818/uploads/session-allow/test.jpg",source_sha256:"a".repeat(64),bytes:22000});
+}
+async function tech(h,job){
+ const masterKey="tropicana-park/editorial-jobs/"+job.job_id+"/technical/master16.tif";
+ await h.r2.put(masterKey,new Uint8Array(1100000),{
+   httpMetadata:{contentType:"image/tiff"},customMetadata:{sha256:"b".repeat(64)}
+ });
+ await h.r2.put("tropicana-park/editorial-jobs/"+job.job_id+"/technical/qa.json",JSON.stringify({
+   job_id:job.job_id,source_sha256:job.source_sha256,
+   master_key:masterKey,master_sha256:"b".repeat(64),master_bytes:1100000,
+   master_bit_depth:16,technical_status:"TECHNICAL_QA_PASS",
+   HDR_applied:false,virtual_exposures:false,local_HDR:false,qa_checks:{HDR_ABSENT:"PASS"}
+ }),{httpMetadata:{contentType:"application/json"}});
+}
+test("new upload is awaiting processing and never pretends to have a progress percentage",async()=>{
+ const h=harness(),job=await intake(h);
+ const resp=await h.call("/api/editorial/job/status?job="+job.job_id);
+ const data=await resp.json();
+ assert.equal(resp.status,200);
+ assert.equal(data.status,"AWAITING_TECH_PROCESSING");
+ assert.equal(data.progress,null);
+ assert.equal(data.can_approve,false);
+ assert.equal(data.can_handoff,false);
+ assert.equal(data.auto_generation,false);
+ for(const op of ["decision","handoff"]){
+   const r=await h.call("/api/editorial/job/"+op+"?job="+job.job_id,"POST",op==="decision"?{decision:"APPROVED",master_sha256:"b".repeat(64)}:undefined);
+   assert.equal(r.status,409);
+ }
+});
+test("per-job access is bound to authenticated session",async()=>{
+ const h=harness(),job=await intake(h);
+ for(const op of ["status","download"]){
+   const r=await h.call("/api/editorial/job/"+op+"?job="+job.job_id,"GET",null,false);
+   assert.equal(r.status,404);
+ }
+});
+test("only verified technical NO HDR evidence unlocks QA; approval enables download and staged handoff",async()=>{
+ const h=harness(),job=await intake(h);
+ await tech(h,job);
+ let r=await h.call("/api/editorial/job/status?job="+job.job_id);
+ let d=await r.json();
+ assert.equal(d.status,"AWAITING_HUMAN_QA");assert.equal(d.can_approve,true);
+ r=await h.call("/api/editorial/job/decision?job="+job.job_id,"POST",{decision:"APPROVED",master_sha256:"c".repeat(64)});
+ assert.equal(r.status,409);
+ r=await h.call("/api/editorial/job/decision?job="+job.job_id,"POST",{decision:"APPROVED",master_sha256:"b".repeat(64)});
+ assert.equal(r.status,200);
+ r=await h.call("/api/editorial/job/status?job="+job.job_id);d=await r.json();
+ assert.equal(d.can_download,true);assert.equal(d.can_handoff,true);
+ r=await h.call("/api/editorial/job/download?job="+job.job_id);
+ assert.equal(r.status,200);assert.equal(r.headers.get("content-type"),"image/tiff");
+ r=await h.call("/api/editorial/job/handoff?job="+job.job_id,"POST");
+ d=await r.json();
+ assert.equal(d.stage,"READY_FOR_MG4K_IMPORT");assert.equal(d.generation_started,false);
+ const o=await h.r2.get("tropicana-park/editorial-jobs/"+job.job_id+"/handoff.json");
+ const manifest=await o.json();assert.equal(manifest.locks.geometry,"HARD");assert.equal(manifest.generation_authorized,false);
+});
+test("reject is final and cannot be overwritten or handed off",async()=>{
+ const h=harness(),job=await intake(h);
+ await tech(h,job);
+ let r=await h.call("/api/editorial/job/decision?job="+job.job_id,"POST",{decision:"REJECTED",master_sha256:"b".repeat(64)});
+ assert.equal(r.status,200);
+ r=await h.call("/api/editorial/job/decision?job="+job.job_id,"POST",{decision:"APPROVED",master_sha256:"b".repeat(64)});
+ assert.equal(r.status,409);
+ r=await h.call("/api/editorial/job/handoff?job="+job.job_id,"POST");
+ assert.equal(r.status,409);
+});
