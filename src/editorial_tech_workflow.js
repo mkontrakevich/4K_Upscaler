@@ -64,6 +64,32 @@ async function proof(env,id,job){
     throw Error("technical_QA_proof_HOLD");
   return qa;
 }
+
+// ContainerProxy responses expose a Content-Length header, but their ReadableStream
+// is not considered length-bearing by the R2 binding. FixedLengthStream restores
+// a strict content length without buffering a potentially large 16-bit TIFF.
+async function persistKnownLength(env,key,response,expectedSize,options){
+  if(!Number.isSafeInteger(expectedSize)||expectedSize<=0||!response.body)
+    throw Error("technical_stream_expected_length_invalid");
+  const bucket=env.TROPICANA_EDITORIAL_R2;
+  const already=await bucket.head(key);
+  if(already){
+    if(already.size!==expectedSize||
+       already.customMetadata?.sha256!==options.customMetadata?.sha256||
+       !already.checksums?.sha256||
+       hex(already.checksums.sha256)!==options.customMetadata.sha256)
+      throw Error("technical_output_collision_integrity_HOLD");
+    await response.body.cancel();
+    return already;
+  }
+  const {readable,writable}=new FixedLengthStream(expectedSize);
+  const copy=response.body.pipeTo(writable);
+  const save=bucket.put(key,readable,options);
+  const [,stored]=await Promise.all([copy,save]);
+  if(!stored)throw Error("technical_output_conditional_write_HOLD");
+  return stored;
+}
+
 async function persist(env,id,job,qa){
   const c=await processor(env);
   const master=await c.fetch(new Request(endpoint(id,"master")));
@@ -71,7 +97,7 @@ async function persist(env,id,job,qa){
      Number(master.headers.get("content-length"))!==qa.master_bytes)
     throw Error("master_stream_missing_or_invalid");
   const output=ROOT(id)+"technical/master16.tif";
-  await env.TROPICANA_EDITORIAL_R2.put(output,master.body,{
+  await persistKnownLength(env,output,master,qa.master_bytes,{
     onlyIf:new Headers({"If-None-Match":"*"}),sha256:fromHex(qa.master_sha256),
     httpMetadata:{contentType:"image/tiff"},
     customMetadata:{sha256:qa.master_sha256,source_sha256:job.source_sha256,job_id:id}
@@ -85,7 +111,7 @@ async function persist(env,id,job,qa){
   if(!view.ok||view.headers.get("content-type")!=="image/jpeg"||
      Number(view.headers.get("content-length"))!==qa.preview_bytes)
     throw Error("technical_preview_invalid");
-  await env.TROPICANA_EDITORIAL_R2.put(ROOT(id)+"technical/fullres-preview.jpg",view.body,{
+  await persistKnownLength(env,ROOT(id)+"technical/fullres-preview.jpg",view,qa.preview_bytes,{
     onlyIf:new Headers({"If-None-Match":"*"}),sha256:fromHex(qa.preview_sha256),
     httpMetadata:{contentType:"image/jpeg"},customMetadata:{sha256:qa.preview_sha256}
   });
