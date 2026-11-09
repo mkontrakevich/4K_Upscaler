@@ -5,6 +5,9 @@ on:
       - 'src/editorial_photo.js'
       - 'src/editorial_jobs.js'
       - 'tests/editorial-jobs.test.mjs'
+      - 'tests/editorial-raster-tech.py'
+      - 'scripts/editorial_raster_technical_master.py'
+      - 'requirements.txt'
       - 'src/worker.js'
       - 'site/editorial-photo.html'
       - 'site/editorial-import.js'
@@ -41,6 +44,10 @@ jobs:
           node --check site/editorial-compare.js
           node --check site/editorial-import.js
           python -m py_compile scripts/editorial_fullres_review.py scripts/editorial_original_raw_review.py scripts/editorial_dsc09818_technical_master_v10.py scripts/editorial_fullres_review_v10.py
+      - name: Test generic raster Tech Master (no HDR, real TIFF)
+        run: |
+          python -m pip install --disable-pip-version-check 'numpy>=2,<3' 'opencv-python-headless>=4.10,<5' 'tifffile>=2025.1,<2028'
+          python tests/editorial-raster-tech.py
       - name: Validate geometry module
         run: |
           python -m py_compile editorial_geometry.py editorial_lens_profile.py
