@@ -84,8 +84,19 @@
 const base="/api/editorial";let session=null,sourceURL=null;
 let intakeId="",intakeProof=null,intakePoll=null,intakeBusy=false;
 const sessionStore="mg4k-editorial-session-v1";
+const jobAccessStore="mg4k-editorial-job-access-v1";
+function jobToken(id){
+ try{return JSON.parse(localStorage.getItem(jobAccessStore)||"{}")[id]?.token||""}catch{return ""}
+}
+function persistJobToken(id,token){
+ if(!/^[a-f0-9-]{36}$/i.test(id)||!/^[a-f0-9]{64}$/.test(token))return;
+ let current={};try{current=JSON.parse(localStorage.getItem(jobAccessStore)||"{}")}catch{}
+ const now=Date.now();
+ for(const [k,v] of Object.entries(current)){if(!v||now-Number(v.at||0)>30*24*3600*1000)delete current[k]}
+ current[id]={token,at:now};localStorage.setItem(jobAccessStore,JSON.stringify(current));
+}
 const readableStatus={AWAITING_TECH_PROCESSING:"Ожидает технической обработки",AWAITING_HUMAN_QA:"Ожидает визуального QA",TECH_MASTER_APPROVED:"Мастер утверждён",REJECTED:"QA отклонён"};
-function sessionHeaders(extra={}){return {...extra,"x-session-id":session?.id||"","x-session-token":session?.token||""}}
+function sessionHeaders(extra={}){return {...extra,"x-session-id":session?.id||"","x-session-token":session?.token||"","x-editorial-job-token":jobToken(intakeId)}}
 function setIntake(data){
  intakeProof=data.technical_qa||null;
  e("intake-id").textContent=data.job_id||"—";
@@ -164,7 +175,7 @@ async function sessionStart(){
  session=await r.json();sessionStorage.setItem(sessionStore,JSON.stringify(session));return session
 }
 async function health(){const r=await fetch(base+"/health");const h=await r.json();e("status").textContent=h.ok&&h.storage_isolated&&h.openrouter_configured?"Контур доступен":"Требуется настройка";say(h)}
-async function upload(){const file=e("file").files[0];if(!file)throw Error("Выберите JPG/PNG/WebP");if(file.size>8*1024*1024)throw Error("Лимит 8 МБ");const s=await sessionStart();const f=new FormData();f.append("file",file);const r=await fetch(base+"/upload",{method:"POST",headers:{"x-session-id":s.id,"x-session-token":s.token},body:f});const data=await r.json();if(!r.ok)throw Error(JSON.stringify(data));e("upload-result").textContent=data.source_key+" · "+data.sha256.slice(0,16);say(data);if(data.job_id)activateIntake(data.job_id);if(sourceURL)URL.revokeObjectURL(sourceURL);sourceURL=URL.createObjectURL(file);e("source").src=sourceURL;e("source").classList.add("ready");e("source-label").hidden=true}
+async function upload(){const file=e("file").files[0];if(!file)throw Error("Выберите JPG/PNG/WebP");if(file.size>8*1024*1024)throw Error("Лимит 8 МБ");const s=await sessionStart();const f=new FormData();f.append("file",file);const r=await fetch(base+"/upload",{method:"POST",headers:{"x-session-id":s.id,"x-session-token":s.token},body:f});const data=await r.json();if(!r.ok)throw Error(JSON.stringify(data));e("upload-result").textContent=data.source_key+" · "+data.sha256.slice(0,16);say(data);if(data.job_id){persistJobToken(data.job_id,data.job_token);activateIntake(data.job_id)}if(sourceURL)URL.revokeObjectURL(sourceURL);sourceURL=URL.createObjectURL(file);e("source").src=sourceURL;e("source").classList.add("ready");e("source-label").hidden=true}
 async function load(){const id=e("job").value.trim();if(!/^[0-9a-f-]{36}$/i.test(id))return say("Укажите UUID задания");const r=await fetch(base+"/view?job="+encodeURIComponent(id)+"&kind=manifest");const data=await r.json();if(!r.ok)return say(data);e("status").textContent=data.status||"REVIEW";say(data);e("source").src=base+"/view?job="+encodeURIComponent(id)+"&kind=source";e("source").classList.add("ready");e("source-label").hidden=true;
 e("optical").src=base+"/view?job="+encodeURIComponent(id)+"&kind=optical";e("optical").classList.add("ready");e("optical-label").hidden=true;
 for(const [kind,element] of [["tech_v10_neutral","tech-neutral"],["tech_v10_clean","tech-clean"]]){
