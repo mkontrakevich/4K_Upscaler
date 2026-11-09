@@ -1,3 +1,4 @@
+import { editorialJobApi, createEditorialIntakeJob } from "./editorial_jobs.js";
 import { WorkflowEntrypoint } from "cloudflare:workers";
 import { NonRetryableError } from "cloudflare:workflows";
 
@@ -158,6 +159,7 @@ export class EditorialPhotoWorkflow extends WorkflowEntrypoint{
 }
 export async function editorialApi(request,env,url,authorizeSession){
  const path=url.pathname,method=request.method.toUpperCase();
+ if(path.startsWith("/api/editorial/job/"))return editorialJobApi(request,env,url,authorizeSession);
  if(path==="/api/editorial/health"&&method==="GET"){
   return j({ok:true,project:PROJECT,frame:FRAME,module:"Editorial Photo",storage_isolated:!!env.TROPICANA_EDITORIAL_R2,openrouter_configured:!!env.OPENROUTER_API_KEY,job_control:"Cloudflare Workflows API only",skill:"v1.13",technical_master_policy:"V10_NEUTRAL_NO_HDR",generation_guard:"HUMAN_QA_APPROVAL_REQUIRED",image_model:env.EDITORIAL_IMAGE_MODEL||MODEL,workflow:"mg4k-tropicana-editorial"});
  }
@@ -184,7 +186,10 @@ export async function editorialApi(request,env,url,authorizeSession){
   await env.TROPICANA_EDITORIAL_R2.put(key,bytes,{httpMetadata:{contentType:file.type},customMetadata:{sha256:sha,project:PROJECT,frame:FRAME}});
   await env.SESSION_STATE_R7.put(limitKey,String(usage+1),{expirationTtl:3600});
   await Promise.all([env.SESSION_STATE_R7.put(ipKey,String(Number(ipCount||0)+1),{expirationTtl:7200}),env.SESSION_STATE_R7.put(globalKey,String(Number(globalCount||0)+1),{expirationTtl:7200})]);
-  return j({ok:true,project:PROJECT,frame:FRAME,source_key:key,sha256:sha,bytes:bytes.byteLength,workflow_control:"manual",message:"Input stored. Paid editorial workflow requires authorized management launch."},201);
+  const intake=await createEditorialIntakeJob(env,session,{filename:file.name,mime:file.type,source_key:key,source_sha256:sha,bytes:bytes.byteLength});
+  return j({ok:true,project:PROJECT,frame:FRAME,job_id:intake.job_id,status:intake.status,stage:intake.stage,progress:null,
+    source_key:key,sha256:sha,bytes:bytes.byteLength,workflow_control:"manual",
+    message:"Файл сохранён в R2; Tech Master не запущен. Обработка ожидает подключённого технического процессора."},201);
  }
  if(path==="/api/editorial/view"&&method==="GET"){
   const id=url.searchParams.get("job")||"",kind=url.searchParams.get("kind")||"manifest";
