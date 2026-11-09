@@ -46,8 +46,15 @@ def prepare(source: Path, out: Path, job_id: str, expected_sha: str) -> dict:
         rgb = np.repeat(raw[:, :, None], 3, axis=2)
     elif raw.shape[2] == 3:
         rgb = raw[:, :, ::-1].copy()
+    elif raw.shape[2] == 4:
+        # Accept RGBA only if every pixel is fully opaque. No matting or
+        # transparent-pixel color changes are permitted in a source master.
+        fully_opaque = np.all(raw[:, :, 3] == np.iinfo(raw.dtype).max)
+        if not fully_opaque:
+            raise ValueError("non_opaque_alpha_requires_explicit_matte_and_QA")
+        rgb = raw[:, :, 2::-1].copy()
     else:
-        raise ValueError("alpha_or_multichannel_requires_explicit_matte")
+        raise ValueError("unsupported_image_channels")
     height, width = rgb.shape[:2]
     if width < 320 or height < 320 or width * height > 50_000_000:
         raise ValueError("invalid_source_dimensions")
@@ -95,6 +102,8 @@ def prepare(source: Path, out: Path, job_id: str, expected_sha: str) -> dict:
         "geometry": "IDENTITY_NO_CORRECTION",
         "geometry_visual_review": "PENDING",
         "human_visual_QA": "PENDING",
+        "opaque_alpha_verified": bool(raw.ndim==3 and raw.shape[2]==4),
+        "alpha_handling": "fully_opaque_alpha_removed_losslessly" if raw.ndim==3 and raw.shape[2]==4 else "none",
         "model_input_generated": False,
         "qa_checks": {
             "SOURCE_SHA256": "PASS",
