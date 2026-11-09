@@ -109,7 +109,7 @@ function persistJobToken(id,token){
  for(const [k,v] of Object.entries(current)){if(!v||now-Number(v.at||0)>30*24*3600*1000)delete current[k]}
  current[id]={token,at:now};localStorage.setItem(jobAccessStore,JSON.stringify(current));
 }
-const readableStatus={AWAITING_TECH_PROCESSING:"Ожидает технической обработки",AWAITING_HUMAN_QA:"Ожидает визуального QA",TECH_MASTER_APPROVED:"Мастер утверждён",REJECTED:"QA отклонён"};
+const readableStatus={AWAITING_TECH_PROCESSING:"Ожидает технической обработки",QUEUED:"В очереди технической обработки",PROCESSING:"Выполняется Tech Master",TECHNICAL_QA_PENDING:"Проверка технического мастера",AWAITING_HUMAN_QA:"Ожидает визуального QA",TECH_MASTER_APPROVED:"Мастер утверждён",MG4K_MASTER_IMPORTED:"Импортировано в MG 4K",FAILED:"Ошибка технической обработки",REJECTED:"QA отклонён"};
 function sessionHeaders(extra={}){return {...extra,"x-session-id":session?.id||"","x-session-token":session?.token||"","x-editorial-job-token":jobToken(intakeId)}}
 function reviewChecksPass(){
  return intakePreviewReady&&["intake-check-preview","intake-check-geometry","intake-check-materials"].every(id=>e(id).checked);
@@ -255,6 +255,19 @@ e("intake-reject").addEventListener("click",()=>intakeDecision("REJECTED"));
 e("intake-download").addEventListener("click",intakeDownload);
 e("intake-handoff").addEventListener("click",intakeHandoff);
 const hash=new URLSearchParams(location.hash.slice(1));
-if(hash.get("intake")){activateIntake(hash.get("intake"));health().catch(err=>say(String(err)))}
+if(hash.get("intake")){
+ const importedId=hash.get("intake"),capability=hash.get("token");
+ if(capability!==null){
+   if(/^[0-9a-f-]{36}$/i.test(importedId)&&/^[a-f0-9]{64}$/.test(capability)){
+     persistJobToken(importedId,capability);
+   }
+   // A URL fragment never reaches the server. Consume the capability once and
+   // immediately remove it from browser history/address bar.
+   hash.delete("token");
+   history.replaceState(null,"",location.pathname+location.search+"#"+hash.toString());
+ }
+ activateIntake(importedId);
+ health().catch(err=>say(String(err)))
+}
 else if(hash.get("job")){e("job").value=hash.get("job");load().catch(err=>say(String(err)))}else health().catch(err=>say(String(err)));
 </script><script src="/editorial-compare.js" defer></script></body></html>
