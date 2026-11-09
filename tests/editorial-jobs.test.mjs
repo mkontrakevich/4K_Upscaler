@@ -67,7 +67,7 @@ test("new upload is awaiting processing and never pretends to have a progress pe
  assert.equal(data.can_handoff,false);
  assert.equal(data.auto_generation,false);
  for(const op of ["decision","handoff"]){
-   const r=await h.call("/api/editorial/job/"+op+"?job="+job.job_id,"POST",op==="decision"?{decision:"APPROVED",master_sha256:sha}:undefined);
+   const r=await h.call("/api/editorial/job/"+op+"?job="+job.job_id,"POST",op==="decision"?{decision:"APPROVED",master_sha256:"c".repeat(64)}:undefined);
    assert.equal(r.status,409);
  }
 });
