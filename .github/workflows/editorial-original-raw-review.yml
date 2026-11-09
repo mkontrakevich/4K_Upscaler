@@ -1,9 +1,5 @@
 name: DSC09818 original ARW full-size neutral viewer source
 on:
-  pull_request:
-    paths:
-      - 'scripts/editorial_original_raw_review.py'
-      - '.github/workflows/editorial-original-raw-review.yml'
   workflow_dispatch:
 permissions:
   contents: read
