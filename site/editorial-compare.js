@@ -130,12 +130,12 @@ function setPair(pair){
 function scaleLimits(){return {min:.015,max:4}}
 function view(){const r=stage?.getBoundingClientRect();return {w:Math.max(1,r?.width||1),h:Math.max(1,r?.height||1)}}
 function paneWidth(){const v=view();return S.mode==="side"?(v.w-8)/2:v.w}
-function fitScale(){if(!S.source)return 1;const v=view();return Math.min((paneWidth()-20)/S.source.naturalWidth,(v.h-20)/S.source.naturalHeight)}
+function fitScale(){if(!S.source)return 1;const v=view(),ref=S.images.technical||S.source;return Math.min((paneWidth()-20)/ref.naturalWidth,(v.h-20)/ref.naturalHeight)}
 function setZoom(z){
  if(!S.source)return;
  S.zoom=z;
  if(z==="fit")S.scale=fitScale();
- else if(z==="editorial")S.scale=S.result.naturalWidth/S.source.naturalWidth;
+ else if(z==="editorial")S.scale=S.result.naturalWidth/6536;
  else S.scale=Number(z);
  const lim=scaleLimits();S.scale=Math.min(lim.max,Math.max(lim.min,S.scale));S.panX=0;S.panY=0;updateUI();scheduleDraw()
 }
@@ -160,17 +160,23 @@ function action(name){
 }
 function updateUI(){
  if(!dialog)return;
+ dialog.querySelectorAll("[data-ec-pair]").forEach(b=>b.classList.toggle("active",b.dataset.ecPair===S.pair));
  dialog.querySelectorAll("[data-ec-mode]").forEach(b=>b.classList.toggle("active",b.dataset.ecMode===S.mode));
  dialog.querySelectorAll("[data-ec-zoom]").forEach(b=>b.classList.toggle("active",b.dataset.ecZoom===S.zoom));
  const sl=$("ec-split-range");sl.value=String(Math.round(S.split*100));sl.disabled=S.mode!=="split";
  $("ec-split-percent").textContent=Math.round(S.split*100)+"%";
- $("ec-zoom-label").textContent=S.zoom==="fit"?"FIT":S.zoom==="editorial"?"1:1 EDIT":Math.round(S.scale*100)+"% TECH";
+ const isRaw=S.pair==="raw-tech";
+ $("ec-pair-title").textContent=isRaw?"DSC09818 / ORIGINAL RAW ↔ TECH V9":"DSC09818 / TECH V9 ↔ EDITORIAL 01";
+ $("ec-zoom-label").textContent=S.zoom==="fit"?"FIT":S.zoom==="editorial"?"1:1 RIGHT":Math.round(S.scale*100)+"% REF";
  if(S.source&&S.result){
   const a=S.source,b=S.result;
-  $("ec-dimensions").textContent="TECH RAW V9 "+a.naturalWidth+"×"+a.naturalHeight+" · EDITORIAL "+b.naturalWidth+"×"+b.naturalHeight;
-  $("ec-resolution-warning").textContent=S.fullNative?"Слева 6536px из 16-битного TIFF (8-bit display proxy). Справа native OpenRouter: "+b.naturalWidth+"px; 100% TECH увеличивает его, не создавая деталей.":"Полный источник ещё недоступен. Сейчас используется 2000px техническое превью; статус 100% TECH ограничен.";
+  $("ec-dimensions").textContent=(isRaw?"ORIGINAL ARW ":"TECH V9 ")+a.naturalWidth+"×"+a.naturalHeight+" · "+(isRaw?"TECH V9 ":"EDITORIAL ")+b.naturalWidth+"×"+b.naturalHeight;
+  $("ec-resolution-warning").textContent=isRaw?
+    "RAW: 7028×4688 без исправления геометрии · совмещение по центральной области 6536×4360 без масштабирования. Расхождение архитектурных линий показывает выполненные коррекции.":
+    "TECH: 6536×4360 из TIFF 16-bit (8-bit экранная копия). EDITORIAL: "+b.naturalWidth+"×"+b.naturalHeight+" native; 100% TECH увеличивает модель, не создавая деталей.";
  }else $("ec-dimensions").textContent="Ожидание исходных размеров…";
- $("ec-help").textContent=S.mode==="split"?"Перетаскивайте вертикальную линию · drag кадра — панорама · колесо — масштаб":S.mode==="side"?"Синхронный zoom и pan в двух окнах · Fit / 100% / 1:1 EDIT":S.mode==="blink"?"Blink: чередование TECH и EDITORIAL каждые 700 мс":"Single: кнопка TECH / EDIT переключает исходник и художественную версию";
+ $("ec-help").textContent=S.mode==="split"?"Перетащите линию — Split · drag кадра — pan · колесо — zoom":S.mode==="side"?"Две версии, синхронные pan и zoom. Q: RAW/TECH · W: TECH/EDIT":
+ S.mode==="blink"?"Blink: переключение версий каждые 700 мс":"Single: LEFT/RIGHT переключает версии";
 }
 function scheduleDraw(){
  if(!S.open||S.renderQueued)return;S.renderQueued=true;
@@ -187,16 +193,24 @@ function drawImage(img,pane,additionalClip){
  if(!img)return;
  ctx.save();ctx.beginPath();ctx.rect(pane.x,pane.y,pane.w,pane.h);ctx.clip();
  if(additionalClip){ctx.beginPath();ctx.rect(additionalClip.x,additionalClip.y,additionalClip.w,additionalClip.h);ctx.clip()}
- const rW=S.source.naturalWidth,rH=S.source.naturalHeight;
- const refW=rW*S.scale,refH=rH*S.scale;
- // Keep own aspect ratio, center-align by source-frame coordinates.
- const fit=Math.min(rW/img.naturalWidth,rH/img.naturalHeight);
- const iw=img.naturalWidth*fit*S.scale,ih=img.naturalHeight*fit*S.scale;
- const x=pane.x+(pane.w-refW)/2+S.panX+(refW-iw)/2;
- const y=pane.y+(pane.h-refH)/2+S.panY+(refH-ih)/2;
+ // All variants reference the corrected 6536×4360 frame for synchronized pan/zoom.
+ // True ARW has 7028×4688 raw-developed pixels. Center viewport translation alone
+ // (-246,-164) aligns its field-of-view without changing actual RAW geometry.
+ const rW=6536,rH=4360,refW=rW*S.scale,refH=rH*S.scale;
+ let iw,ih,x,y;
+ const baseX=pane.x+(pane.w-refW)/2+S.panX;
+ const baseY=pane.y+(pane.h-refH)/2+S.panY;
+ if(img===S.images.raw){
+  iw=img.naturalWidth*S.scale;ih=img.naturalHeight*S.scale;
+  const crop=S.meta?.original_raw_preview?.reference_center_crop_xywh||[246,164,6536,4360];
+  x=baseX-crop[0]*S.scale;y=baseY-crop[1]*S.scale;
+ }else{
+  const fit=Math.min(rW/img.naturalWidth,rH/img.naturalHeight);
+  iw=img.naturalWidth*fit*S.scale;ih=img.naturalHeight*fit*S.scale;
+  x=baseX+(refW-iw)/2;y=baseY+(refH-ih)/2;
+ }
  ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality="high";
- ctx.drawImage(img,x,y,iw,ih);
- ctx.restore();
+ ctx.drawImage(img,x,y,iw,ih);ctx.restore();
 }
 function label(pane,txt,position="left"){
  if(!S.labels)return;
@@ -211,7 +225,9 @@ function draw(){
  ctx.fillStyle="#02080d";ctx.fillRect(0,0,w,h);
  if(!S.source||!S.result)return;
  const A=S.swap?S.result:S.source,B=S.swap?S.source:S.result;
- const an=S.swap?"EDITORIAL":"TECH RAW V9",bn=S.swap?"TECH RAW V9":"EDITORIAL";
+ const leftLabel=S.pair==="raw-tech"?"ORIGINAL RAW · UNRECTIFIED":"TECH RAW V9";
+ const rightLabel=S.pair==="raw-tech"?"TECH MASTER V9":"EDITORIAL · OPENROUTER";
+ const an=S.swap?rightLabel:leftLabel,bn=S.swap?leftLabel:rightLabel;
  const full={x:0,y:0,w,h};
  if(S.mode==="split"){
   drawImage(A,full);
@@ -224,7 +240,7 @@ function draw(){
   const pw=(w-8)/2,one={x:0,y:0,w:pw,h},two={x:pw+8,y:0,w:pw,h};
   drawImage(A,one);drawImage(B,two);ctx.fillStyle="#253b4b";ctx.fillRect(pw,0,8,h);label(one,an);label(two,bn);
  }else if(S.mode==="single"){
-  const img=S.single==="source"?S.source:S.result;drawImage(img,full);label(full,S.single==="source"?"TECH RAW V9":"EDITORIAL / OPENROUTER");
+  const img=S.single==="source"?S.source:S.result;drawImage(img,full);label(full,S.single==="source"?leftLabel:rightLabel);
  }else{
   const img=S.blinkResult?B:A;drawImage(img,full);label(full,S.blinkResult?bn:an);
  }
@@ -249,13 +265,13 @@ function wheel(e){
  const pane=S.mode==="side"?{x:x>=v.w/2?(v.w+8)/2:0,w:(v.w-8)/2}:{x:0,w:v.w};
  const px=x-pane.x,oldScale=S.scale;
  const next=Math.max(scaleLimits().min,Math.min(scaleLimits().max,oldScale*Math.exp(-e.deltaY*.0013)));
- const refX=(px-(pane.w-S.source.naturalWidth*oldScale)/2-S.panX)/oldScale;
- const refY=(y-(v.h-S.source.naturalHeight*oldScale)/2-S.panY)/oldScale;
- S.panX=px-(pane.w-S.source.naturalWidth*next)/2-refX*next;
- S.panY=y-(v.h-S.source.naturalHeight*next)/2-refY*next;
+ const refX=(px-(pane.w-6536*oldScale)/2-S.panX)/oldScale;
+ const refY=(y-(v.h-4360*oldScale)/2-S.panY)/oldScale;
+ S.panX=px-(pane.w-6536*next)/2-refX*next;
+ S.panY=y-(v.h-4360*next)/2-refY*next;
  S.scale=next;S.zoom="custom";updateUI();scheduleDraw();
 }
-function cleanup(){S.open=false;activeJob="";S.drag=false;stopBlink();if(document.fullscreenElement===dialog)document.exitFullscreen?.();S.source=null;S.result=null;S.meta=null;S.fullNative=false}
+function cleanup(){S.open=false;activeJob="";S.drag=false;stopBlink();if(document.fullscreenElement===dialog)document.exitFullscreen?.();S.source=null;S.result=null;S.images={raw:null,technical:null,editorial:null};S.meta=null;S.fullNative=false}
 function close(){if(dialog?.open)dialog.close();else cleanup()}
 function keys(e){
  if(!S.open||["INPUT","TEXTAREA","SELECT"].includes(document.activeElement?.tagName))return;
@@ -263,6 +279,7 @@ function keys(e){
  if(k==="escape"){e.preventDefault();close()}
  else if(k==="1")setMode("split");else if(k==="2")setMode("side");else if(k==="3")setMode("single");else if(k==="4")setMode("blink");
  else if(k==="f")setZoom("fit");else if(k==="z")setZoom("1");else if(k==="x")setZoom("2");
+ else if(k==="q")setPair("raw-tech");else if(k==="w")setPair("tech-editorial");
  else if(k==="s")action("swap");else if(k==="l")action("labels");
  else if(k==="0"||k==="r")action("reset");else if(k===" "){if(S.mode==="single"){e.preventDefault();action("single")}}
 }
