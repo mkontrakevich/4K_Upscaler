@@ -7,6 +7,7 @@ on:
       - 'tests/editorial-jobs.test.mjs'
       - 'src/worker.js'
       - 'site/editorial-photo.html'
+      - 'site/editorial-import.js'
       - 'site/editorial-compare.js'
       - 'scripts/editorial_dsc09818_technical_master_v10.py'
       - 'scripts/editorial_fullres_review_v10.py'
@@ -38,6 +39,7 @@ jobs:
           node --check src/editorial_jobs.js
           node --experimental-default-type=module --test tests/editorial-jobs.test.mjs
           node --check site/editorial-compare.js
+          node --check site/editorial-import.js
           python -m py_compile scripts/editorial_fullres_review.py scripts/editorial_original_raw_review.py scripts/editorial_dsc09818_technical_master_v10.py scripts/editorial_fullres_review_v10.py
       - name: Validate geometry module
         run: |
