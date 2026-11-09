@@ -1,9 +1,5 @@
 name: Editorial DSC09818 native-resolution compare source
 on:
-  pull_request:
-    paths:
-      - 'scripts/editorial_fullres_review.py'
-      - '.github/workflows/editorial-fullres-review.yml'
   workflow_dispatch:
 permissions:
   contents: read
