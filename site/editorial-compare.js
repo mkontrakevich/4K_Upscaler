@@ -161,9 +161,8 @@ function canvasContext(){
 }
 function drawImage(img,pane,additionalClip){
  if(!img)return;
- ctx.save();ctx.beginPath();ctx.rect(pane.x,pane.y,pane.w,pane.h);
- if(additionalClip){ctx.rect(additionalClip.x,additionalClip.y,additionalClip.w,additionalClip.h)}
- ctx.clip();
+ ctx.save();ctx.beginPath();ctx.rect(pane.x,pane.y,pane.w,pane.h);ctx.clip();
+ if(additionalClip){ctx.beginPath();ctx.rect(additionalClip.x,additionalClip.y,additionalClip.w,additionalClip.h);ctx.clip()}
  const rW=S.source.naturalWidth,rH=S.source.naturalHeight;
  const refW=rW*S.scale,refH=rH*S.scale;
  // Keep own aspect ratio, center-align by source-frame coordinates.
