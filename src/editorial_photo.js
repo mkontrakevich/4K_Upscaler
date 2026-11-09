@@ -36,7 +36,7 @@ async function openrouter(env,path,payload){
  return data;
 }
 const EDIT_PROMPT=[
-"IMAGE-TO-IMAGE EDIT ONLY. The attached DSC09818 source is the technically finished 16bit real Sony RAW derivative V9: lens corrected, PerspectiveLock, conservative single-RAW HDR signal extraction and noise cleanup. Preserve this scene and its geometry precisely. Do not redesign any object.",
+"IMAGE-TO-IMAGE EDIT ONLY. The attached DSC09818 source is the technically corrected Sony RAW derivative V10: true RAW neutral display exposure, optical lens correction, PerspectiveLock and controlled ISO3200 denoising. NO HDR, NO virtual exposures, NO HDR-like relighting were applied. Preserve this scene and its geometry precisely. Do not redesign any object.",
 "Preserve EXACT camera position and framing; same glass and metal railing, same door, bar stools, tables, floor tiles, brick, ceiling beams, plants, true skyline and harbor lights. Do not add furniture, decorative objects, lighting fixtures, railings or new buildings.",
 "Creative direction: premium European hospitality editorial at authentic late-night blue-hour. Retouch only the original recorded warm interior light and the real faint distant city/bay lights. Do not brighten pure-black sky into invented scenery. Keep physically plausible shadow signal and metal, brick and glass detail. Correct muddy cyan cast, reduce chroma noise, protect natural black sky and glass reflections, refine controlled amber-vs-deep-blue balance.",
 "Do not synthesize a different sky or sunset, city layout, yachts, flowers, or people. Preserve original weather and honest night conditions. No fantasy architecture, no deformed typography or people. Do not repaint blurred areas into invented detail.",
@@ -48,31 +48,38 @@ export class EditorialPhotoWorkflow extends WorkflowEntrypoint{
   const params=typeof event.payload==="string"?JSON.parse(event.payload):event.payload||{};
   const id=String(params.job_id||"");
   const sourceKey=String(params.source_key||"");
-  // Editorial V9 release is limited to one UUID and binds RAW, master and model input hashes.
-  if(!isId(id)||sourceKey!==ROOT+"technical-v9/DSC09818_EDITORIAL_INPUT.jpg")
-    throw new NonRetryableError("technical_v9_master_required");
-  const qaObject=await this.env.TROPICANA_EDITORIAL_R2.get(ROOT+"technical-v9/DSC09818_TECH_QA.json");
-  if(!qaObject)throw new NonRetryableError("technical_v9_QA_missing");
+  // The only source of future generative improvements: TECH V10 neutral with NO HDR.
+  // The previous V9 model candidate remains historical, and is never a valid new input.
+  if(!isId(id)||sourceKey!==ROOT+"technical-v10/DSC09818_EDITORIAL_INPUT.jpg")
+    throw new NonRetryableError("technical_v10_neutral_source_required");
+  const qaObject=await this.env.TROPICANA_EDITORIAL_R2.get(ROOT+"technical-v10/DSC09818_TECH_QA.json");
+  if(!qaObject)throw new NonRetryableError("technical_v10_QA_missing");
   const masterQA=await qaObject.json();
   if(masterQA.source_sha256!=="1b4344f4b8ca629830254850fbcbaf2931c83c00a158ab87d84e5ee7722046d5"||
-     masterQA.technical_status!=="TECHNICAL_QA_PASS"||masterQA.city_signal_qa!=="PASS"||
-     masterQA.HDR_bracketed!==false||masterQA.no_generated_pixels!==true||
-     Number(masterQA.roi_city_median_pct?.clean)<.97*Number(masterQA.roi_city_median_pct?.neutral))
-    throw new NonRetryableError("technical_v9_QA_invalid");
-  const releaseObject=await this.env.TROPICANA_EDITORIAL_R2.get(ROOT+"technical-v9/editorial-transition-release.json");
-  if(!releaseObject)throw new NonRetryableError("owner_transition_authorization_missing");
-  const release=await releaseObject.json();
-  if(release.authorized_job_id!==id||
-     release.owner_direction!=="proceed_after_technical_QA"||
+     masterQA.technical_version!=="V10_NEUTRAL_NO_HDR"||
+     masterQA.technical_status!=="TECHNICAL_QA_PASS"||
+     masterQA.qa_checks?.HDR_ABSENT!=="PASS"||
+     masterQA.HDR_applied!==false||masterQA.HDR_bracketed!==false||
+     masterQA.virtual_exposures!==false||masterQA.local_HDR!==false||
+     masterQA.adaptive_tone_recovery!==false||masterQA.no_generated_pixels!==true||
+     !masterQA.clean16_sha256||!masterQA.editorial_input_sha256)
+    throw new NonRetryableError("technical_v10_HOLDS_or_HDR_detected");
+  // Automated processing QA PASS is not owner's visual signoff.
+  // Approval must be explicitly recorded after full-resolution RAW vs TECH V10 inspection.
+  const approvalObject=await this.env.TROPICANA_EDITORIAL_R2.get(ROOT+"technical-v10/qa-approval.json");
+  if(!approvalObject)throw new NonRetryableError("technical_v10_human_QA_approval_required");
+  const release=await approvalObject.json();
+  if(release.qa_decision!=="APPROVED"||release.approved!==true||
+     release.frame!==FRAME||release.technical_version!=="V10_NEUTRAL_NO_HDR"||
      release.scope!=="ONE_ARTISTIC_OPENROUTER_CANDIDATE_ONLY"||
-     release.approved_for_publishing!==false||
+     release.authorized_job_id!==id||release.approved_for_publishing!==false||
      release.original_raw_sha256!==masterQA.source_sha256||
      release.technical_master_sha256!==masterQA.clean16_sha256||
      release.editorial_input_sha256!==masterQA.editorial_input_sha256)
-    throw new NonRetryableError("technical_release_or_lineage_invalid");
-  const masterHead=await this.env.TROPICANA_EDITORIAL_R2.head(ROOT+"technical-v9/DSC09818_TECH_CLEAN16.tif");
+    throw new NonRetryableError("technical_v10_approval_or_sha_invalid");
+  const masterHead=await this.env.TROPICANA_EDITORIAL_R2.head(ROOT+"technical-v10/DSC09818_TECH_CLEAN16.tif");
   if(!masterHead||masterHead.size!==masterQA.clean16_size||masterHead.size<50000000)
-    throw new NonRetryableError("technical_v9_fullsize_master_missing");
+    throw new NonRetryableError("technical_v10_fullsize_master_missing");
   const runRoot=fileKey(id,"");
   // Enforce exactly one paid candidate; an already saved result must never be purchased again.
   const [priorManifest,priorCandidate]=await Promise.all([
@@ -80,17 +87,17 @@ export class EditorialPhotoWorkflow extends WorkflowEntrypoint{
     this.env.TROPICANA_EDITORIAL_R2.head(runRoot+"editorial_candidate.png")
   ]);
   if(priorManifest||priorCandidate)throw new NonRetryableError("one_candidate_already_generated");
-  const source=await step.do("validate-source-v9",async()=>{
+  const source=await step.do("validate-source-v10",async()=>{
     const o=await object(this.env,sourceKey);
     if(o.sha!==masterQA.editorial_input_sha256)throw new NonRetryableError("editorial_model_input_sha_mismatch");
     await this.env.TROPICANA_EDITORIAL_R2.put(runRoot+"technical_master_QA.json",JSON.stringify(masterQA),{httpMetadata:{contentType:"application/json"}});
     await this.env.TROPICANA_EDITORIAL_R2.put(runRoot+"editorial_transition_release.json",JSON.stringify(release),{httpMetadata:{contentType:"application/json"}});
     await this.env.TROPICANA_EDITORIAL_R2.put(runRoot+"source_manifest.json",JSON.stringify({
-      project:PROJECT,frame:FRAME,technical_master:"TECH_V9",source_key:sourceKey,source_sha256:o.sha,source_bytes:o.size,
+      project:PROJECT,frame:FRAME,technical_master:"TECH_V10_NEUTRAL_NO_HDR",source_key:sourceKey,source_sha256:o.sha,source_bytes:o.size,
       clean_16bit_master_sha256:masterQA.clean16_sha256,original_RAW_sha256:masterQA.source_sha256,
       source_mime:o.mime,created_at:new Date().toISOString(),status:"INPUT_VALIDATED",
-      skill:"MARINS-Architectural-RAW-Photo-v1.10",geometry_lock:"HARD",fidelity_lock:"HARD",
-      single_RAW_HDR:true,owner_authorized_one_candidate:true
+      skill:"MARINS-Architectural-RAW-Photo-v1.13",geometry_lock:"HARD",fidelity_lock:"HARD",
+      HDR_applied:false,virtual_exposures:false,human_QA_approved:true,owner_authorized_one_candidate:true
     }),{httpMetadata:{contentType:"application/json"}});
     return {sha256:o.sha,size:o.size,mime:o.mime,master_sha256:masterQA.clean16_sha256};
   });
@@ -138,11 +145,11 @@ export class EditorialPhotoWorkflow extends WorkflowEntrypoint{
   const manifest={
    project:PROJECT,frame:FRAME,job_id:id,status:"EDITORIAL_REVIEW",final:false,
    source_key:sourceKey,source_sha256:source.sha256,source_bytes:source.size,
-   technical_raw_master:"Actual 16bit 6536x4360 real RAW technical V9 stored in isolated R2",
-   geometry_input:"One-pass combined PTLens 16mm + V3 PerspectiveLock from 16bit original RAW; SHA-linked TECH V9",
+   technical_raw_master:"Actual 16bit 6536x4360 real RAW TECH V10 neutral NO HDR stored in isolated R2",
+   geometry_input:"One-pass PTLens 16mm + V3 PerspectiveLock from 16bit original Sony RAW; TECH V10 NO HDR",
    candidate_key:candidate.key,candidate_sha256:candidate.sha256,
-   gates:{source_integrity:"PASS",raw_technical_v9:"PASS",single_raw_hdr_city_signal:"PASS",optical_distortion:"PROFILE_APPLIED_REQUIRES_REVIEW",pre_generation_geometry:"PASS",post_generation_geometry:"PENDING_NUMERIC_QA",editorial_visual:"REVIEW",geometry_fidelity:"REVIEW",manual_approval:"REQUIRED",full_resolution_master:"REQUIRED"},
-   steps:{analysis,candidate,audit},skill:"MARINS Architectural RAW Photo v1.10",
+   gates:{source_integrity:"PASS",raw_technical_v10:"PASS",hdr_absent:"PASS",human_technical_QA:"APPROVED",optical_distortion:"PROFILE_APPLIED_REQUIRES_REVIEW",pre_generation_geometry:"PASS",post_generation_geometry:"PENDING_NUMERIC_QA",editorial_visual:"REVIEW",geometry_fidelity:"REVIEW",manual_approval:"REQUIRED",full_resolution_master:"REQUIRED"},
+   steps:{analysis,candidate,audit},skill:"MARINS Architectural RAW Photo v1.13",
    model:this.env.EDITORIAL_IMAGE_MODEL||MODEL,created_at:new Date().toISOString()
   };
   await step.do("save-qa-manifest",async()=>{await this.env.TROPICANA_EDITORIAL_R2.put(runRoot+"manifest.json",JSON.stringify(manifest),{httpMetadata:{contentType:"application/json"}});return {stored:true}});
