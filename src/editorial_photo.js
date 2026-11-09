@@ -187,7 +187,7 @@ export async function editorialApi(request,env,url,authorizeSession){
   await env.SESSION_STATE_R7.put(limitKey,String(usage+1),{expirationTtl:3600});
   await Promise.all([env.SESSION_STATE_R7.put(ipKey,String(Number(ipCount||0)+1),{expirationTtl:7200}),env.SESSION_STATE_R7.put(globalKey,String(Number(globalCount||0)+1),{expirationTtl:7200})]);
   const intake=await createEditorialIntakeJob(env,session,{filename:file.name,mime:file.type,source_key:key,source_sha256:sha,bytes:bytes.byteLength});
-  return j({ok:true,project:PROJECT,frame:FRAME,job_id:intake.job_id,status:intake.status,stage:intake.stage,progress:null,
+  return j({ok:true,project:PROJECT,frame:FRAME,job_id:intake.job_id,job_token:intake.job_token,status:intake.status,stage:intake.stage,progress:null,
     source_key:key,sha256:sha,bytes:bytes.byteLength,workflow_control:"manual",
     message:"Файл сохранён в R2; Tech Master не запущен. Обработка ожидает подключённого технического процессора."},201);
  }
