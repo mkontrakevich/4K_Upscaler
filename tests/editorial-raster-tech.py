@@ -60,6 +60,15 @@ with tempfile.TemporaryDirectory() as td:
     else:
         raise AssertionError("corrupt source digest passed")
 
+    opaque = root / "opaque-rgba.png"
+    opaque_pixels = np.dstack([pixels, np.full(pixels.shape[:2], 255, dtype=np.uint8)])
+    assert cv2.imwrite(str(opaque), opaque_pixels)
+    info_opaque = tech.prepare(opaque, root / "opaque-result", JOB, sha(opaque))
+    opaque_master = tifffile.imread(root / "opaque-result" / "master16.tif")
+    assert info_opaque["opaque_alpha_verified"] is True
+    assert info_opaque["alpha_handling"] == "fully_opaque_alpha_removed_losslessly"
+    np.testing.assert_array_equal(opaque_master[:, :, ::-1], pixels.astype(np.uint16) * 257)
+
     alpha = root / "alpha.png"
     assert cv2.imwrite(str(alpha), np.random.default_rng(3).integers(0, 255, size=(380, 510, 4), dtype=np.uint8))
     try:
