@@ -54,11 +54,19 @@ async function verifiedTech(env,job) {
      q.virtual_exposures!==false||q.local_HDR!==false||
      q.qa_checks?.HDR_ABSENT!=="PASS"||q.master_bit_depth!==16||
      q.master_key!==expected||!SHA.test(String(q.master_sha256||""))||
-     !Number.isInteger(q.master_bytes)||q.master_bytes<1000000)return null;
+     !Number.isInteger(q.master_bytes)||q.master_bytes<200000)return null;
   const head=await env.TROPICANA_EDITORIAL_R2.head(expected);
   if(!head||head.size!==q.master_bytes||head.httpMetadata?.contentType!=="image/tiff"||
      head.customMetadata?.sha256!==q.master_sha256||
      !head.checksums?.sha256||hex(head.checksums.sha256)!==q.master_sha256)return null;
+  const first=await env.TROPICANA_EDITORIAL_R2.get(expected,{range:{offset:0,length:4}});
+  if(!first)return null;
+  const signature=new Uint8Array(await first.arrayBuffer());
+  const tiff=signature.length===4&&(
+    (signature[0]===73&&signature[1]===73&&(signature[2]===42||signature[2]===43)&&signature[3]===0)||
+    (signature[0]===77&&signature[1]===77&&signature[2]===0&&(signature[3]===42||signature[3]===43))
+  );
+  if(!tiff)return null;
   return q;
 }
 async function decision(env,id) {
