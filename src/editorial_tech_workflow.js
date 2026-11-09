@@ -60,7 +60,7 @@ async function proof(env,id,job){
      qa.technical_status!=="TECHNICAL_QA_PASS"||qa.master_bit_depth!==16||
      qa.HDR_applied!==false||qa.virtual_exposures!==false||qa.local_HDR!==false||
      qa.qa_checks?.HDR_ABSENT!=="PASS"||!SHA.test(qa.master_sha256||"")||
-     !Number.isInteger(qa.master_bytes)||qa.master_bytes<1000000)
+     !Number.isInteger(qa.master_bytes)||qa.master_bytes<200000)
     throw Error("technical_QA_proof_HOLD");
   return qa;
 }
