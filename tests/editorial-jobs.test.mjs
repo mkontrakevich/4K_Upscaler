@@ -28,9 +28,10 @@ function harness(){
  const r2=mockR2(),mg4k=mockR2(),env={TROPICANA_EDITORIAL_R2:r2,TEMP_BUFFER_R7:mg4k};
  const session={id:"session-allow"};
  const authorize=async request=>request.headers.get("x-session-id")==="session-allow"&&request.headers.get("x-session-token")==="secret"?session:null;
- const call=(path,method="GET",body,allow=true)=> {
+ const call=(path,method="GET",body,allow=true,editorialBearer="")=> {
    const url=new URL("https://app.example"+path);
    const headers=allow?{"x-session-id":"session-allow","x-session-token":"secret"}:{"x-session-id":"intruder","x-session-token":"wrong"};
+   if(editorialBearer)headers["x-editorial-job-token"]=editorialBearer;
    if(body)headers["content-type"]="application/json";
    const request=new Request(url,{method,headers,body:body?JSON.stringify(body):undefined});
    return editorialJobApi(request,env,url,authorize);
@@ -77,6 +78,17 @@ test("per-job access is bound to authenticated session",async()=>{
    const r=await h.call("/api/editorial/job/"+op+"?job="+job.job_id,"GET",null,false);
    assert.equal(r.status,404);
  }
+});
+test("opaque durable job token restores QA status after short session expires",async()=>{
+ const h=harness(),job=await intake(h);
+ assert.match(job.job_token,/^[a-f0-9]{64}$/);
+ const record=await (await h.r2.get("tropicana-park/editorial-jobs/"+job.job_id+"/job.json")).json();
+ assert.equal(record.job_token,undefined);
+ assert.match(record.access_hash,/^[0-9a-f]{64}$/);
+ let r=await h.call("/api/editorial/job/status?job="+job.job_id,"GET",null,false,job.job_token);
+ assert.equal(r.status,200);
+ r=await h.call("/api/editorial/job/status?job="+job.job_id,"GET",null,false,"a".repeat(64));
+ assert.equal(r.status,404);
 });
 test("only verified technical NO HDR evidence unlocks QA; approval enables download and staged handoff",async()=>{
  const h=harness(),job=await intake(h);
