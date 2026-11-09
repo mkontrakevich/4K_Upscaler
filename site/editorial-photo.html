@@ -78,7 +78,7 @@ for(const [kind,element] of [["tech_v10_neutral","tech-neutral"],["tech_v10_clea
 }
 e("technical").src=base+"/view?job="+encodeURIComponent(id)+"&kind=technical";e("technical").classList.add("ready");e("technical-label").hidden=true;
 if(data.candidate_key){e("candidate").src=base+"/view?job="+encodeURIComponent(id)+"&kind=candidate";e("candidate").classList.add("ready");e("candidate-label").hidden=true;
-e("open-compare").disabled=data.source_key!=="tropicana-park/DSC09818/technical-v9/DSC09818_EDITORIAL_INPUT.jpg";
+e("open-compare").disabled=!(["tropicana-park/DSC09818/technical-v9/DSC09818_EDITORIAL_INPUT.jpg","tropicana-park/DSC09818/technical-v10/DSC09818_EDITORIAL_INPUT.jpg"].includes(data.source_key));
 e("open-editorial").disabled=e("open-compare").disabled;
 if(!e("open-compare").disabled && ["1","raw-tech","tech-editorial"].includes(hash.get("compare"))){
  const pair=hash.get("compare")==="raw-tech"?"raw-tech":"tech-editorial";
