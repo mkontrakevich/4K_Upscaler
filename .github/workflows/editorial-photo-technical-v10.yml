@@ -24,8 +24,8 @@ jobs:
       - name: Install reproducible RAW processing dependencies
         run: |
           npm ci || npm install
-          python -m pip install --quiet numpy opencv-python-headless tifffile rawpy
-          python -m py_compile scripts/editorial_dsc09818_technical_master_v10.py
+          python -m pip install --quiet numpy opencv-python-headless tifffile rawpy pillow
+          python -m py_compile scripts/editorial_dsc09818_technical_master_v10.py scripts/editorial_fullres_review_v10.py
       - name: Download original protected Sony ARW only
         run: |
           set -euo pipefail
@@ -78,12 +78,21 @@ jobs:
           npx wrangler r2 object put "$ROOT/DSC09818_TECH_CLEAN.jpg" --file "$TROPICANA_TECH_DIR/DSC09818_TECH_CLEAN.jpg" --remote --content-type image/jpeg
           npx wrangler r2 object put "$ROOT/DSC09818_EDITORIAL_INPUT.jpg" --file "$TROPICANA_TECH_DIR/DSC09818_EDITORIAL_INPUT.jpg" --remote --content-type image/jpeg
           npx wrangler r2 object put "$ROOT/DSC09818_TECH_QA.json" --file "$TROPICANA_TECH_DIR/DSC09818_TECH_QA.json" --remote --content-type application/json
+      - name: Build native 6536px 8bit review proxy from NO HDR 16bit technical master
+        run: |
+          python scripts/editorial_fullres_review_v10.py "$TROPICANA_TECH_DIR/DSC09818_TECH_CLEAN16.tif" "$TROPICANA_TECH_DIR/DSC09818_TECH_QA.json" "$TROPICANA_TECH_DIR/DSC09818_FULLRES_VIEW.jpg" "$TROPICANA_TECH_DIR/fullres-preview-manifest.json"
+      - name: Upload SHA-addressed full resolution review proxy
+        run: |
+          KEY=$(python -c 'import os,json;print(json.load(open(os.environ["TROPICANA_TECH_DIR"]+"/fullres-preview-manifest.json"))["preview_key"])')
+          npx wrangler r2 object put "marins-tropicana-editorial-photo/$KEY" --file "$TROPICANA_TECH_DIR/DSC09818_FULLRES_VIEW.jpg" --remote --content-type image/jpeg
+          npx wrangler r2 object put "marins-tropicana-editorial-photo/tropicana-park/DSC09818/technical-v10/fullres-preview-manifest.json" --file "$TROPICANA_TECH_DIR/fullres-preview-manifest.json" --remote --content-type application/json
       - name: Save small evidence for independent review
         uses: actions/upload-artifact@v4
         with:
           name: tropicana-DSC09818-technical-v10-QA
           path: |
             /tmp/tropicana-technical-v10/DSC09818_TECH_QA.json
+            /tmp/tropicana-technical-v10/fullres-preview-manifest.json
             /tmp/tropicana-technical-v10/DSC09818_TECH_NEUTRAL.jpg
             /tmp/tropicana-technical-v10/DSC09818_TECH_CLEAN.jpg
             /tmp/tropicana-technical-v10/DSC09818_EDITORIAL_INPUT.jpg
