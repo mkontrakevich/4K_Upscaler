@@ -1,9 +1,5 @@
 name: Editorial DSC09818 V9 HDR Technical Final
 on:
-  pull_request:
-    paths:
-      - 'scripts/editorial_dsc09818_technical_master_v9.py'
-      - '.github/workflows/editorial-photo-technical-v9.yml'
   workflow_dispatch:
 permissions:
   contents: read
