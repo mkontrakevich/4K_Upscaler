@@ -38,7 +38,7 @@ async function start(env,id,job){
   const res=await c.fetch(new Request(endpoint(id,"start"),{
     method:"POST",body:bytes,headers:{
       "content-type":job.mime,"x-source-sha256":job.source_sha256,
-      "x-source-filename":job.filename
+      "x-source-filename":encodeURIComponent(job.filename),"x-mg4k-source-size":String(bytes.byteLength)
     }
   }));
   const data=await res.json().catch(()=>({}));
