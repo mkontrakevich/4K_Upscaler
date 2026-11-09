@@ -76,7 +76,7 @@ test("new upload is awaiting processing and never pretends to have a progress pe
  assert.equal(data.can_handoff,false);
  assert.equal(data.auto_generation,false);
  for(const op of ["decision","handoff"]){
-   const r=await h.call("/api/editorial/job/"+op+"?job="+job.job_id,"POST",op==="decision"?{decision:"APPROVED",master_sha256:"c".repeat(64)}:undefined);
+   const r=await h.call("/api/editorial/job/"+op+"?job="+job.job_id,"POST",op==="decision"?{decision:"APPROVED",master_sha256:"c".repeat(64),checks:QA_CHECKS}:undefined);
    assert.equal(r.status,409);
  }
 });
@@ -104,7 +104,7 @@ test("only verified technical NO HDR evidence unlocks QA; approval enables downl
  let r=await h.call("/api/editorial/job/status?job="+job.job_id);
  let d=await r.json();
  assert.equal(d.status,"AWAITING_HUMAN_QA");assert.equal(d.can_approve,true);
- r=await h.call("/api/editorial/job/decision?job="+job.job_id,"POST",{decision:"APPROVED",master_sha256:"c".repeat(64)});
+ r=await h.call("/api/editorial/job/decision?job="+job.job_id,"POST",{decision:"APPROVED",master_sha256:"c".repeat(64),checks:QA_CHECKS});
  assert.equal(r.status,409);
  r=await h.call("/api/editorial/job/decision?job="+job.job_id,"POST",{decision:"APPROVED",master_sha256:sha});
  assert.equal(r.status,400);
