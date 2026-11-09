@@ -21,7 +21,7 @@ function mockR2(){
  };
 }
 function harness(){
- const r2=mockR2(),env={TROPICANA_EDITORIAL_R2:r2};
+ const r2=mockR2(),mg4k=mockR2(),env={TROPICANA_EDITORIAL_R2:r2,TEMP_BUFFER_R7:mg4k};
  const session={id:"session-allow"};
  const authorize=async request=>request.headers.get("x-session-id")==="session-allow"&&request.headers.get("x-session-token")==="secret"?session:null;
  const call=(path,method="GET",body,allow=true)=> {
@@ -31,7 +31,7 @@ function harness(){
    const request=new Request(url,{method,headers,body:body?JSON.stringify(body):undefined});
    return editorialJobApi(request,env,url,authorize);
  };
- return {r2,env,session,call};
+ return {r2,mg4k,env,session,call};
 }
 async function intake(h){
  return createEditorialIntakeJob(h.env,h.session,{filename:"New_photo.jpg",mime:"image/jpeg",source_key:"tropicana-park/DSC09818/uploads/session-allow/test.jpg",source_sha256:"a".repeat(64),bytes:22000});
@@ -86,9 +86,27 @@ test("only verified technical NO HDR evidence unlocks QA; approval enables downl
  assert.equal(r.status,200);assert.equal(r.headers.get("content-type"),"image/tiff");
  r=await h.call("/api/editorial/job/handoff?job="+job.job_id,"POST");
  d=await r.json();
- assert.equal(d.stage,"READY_FOR_MG4K_IMPORT");assert.equal(d.generation_started,false);
+ assert.equal(d.stage,"MG4K_MASTER_IMPORTED");assert.equal(d.generation_started,false);
  const o=await h.r2.get("tropicana-park/editorial-jobs/"+job.job_id+"/handoff.json");
- const manifest=await o.json();assert.equal(manifest.locks.geometry,"HARD");assert.equal(manifest.generation_authorized,false);
+ const manifest=await o.json();
+ assert.equal(manifest.locks.geometry,"HARD");assert.equal(manifest.mg4k_locks.camera,"hard");
+ assert.equal(manifest.generation_authorized,false);
+ assert.equal(manifest.mg4k_master_key,"editorial-imports/"+job.job_id+"/approved-master16.tif");
+ const original=await h.r2.get(manifest.master_key), imported=await h.mg4k.get(manifest.mg4k_master_key);
+ assert.equal(imported.size,original.size);
+ assert.equal(imported.httpMetadata.contentType,"image/tiff");
+ assert.equal(imported.bytes?.byteLength||imported.size,1100000);
+ let view=await h.call("/api/editorial/job/import-status?job="+job.job_id);
+ assert.equal(view.status,200);
+ const summary=await view.json();
+ assert.equal(summary.generation_started,false);
+ assert.equal(summary.master_sha256,"b".repeat(64));
+ assert.equal(summary.mg4k_locks.geometry,"hard");
+ view=await h.call("/api/editorial/job/import-status?job="+job.job_id,"GET",null,false);
+ assert.equal(view.status,404);
+ const repeat=await h.call("/api/editorial/job/handoff?job="+job.job_id,"POST");
+ assert.equal(repeat.status,200);
+ assert.equal((await h.mg4k.get(manifest.mg4k_master_key)).size,1100000);
 });
 test("reject is final and cannot be overwritten or handed off",async()=>{
  const h=harness(),job=await intake(h);
@@ -99,4 +117,14 @@ test("reject is final and cannot be overwritten or handed off",async()=>{
  assert.equal(r.status,409);
  r=await h.call("/api/editorial/job/handoff?job="+job.job_id,"POST");
  assert.equal(r.status,409);
+});
+
+test("invalid MG4K storage leaves no falsely completed handoff",async()=>{
+ const h=harness(),job=await intake(h);await tech(h,job);
+ await h.call("/api/editorial/job/decision?job="+job.job_id,"POST",{decision:"APPROVED",master_sha256:"b".repeat(64)});
+ delete h.env.TEMP_BUFFER_R7;
+ const r=await h.call("/api/editorial/job/handoff?job="+job.job_id,"POST");
+ assert.equal(r.status,503);
+ const record=await h.r2.get("tropicana-park/editorial-jobs/"+job.job_id+"/handoff.json");
+ assert.equal(record,null);
 });
