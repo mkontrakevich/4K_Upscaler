@@ -1,0 +1,64 @@
+name: DSC09818 original ARW full-size neutral viewer source
+on:
+  pull_request:
+    paths:
+      - 'scripts/editorial_original_raw_review.py'
+      - '.github/workflows/editorial-original-raw-review.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  neutral-original-arw:
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == 'mkontrakevich/4K_Upscaler'
+    runs-on: ubuntu-latest
+    timeout-minutes: 22
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install genuine RAW development tools
+        run: |
+          npm ci || npm install
+          python -m pip install --quiet rawpy numpy tifffile pillow
+          python -m py_compile scripts/editorial_original_raw_review.py
+      - name: Read original immutable DSC09818.ARW, not JPEG or artistic image
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/original-raw-viewer
+          npx wrangler r2 object get "marins-tropicana-photo-originals/originals/DSC09818.ARW" --file /tmp/original-raw-viewer/DSC09818.ARW --remote
+      - name: Develop full-res original WITHOUT optical or perspective corrections
+        run: |
+          python scripts/editorial_original_raw_review.py /tmp/original-raw-viewer/DSC09818.ARW /tmp/original-raw-viewer/ORIGINAL_RAW_NEUTRAL.jpg /tmp/original-raw-viewer/original-raw-manifest.json
+      - name: Verify pixel resolution, hash, immutable RAW source and geometry-not-corrected
+        run: |
+          python - <<'PY'
+          import json,hashlib
+          from pathlib import Path
+          from PIL import Image
+          d=Path('/tmp/original-raw-viewer')
+          p=json.loads((d/'original-raw-manifest.json').read_text())
+          assert p['original_raw_sha256']=='1b4344f4b8ca629830254850fbcbaf2931c83c00a158ab87d84e5ee7722046d5'
+          assert p['display_sha256']==hashlib.sha256((d/'ORIGINAL_RAW_NEUTRAL.jpg').read_bytes()).hexdigest()
+          assert p['display_width']==7028 and p['display_height']==4688
+          assert p['reference_center_crop_xywh']==[246,164,6536,4360]
+          assert p['no_spatial_resize'] and not p['optical_distortion_corrected'] and not p['perspective_corrected'] and not p['HDR_applied']
+          with Image.open(d/'ORIGINAL_RAW_NEUTRAL.jpg') as image:assert image.size==(7028,4688)
+          print('ORIGINAL_RAW_NEUTRAL_PHYSICAL_SOURCE_QA PASS',p['display_sha256'])
+          PY
+      - name: Save versioned full-size original RAW viewer image in private R2
+        shell: bash
+        run: |
+          set -euo pipefail
+          KEY=$(python -c 'import json;print(json.load(open("/tmp/original-raw-viewer/original-raw-manifest.json"))["display_key"])')
+          npx wrangler r2 object put "marins-tropicana-editorial-photo/$KEY" --file /tmp/original-raw-viewer/ORIGINAL_RAW_NEUTRAL.jpg --remote --content-type image/jpeg
+          npx wrangler r2 object put "marins-tropicana-editorial-photo/tropicana-park/DSC09818/original-raw/original-raw-manifest.json" --file /tmp/original-raw-viewer/original-raw-manifest.json --remote --content-type application/json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DSC09818-original-raw-neutral-provenance
+          path: /tmp/original-raw-viewer/original-raw-manifest.json
+          retention-days: 14
