@@ -6,6 +6,9 @@ on:
       - 'src/worker.js'
       - 'site/editorial-photo.html'
       - 'site/editorial-compare.js'
+      - 'scripts/editorial_dsc09818_technical_master_v10.py'
+      - 'scripts/editorial_fullres_review_v10.py'
+      - '.github/workflows/editorial-photo-technical-v10.yml'
       - 'scripts/editorial_original_raw_review.py'
       - '.github/workflows/editorial-original-raw-review.yml'
       - 'site/editorial-compare.css'
@@ -31,7 +34,7 @@ jobs:
           node --check src/worker.js
           node --check src/editorial_photo.js
           node --check site/editorial-compare.js
-          python -m py_compile scripts/editorial_fullres_review.py scripts/editorial_original_raw_review.py
+          python -m py_compile scripts/editorial_fullres_review.py scripts/editorial_original_raw_review.py scripts/editorial_dsc09818_technical_master_v10.py scripts/editorial_fullres_review_v10.py
       - name: Validate geometry module
         run: |
           python -m py_compile editorial_geometry.py editorial_lens_profile.py
@@ -61,13 +64,25 @@ jobs:
           s=Path('src/editorial_photo.js').read_text()
           assert 'input_references' in s and '/images' in s
           assert 'EDITORIAL_REVIEW' in s and 'final:false' in s
-          assert 'technical_v9_master_required' in s
-          assert 'technical_v9_QA_invalid' in s
-          assert 'owner_transition_authorization_missing' in s
-          assert 'technical_release_or_lineage_invalid' in s
+          assert 'technical_v10_neutral_source_required' in s
+          assert 'technical_v10_HOLDS_or_HDR_detected' in s
+          assert 'technical_v10_human_QA_approval_required' in s
+          assert 'technical_v10_approval_or_sha_invalid' in s
           assert 'editorial_model_input_sha_mismatch' in s
-          assert 'technical-v9/DSC09818_TECH_QA.json' in s
-          assert 'technical-v9/DSC09818_TECH_CLEAN16.tif' in s
+          assert 'technical-v10/DSC09818_TECH_QA.json' in s
+          assert 'technical-v10/DSC09818_TECH_CLEAN16.tif' in s
+          assert 'tech_v10_full' in s and 'technical_v10_preview' in s
+          neutral=Path('scripts/editorial_dsc09818_technical_master_v10.py').read_text()
+          assert 'def neutral_tone' in neutral and 'develop_neutral()' in neutral
+          assert "HDR_applied=False" in neutral and "virtual_exposures=False" in neutral
+          assert "qa_checks={'raw_sha':'PASS'" in neutral
+          assert not any(x in neutral for x in ("def smooth(","develop('fusion')","HDR_TEST.jpg"))
+          assert 'id="tech-hdr"' not in Path('site/editorial-photo.html').read_text()
+          assert 'technicalV10' in Path('site/editorial-compare.js').read_text()
+          workflow10=Path('.github/workflows/editorial-photo-technical-v10.yml').read_text()
+          assert 'technical-v10' in workflow10 and 'HDR_ABSENT' in workflow10
+          assert 'DSC09818_TECH_HDR_TEST.jpg' not in workflow10
+          assert 'HDR_applied' in s and 'human_QA_approved' in s
           assert 'WorkflowEntrypoint' in s
           assert 'NonRetryableError' in s and 'retries:{limit:0}' not in s
           assert 'TROPICANA_EDITORIAL_R2' in s

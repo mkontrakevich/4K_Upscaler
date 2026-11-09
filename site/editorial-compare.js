@@ -7,7 +7,7 @@
 "use strict";
 const prefix="/api/editorial/view?";
 let root=null,stage=null,canvas=null,ctx=null,dialog=null,activeJob="";
-const S={source:null,result:null,images:{raw:null,technical:null,editorial:null},pair:"raw-tech",meta:null,open:false,mode:"split",zoom:"fit",scale:1,panX:0,panY:0,split:.5,swap:false,labels:true,single:"result",blinkResult:false,blinkTimer:null,drag:false,dragMode:"pan",lastX:0,lastY:0,loading:false,renderQueued:false,fullNative:false};
+const S={source:null,result:null,images:{raw:null,technical:null,technicalV10:null,editorial:null},pair:"raw-tech",meta:null,open:false,mode:"split",zoom:"fit",scale:1,panX:0,panY:0,split:.5,swap:false,labels:true,single:"result",blinkResult:false,blinkTimer:null,drag:false,dragMode:"pan",lastX:0,lastY:0,loading:false,renderQueued:false,fullNative:false};
 const $=(id)=>document.getElementById(id);
 const by=(job,kind)=>prefix+"job="+encodeURIComponent(job)+"&kind="+encodeURIComponent(kind);
 function mount(){
@@ -17,10 +17,10 @@ function mount(){
  '<dialog id="ec-dialog" class="ec-dialog" aria-label="MG 4K Editorial Photo Split Compare">',
  '<div class="ec-shell">',
  '<div class="ec-toolbar">',
- '<div class="ec-title"><strong id="ec-pair-title">DSC09818 / ORIGINAL RAW ↔ TECH V9</strong><span class="ec-subtitle" id="ec-dimensions">Проверка исходных размеров…</span></div>',
+ '<div class="ec-title"><strong id="ec-pair-title">DSC09818 / ORIGINAL RAW ↔ TECH V10 · NO HDR</strong><span class="ec-subtitle" id="ec-dimensions">Проверка исходных размеров…</span></div>',
  '<div class="ec-controls" aria-label="Выбор пары для проверки">',
- '<button data-ec-pair="raw-tech" class="active" title="Оригинальный RAW без коррекций vs технический RAW V9">01 · RAW / TECH</button>',
- '<button data-ec-pair="tech-editorial" title="Технический мастер V9 vs художественный результат OpenRouter">02 · TECH / EDITORIAL</button>',
+ '<button data-ec-pair="raw-tech" class="active" title="Оригинальный RAW до коррекции и технический RAW V10 без HDR">01 · RAW / TECH</button>',
+ '<button data-ec-pair="tech-editorial" title="Архив: технический V9 с HDR против его старого OpenRouter; не использовать как новый технический источник">02 · TECH / EDITORIAL</button>',
  '</div>',
  '<div class="ec-controls" aria-label="Режимы сравнения">',
  '<button data-ec-mode="split" class="active" title="Наложение с перетаскиваемым разделителем">SPLIT</button>',
@@ -93,8 +93,8 @@ async function open(job,requestedPair="raw-tech"){
  if(!dialog.open)dialog.showModal();
  S.open=true;S.loading=true;activeJob=job;S.mode="split";S.pair=requestedPair==="tech-editorial"?"tech-editorial":"raw-tech";
  S.split=.5;S.swap=false;S.zoom="fit";S.panX=0;S.panY=0;S.labels=true;S.source=null;S.result=null;
- S.images={raw:null,technical:null,editorial:null};S.single="result";
- stopBlink();setLoading("Загружаются исходный Sony RAW, технический мастер V9 и оригинал OpenRouter…");updateUI();
+ S.images={raw:null,technical:null,technicalV10:null,editorial:null};S.single="result";
+ stopBlink();setLoading("Загружаются ORIGINAL RAW, новый TECH V10 без HDR и история V9 / OpenRouter…");updateUI();
  try{
   const response=await fetch(by(job,"compare_info"),{cache:"no-store"});
   if(!response.ok)throw new Error("Не удалось получить параметры сравнения ("+response.status+")");
@@ -102,20 +102,22 @@ async function open(job,requestedPair="raw-tech"){
   if(activeJob!==job||!S.open)return;
   S.meta=info;
   if(info.original_raw_preview?.ready!==true)throw new Error("Не готов полноразмерный исходный ARW: нейтральная проявка должна быть подготовлена без коррекции");
-  if(info.fullres_preview?.ready!==true)throw new Error("Не готов полноразмерный RAW Technical V9");
-  const [raw,technical,editorial]=await Promise.all([
-   image(by(job,"raw_original")),image(by(job,"tech_full")),image(by(job,"candidate"))
+  if(info.fullres_preview?.ready!==true)throw new Error("Не готов прежний RAW Technical V9");
+  if(info.technical_v10_preview?.ready!==true)throw new Error("Новый TECH V10 без HDR ещё не прошёл технический QA или не готов полноразмерный просмотр");
+  const [raw,technical,technicalV10,editorial]=await Promise.all([
+   image(by(job,"raw_original")),image(by(job,"tech_full")),image(by(job,"tech_v10_full")),image(by(job,"candidate"))
   ]);
   if(activeJob!==job||!S.open)return;
   if(raw.naturalWidth!==7028||raw.naturalHeight!==4688)throw new Error("Неверный размер оригинального RAW");
-  if(technical.naturalWidth!==6536||technical.naturalHeight!==4360)throw new Error("Неверный размер технического TIFF proxy");
-  S.images={raw,technical,editorial};
+  if(technical.naturalWidth!==6536||technical.naturalHeight!==4360)throw new Error("Неверный размер исторической V9");
+  if(technicalV10.naturalWidth!==6536||technicalV10.naturalHeight!==4360)throw new Error("Неверный размер V10 без HDR");
+  S.images={raw,technical,technicalV10,editorial};
   S.fullNative=true;S.loading=false;$("ec-loading").hidden=true;
   applyPair();setZoom("fit");updateUI();scheduleDraw();stage.focus({preventScroll:true});
  }catch(err){S.loading=false;setLoading("Ошибка загрузки: "+String(err.message||err));$("ec-resolution-warning").textContent="Сравнение не открыто: "+String(err.message||err)}
 }
 function applyPair(){
- if(S.pair==="raw-tech"){S.source=S.images.raw;S.result=S.images.technical}
+ if(S.pair==="raw-tech"){S.source=S.images.raw;S.result=S.images.technicalV10}
  else{S.source=S.images.technical;S.result=S.images.editorial}
 }
 function setPair(pair){
@@ -130,7 +132,7 @@ function setPair(pair){
 function scaleLimits(){return {min:.015,max:4}}
 function view(){const r=stage?.getBoundingClientRect();return {w:Math.max(1,r?.width||1),h:Math.max(1,r?.height||1)}}
 function paneWidth(){const v=view();return S.mode==="side"?(v.w-8)/2:v.w}
-function fitScale(){if(!S.source)return 1;const v=view(),ref=S.images.technical||S.source;return Math.min((paneWidth()-20)/ref.naturalWidth,(v.h-20)/ref.naturalHeight)}
+function fitScale(){if(!S.source)return 1;const v=view(),ref=S.images.technicalV10||S.source;return Math.min((paneWidth()-20)/ref.naturalWidth,(v.h-20)/ref.naturalHeight)}
 function setZoom(z){
  if(!S.source)return;
  S.zoom=z;
@@ -166,14 +168,15 @@ function updateUI(){
  const sl=$("ec-split-range");sl.value=String(Math.round(S.split*100));sl.disabled=S.mode!=="split";
  $("ec-split-percent").textContent=Math.round(S.split*100)+"%";
  const isRaw=S.pair==="raw-tech";
- $("ec-pair-title").textContent=isRaw?"DSC09818 / ORIGINAL RAW ↔ TECH V9":"DSC09818 / TECH V9 ↔ EDITORIAL 01";
+ const isNewArt=S.meta?.candidate_source_version==="V10";
+ $("ec-pair-title").textContent=isRaw?"DSC09818 / ORIGINAL RAW ↔ TECH V10 (NO HDR)":isNewArt?"DSC09818 / TECH V10 ↔ GENERATIVE REVIEW":"DSC09818 / TECH V9 (АРХИВ) ↔ EDITORIAL 01";
  $("ec-zoom-label").textContent=S.zoom==="fit"?"FIT":S.zoom==="editorial"?"1:1 RIGHT":Math.round(S.scale*100)+"% REF";
  if(S.source&&S.result){
   const a=S.source,b=S.result;
-  $("ec-dimensions").textContent=(isRaw?"ORIGINAL ARW ":"TECH V9 ")+a.naturalWidth+"×"+a.naturalHeight+" · "+(isRaw?"TECH V9 ":"EDITORIAL ")+b.naturalWidth+"×"+b.naturalHeight;
+  $("ec-dimensions").textContent=(isRaw?"ORIGINAL ARW ":isNewArt?"TECH V10 ":"TECH V9 (АРХИВ) ")+a.naturalWidth+"×"+a.naturalHeight+" · "+(isRaw?"TECH V10 без HDR ":isNewArt?"GENERATIVE REVIEW ":"EDITORIAL (АРХИВ) ")+b.naturalWidth+"×"+b.naturalHeight;
   $("ec-resolution-warning").textContent=isRaw?
-    "RAW: 7028×4688 без исправления геометрии · совмещение по центральной области 6536×4360 без масштабирования. Расхождение архитектурных линий показывает выполненные коррекции.":
-    "TECH: 6536×4360 из TIFF 16-bit (8-bit экранная копия). EDITORIAL: "+b.naturalWidth+"×"+b.naturalHeight+" native; 100% TECH увеличивает модель, не создавая деталей.";
+    "RAW: 7028×4688 до коррекции. TECH V10: 6536×4360 без HDR. Совмещение центральной области без деформации оригинала. Проверьте оптику, шум и фактуры.":
+    (isNewArt?"Текущая пара TECH V10 (NO HDR) / генеративный кандидат; выход модели "+b.naturalWidth+"×"+b.naturalHeight+" не является полноразмерным техническим TIFF.":"АРХИВ: TECH V9 содержит HDR, EDITORIAL создан из V9. Это НЕ актуальный технический V10. Новый генеративный этап заблокирован до утверждения QA V10.");
  }else $("ec-dimensions").textContent="Ожидание исходных размеров…";
  $("ec-help").textContent=S.mode==="split"?"Перетащите линию — Split · drag кадра — pan · колесо — zoom":S.mode==="side"?"Две версии, синхронные pan и zoom. Q: RAW/TECH · W: TECH/EDIT":
  S.mode==="blink"?"Blink: переключение версий каждые 700 мс":"Single: LEFT/RIGHT переключает версии";
@@ -225,8 +228,8 @@ function draw(){
  ctx.fillStyle="#02080d";ctx.fillRect(0,0,w,h);
  if(!S.source||!S.result)return;
  const A=S.swap?S.result:S.source,B=S.swap?S.source:S.result;
- const leftLabel=S.pair==="raw-tech"?"ORIGINAL RAW · UNRECTIFIED":"TECH RAW V9";
- const rightLabel=S.pair==="raw-tech"?"TECH MASTER V9":"EDITORIAL · OPENROUTER";
+ const leftLabel=S.pair==="raw-tech"?"ORIGINAL RAW · БЕЗ КОРРЕКЦИИ":S.meta?.candidate_source_version==="V10"?"TECH V10 · NO HDR":"TECH V9 · АРХИВ HDR";
+ const rightLabel=S.pair==="raw-tech"?"TECH MASTER V10 · NO HDR":S.meta?.candidate_source_version==="V10"?"GEN REVIEW · V10":"EDITORIAL 01 · АРХИВ V9";
  const an=S.swap?rightLabel:leftLabel,bn=S.swap?leftLabel:rightLabel;
  const full={x:0,y:0,w,h};
  if(S.mode==="split"){
@@ -271,7 +274,7 @@ function wheel(e){
  S.panY=y-(v.h-4360*next)/2-refY*next;
  S.scale=next;S.zoom="custom";updateUI();scheduleDraw();
 }
-function cleanup(){S.open=false;activeJob="";S.drag=false;stopBlink();if(document.fullscreenElement===dialog)document.exitFullscreen?.();S.source=null;S.result=null;S.images={raw:null,technical:null,editorial:null};S.meta=null;S.fullNative=false}
+function cleanup(){S.open=false;activeJob="";S.drag=false;stopBlink();if(document.fullscreenElement===dialog)document.exitFullscreen?.();S.source=null;S.result=null;S.images={raw:null,technical:null,technicalV10:null,editorial:null};S.meta=null;S.fullNative=false}
 function close(){if(dialog?.open)dialog.close();else cleanup()}
 function keys(e){
  if(!S.open||["INPUT","TEXTAREA","SELECT"].includes(document.activeElement?.tagName))return;

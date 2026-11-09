@@ -39,17 +39,16 @@
   <section class="stack">
     <div class="panel">
       <div class="eyebrow">Стадия 01 / Обязательная техническая подготовка</div>
-      <h2>Technical Master V9 · DSC09818</h2>
-      <p class="muted">Настоящий Sony ARW · 16-bit TIFF 6536 × 4360 · оптика FE 16–35 mm / 16 мм · Perspective Lock · шум ISO 3200. HDR-подобная тональная обработка сделана из ОДНОГО RAW, без экспозиционной вилки.</p>
-      <div class="triptych" style="grid-template-columns:repeat(3,minmax(0,1fr))">
-        <figure class="frame"><figcaption>01 / Нейтральная проявка</figcaption><div class="imagebox"><img id="tech-neutral" alt="Neutral RAW technical"><span id="tech-neutral-label">Загрузка</span></div></figure>
-        <figure class="frame"><figcaption>02 / Виртуальные экспозиции</figcaption><div class="imagebox"><img id="tech-hdr" alt="Single RAW tone fusion"><span id="tech-hdr-label">Загрузка</span></div></figure>
-        <figure class="frame"><figcaption>03 / Очищенный TECH MASTER</figcaption><div class="imagebox"><img id="tech-clean" alt="Clean technical master"><span id="tech-clean-label">Загрузка</span></div></figure>
+      <h2>Technical Master V10 · NO HDR · DSC09818</h2>
+      <p class="muted">Один оригинальный Sony ARW · 16-bit TIFF 6536 × 4360 · оптика FE 16–35mm/16mm · Perspective Lock · нейтральная проявка · шумоподавление ISO 3200. <strong>Без HDR, без виртуальных экспозиций, без генерации.</strong></p>
+      <div class="triptych" style="grid-template-columns:repeat(2,minmax(0,1fr))">
+        <figure class="frame"><figcaption>01 / NEUTRAL RAW · geometry corrected</figcaption><div class="imagebox"><img id="tech-neutral" alt="Neutral genuine Sony RAW technical V10"><span id="tech-neutral-label">Проверка технического источника</span></div></figure>
+        <figure class="frame"><figcaption>02 / TECH MASTER V10 · NO HDR</figcaption><div class="imagebox"><img id="tech-clean" alt="Neutral V10 with denoising, no HDR"><span id="tech-clean-label">Проверка технического источника</span></div></figure>
       </div>
-      <div class="metric"><span>Доступ к OpenRouter</span><strong style="color:#e8b672">Разрешён один художественный тест после V9 QA</strong></div>
-      <p class="note">Исходник, прежняя геометрия и OpenRouter-итерации сохранены. Это новая техническая версия, технический источник, не художественный финал. Ограничения: высокий шум от ISO 3200, отсутствует реальная HDR-вилка, точность калибровки объектива требует визуальной проверки.</p>
+      <div class="metric"><span>Генеративное улучшение OpenRouter</span><strong style="color:#e8b672">ЗАБЛОКИРОВАНО до утверждения QA технического V10</strong></div>
+      <p class="note">Проверить в RAW / TECH Split: кривизну линий, оптику, геометрию, сохранность архитектуры, фактуры и шум при 100%. HDR-обработка V9 и выполненный ранее OpenRouter остаются только в архиве. TECH V10 становится единственной новой базой для генеративного улучшения после утверждения QA.</p>
     </div>
-    <div class="panel"><div class="flex" style="justify-content:space-between"><h2>Проверка RAW / Technical / Editorial</h2><div class="flex"><button class="btn" id="open-compare" disabled title="Исходный ARW до коррекции геометрии против технического мастера V9, без изменения оригинала">SPLIT · RAW / TECH</button><button class="btn mutebtn" id="open-editorial" disabled title="TECH V9 против результата OpenRouter в том же просмотрщике">TECH / EDITORIAL</button><button class="btn mutebtn" id="refresh">Проверить задание</button></div></div><p class="muted">Первый режим сравнивает нейтральную проявку исходного Sony ARW (7028 × 4688, без коррекции дисторсии и перспективы) с TECH V9 (6536 × 4360). Второй — TECH V9 с результатом OpenRouter. Для честного сравнения геометрии исходный RAW совмещается с техническим кадром по центру поля зрения, без выпрямления оригинала. Доступны Fullscreen, Split, Side, Blink и 100% увеличение.</p>
+    <div class="panel"><div class="flex" style="justify-content:space-between"><h2>Проверка RAW / Technical / Editorial</h2><div class="flex"><button class="btn" id="open-compare" disabled title="Исходный ARW до коррекции против технического мастера V10 без HDR, без изменения оригинала">SPLIT · RAW / TECH</button><button class="btn mutebtn" id="open-editorial" disabled title="Архив: TECH V9 с HDR и ранее созданный из него OpenRouter">TECH / EDITORIAL</button><button class="btn mutebtn" id="refresh">Проверить задание</button></div></div><p class="muted">Первый режим сравнивает нейтральную проявку исходного Sony ARW (7028 × 4688, без коррекции дисторсии и перспективы) с TECH V10 без HDR (6536 × 4360). Второй — архивное сравнение TECH V9 с его результатом OpenRouter. Для честного сравнения геометрии исходный RAW совмещается с техническим кадром по центру поля зрения, без выпрямления оригинала. Доступны Fullscreen, Split, Side, Blink и 100% увеличение.</p>
       <details class="panel" style="margin:14px 0;background:#0b1a28;border-color:#294055"><summary style="cursor:pointer;color:#b7ccdc">Архивные стадии прежнего контура (не используются для приёмки RAW / TECH V9)</summary>
       <div class="triptych" style="margin-top:14px">
         <figure class="frame"><figcaption>01 / RAW проявка до геометрии</figcaption><div class="imagebox"><img id="source" alt="Исходник"><span id="source-label">Нет загруженного файла</span></div></figure>
@@ -73,13 +72,13 @@ async function health(){const r=await fetch(base+"/health");const h=await r.json
 async function upload(){const file=e("file").files[0];if(!file)throw Error("Выберите JPG/PNG/WebP");if(file.size>8*1024*1024)throw Error("Лимит 8 МБ");const s=await sessionStart();const f=new FormData();f.append("file",file);const r=await fetch(base+"/upload",{method:"POST",headers:{"x-session-id":s.id,"x-session-token":s.token},body:f});const data=await r.json();if(!r.ok)throw Error(JSON.stringify(data));e("upload-result").textContent=data.source_key+" · "+data.sha256.slice(0,16);say(data);if(sourceURL)URL.revokeObjectURL(sourceURL);sourceURL=URL.createObjectURL(file);e("source").src=sourceURL;e("source").classList.add("ready");e("source-label").hidden=true}
 async function load(){const id=e("job").value.trim();if(!/^[0-9a-f-]{36}$/i.test(id))return say("Укажите UUID задания");const r=await fetch(base+"/view?job="+encodeURIComponent(id)+"&kind=manifest");const data=await r.json();if(!r.ok)return say(data);e("status").textContent=data.status||"REVIEW";say(data);e("source").src=base+"/view?job="+encodeURIComponent(id)+"&kind=source";e("source").classList.add("ready");e("source-label").hidden=true;
 e("optical").src=base+"/view?job="+encodeURIComponent(id)+"&kind=optical";e("optical").classList.add("ready");e("optical-label").hidden=true;
-for(const [kind,element] of [["tech_neutral","tech-neutral"],["tech_hdr","tech-hdr"],["tech_clean","tech-clean"]]){
+for(const [kind,element] of [["tech_v10_neutral","tech-neutral"],["tech_v10_clean","tech-clean"]]){
  e(element).src=base+"/view?job="+encodeURIComponent(id)+"&kind="+kind;
  e(element).classList.add("ready");e(element+"-label").hidden=true;
 }
 e("technical").src=base+"/view?job="+encodeURIComponent(id)+"&kind=technical";e("technical").classList.add("ready");e("technical-label").hidden=true;
 if(data.candidate_key){e("candidate").src=base+"/view?job="+encodeURIComponent(id)+"&kind=candidate";e("candidate").classList.add("ready");e("candidate-label").hidden=true;
-e("open-compare").disabled=data.source_key!=="tropicana-park/DSC09818/technical-v9/DSC09818_EDITORIAL_INPUT.jpg";
+e("open-compare").disabled=!(["tropicana-park/DSC09818/technical-v9/DSC09818_EDITORIAL_INPUT.jpg","tropicana-park/DSC09818/technical-v10/DSC09818_EDITORIAL_INPUT.jpg"].includes(data.source_key));
 e("open-editorial").disabled=e("open-compare").disabled;
 if(!e("open-compare").disabled && ["1","raw-tech","tech-editorial"].includes(hash.get("compare"))){
  const pair=hash.get("compare")==="raw-tech"?"raw-tech":"tech-editorial";
