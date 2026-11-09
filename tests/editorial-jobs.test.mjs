@@ -15,7 +15,7 @@ function mockR2(){
    },
    async head(key){const obj=map.get(key);return obj?{size:obj.bytes.length,httpMetadata:obj.httpMetadata,customMetadata:obj.customMetadata}:null},
    async get(key){const obj=map.get(key);return obj?{
-     size:obj.bytes.length,body:obj.bytes,httpMetadata:obj.httpMetadata,
+     size:obj.bytes.length,body:obj.bytes,httpMetadata:obj.httpMetadata,customMetadata:obj.customMetadata,
      async json(){return JSON.parse(new TextDecoder().decode(obj.bytes))}
    }:null}
  };
