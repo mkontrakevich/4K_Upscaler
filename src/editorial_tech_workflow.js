@@ -100,7 +100,8 @@ async function persist(env,id,job,qa){
 
 export class EditorialTechWorkflow extends WorkflowEntrypoint{
   async run(event,step){
-    const id=String(event.payload?.job_id||"");
+    const payload=typeof event.payload==="string"?JSON.parse(event.payload):event.payload||{};
+    const id=String(payload.job_id||"");
     if(!ID.test(id))throw Error("invalid_technical_job_id");
     const env=this.env,root=ROOT(id);
     try {
