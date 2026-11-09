@@ -39,6 +39,7 @@
         <div class="imagebox" style="aspect-ratio:auto;min-height:260px">
           <img id="intake-preview" alt="Технический мастер для визуального QA" style="display:block;max-height:65vh;object-fit:contain">
         </div>
+        <p><a id="intake-preview-native" href="#" target="_blank" rel="noopener" hidden>Открыть техническое превью в 100% масштабе</a></p>
         <p class="muted">Браузер показывает 8-битное представление 16-битного TIFF. Масштабирование и проверка реальной геометрии остаются обязанностью визуального QA.</p>
       </figure>
       <div id="intake-visual-checks" class="fields" hidden>
@@ -128,6 +129,7 @@ async function loadIntakePreview(id,sha){
  if(intakePreviewURL)URL.revokeObjectURL(intakePreviewURL);
  intakePreviewURL=URL.createObjectURL(blob);
  e("intake-preview").src=intakePreviewURL;
+ e("intake-preview-native").href=intakePreviewURL;e("intake-preview-native").hidden=false;
  e("intake-preview-frame").hidden=false;
  e("intake-visual-checks").hidden=false;
  intakePreviewReady=true;updateIntakeActions();
@@ -141,8 +143,8 @@ function setIntake(data){
  const bar=e("intake-progress");
  if(typeof data.progress==="number"&&Number.isFinite(data.progress)){bar.value=data.progress;bar.title=data.progress+"% только технического этапа"}
  else {bar.removeAttribute("value");bar.title="Процент неизвестен; техническая обработка не начата"}
- e("intake-message").textContent=data.mg4k_imported
- ? "Утверждённый TIFF находится в MG 4K. Генерация не запускалась." : data.message||"";
+ e("intake-message").textContent=data.error?"Ошибка: "+String(data.error).slice(0,500):
+   data.mg4k_imported?"Утверждённый TIFF находится в MG 4K. Генерация не запускалась.":data.message||"";
  const link=e("intake-import-link");if(link){
    link.hidden=!data.mg4k_imported;link.href=data.mg4k_import_url||"#";
  }
@@ -218,7 +220,7 @@ async function sessionStart(){
  if(!r.ok)throw Error("MG4K session error");
  session=await r.json();sessionStorage.setItem(sessionStore,JSON.stringify(session));return session
 }
-async function health(){const r=await fetch(base+"/health");const h=await r.json();e("status").textContent=h.ok&&h.storage_isolated&&h.openrouter_configured?"Контур доступен":"Требуется настройка";say(h)}
+async function health(){const r=await fetch(base+"/health");const h=await r.json();e("status").textContent=h.ok&&h.storage_isolated&&h.technical_workflow_configured?"Tech Master доступен":"Технический контур требует настройки";say(h)}
 async function upload(){const file=e("file").files[0];if(!file)throw Error("Выберите JPG/PNG/WebP");if(file.size>8*1024*1024)throw Error("Лимит 8 МБ");const s=await sessionStart();const f=new FormData();f.append("file",file);const r=await fetch(base+"/upload",{method:"POST",headers:{"x-session-id":s.id,"x-session-token":s.token},body:f});const data=await r.json();if(!r.ok)throw Error(JSON.stringify(data));e("upload-result").textContent=data.source_key+" · "+data.sha256.slice(0,16);say(data);if(data.job_id){persistJobToken(data.job_id,data.job_token);activateIntake(data.job_id)}if(sourceURL)URL.revokeObjectURL(sourceURL);sourceURL=URL.createObjectURL(file);e("source").src=sourceURL;e("source").classList.add("ready");e("source-label").hidden=true}
 async function load(){const id=e("job").value.trim();if(!/^[0-9a-f-]{36}$/i.test(id))return say("Укажите UUID задания");const r=await fetch(base+"/view?job="+encodeURIComponent(id)+"&kind=manifest");const data=await r.json();if(!r.ok)return say(data);e("status").textContent=data.status||"REVIEW";say(data);e("source").src=base+"/view?job="+encodeURIComponent(id)+"&kind=source";e("source").classList.add("ready");e("source-label").hidden=true;
 e("optical").src=base+"/view?job="+encodeURIComponent(id)+"&kind=optical";e("optical").classList.add("ready");e("optical-label").hidden=true;
