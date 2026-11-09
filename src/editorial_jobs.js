@@ -127,6 +127,36 @@ async function importIntoMg4k(env,job,q) {
   return {dest,size:target.size,created:!!committed};
 }
 
+
+// Called by the core MG4K paid job intake only on an explicit user click.
+// The user-supplied LOCK form is not trusted: return the server-owned profile.
+export async function verifyEditorialArtisticInput(env,id,bearer,bytes){
+ if(!idOK(id)||!/^[a-f0-9]{64}$/.test(String(bearer||"")))
+   throw Error("editorial_import_access_invalid");
+ const r=await env.TROPICANA_EDITORIAL_R2.get(key(id,"job.json"));
+ if(!r)throw Error("editorial_import_not_found");
+ const job=await r.json();
+ if(job.job_id!==id||(await hash(new TextEncoder().encode(bearer)))!==job.access_hash)
+   throw Error("editorial_import_forbidden");
+ const a=await availability(env,job);
+ if(!a.approved||!a.imported||!a.q||a.d?.decision!=="APPROVED"||
+    !["preview_reviewed","geometry","materials","no_hdr"].every(k=>a.d.visual_qa_checks?.[k]===true))
+   throw Error("editorial_import_not_human_QA_approved");
+ const preview=await env.TROPICANA_EDITORIAL_R2.head(key(id,"technical/fullres-preview.jpg"));
+ if(!preview||preview.size!==a.q.preview_bytes||
+    preview.httpMetadata?.contentType!=="image/jpeg"||
+    hex(preview.checksums?.sha256||new ArrayBuffer(0))!==a.q.preview_sha256)
+   throw Error("editorial_import_preview_lineage_HOLD");
+ if((await hash(bytes))!==a.q.preview_sha256)throw Error("editorial_import_bytes_do_not_match_approved_proxy");
+ const master=await env.TEMP_BUFFER_R7.head(a.imported.mg4k_master_key);
+ if(!master||master.size!==a.q.master_bytes||
+    hex(master.checksums?.sha256||new ArrayBuffer(0))!==a.q.master_sha256)
+   throw Error("editorial_import_master_hash_HOLD");
+ return {locks:{...a.imported.mg4k_locks},job_id:id,project:job.project,
+    approved_master_sha256:a.q.master_sha256,original_source_sha256:job.source_sha256,
+    approved_proxy_sha256:a.q.preview_sha256,qa_approved_at:a.d.at};
+}
+
 export async function editorialJobApi(request,env,url,authorizeSession) {
   const path=url.pathname,method=request.method.toUpperCase();
   const id=url.searchParams.get("job")||"";
