@@ -218,7 +218,7 @@ export async function editorialApi(request,env,url,authorizeSession){
     const rawManifestObject=await env.TROPICANA_EDITORIAL_R2.get(ROOT+"original-raw/original-raw-manifest.json");
     if(rawManifestObject){
       const p=await rawManifestObject.json();
-      const expectedPrefix=ROOT+"original-raw/fullres-neutral-"+q.source_sha256.slice(0,16)+".jpg";
+      const expectedPrefix=ROOT+"original-raw/fullres-neutral-"+q.source_sha256.slice(0,16)+"-"+p.display_sha256.slice(0,16)+".jpg";
       if(p.project===PROJECT&&p.frame===FRAME&&
          p.original_raw_sha256===q.source_sha256&&p.display_key===expectedPrefix&&
          p.original_sensor_width===7028&&p.original_sensor_height===4688&&
