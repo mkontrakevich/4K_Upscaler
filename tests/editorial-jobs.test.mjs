@@ -18,10 +18,14 @@ function mockR2(){
      return {key,size:bytes.length};
    },
    async head(key){const obj=map.get(key);return obj?{size:obj.bytes.length,httpMetadata:obj.httpMetadata,customMetadata:obj.customMetadata,checksums:obj.checksums}:null},
-   async get(key){const obj=map.get(key);return obj?{
-     size:obj.bytes.length,body:obj.bytes,httpMetadata:obj.httpMetadata,customMetadata:obj.customMetadata,
-     async json(){return JSON.parse(new TextDecoder().decode(obj.bytes))}
-   }:null}
+   async get(key,opts={}){const obj=map.get(key);if(!obj)return null;
+     const part=opts.range?obj.bytes.subarray(opts.range.offset||0,(opts.range.offset||0)+(opts.range.length||obj.bytes.length)):obj.bytes;
+     return {
+       size:obj.bytes.length,body:part,httpMetadata:obj.httpMetadata,customMetadata:obj.customMetadata,
+       async arrayBuffer(){return part.buffer.slice(part.byteOffset,part.byteOffset+part.byteLength)},
+       async json(){return JSON.parse(new TextDecoder().decode(part))}
+     };
+   }
  };
 }
 function harness(){
@@ -44,7 +48,7 @@ async function intake(h){
 }
 async function tech(h,job){
  const masterKey="tropicana-park/editorial-jobs/"+job.job_id+"/technical/master16.tif";
- const bytes=new Uint8Array(1100000);
+ const bytes=new Uint8Array(1100000);bytes.set([73,73,43,0]); // Genuine BigTIFF magic for negative file-type gate.
  const digest=await crypto.subtle.digest("SHA-256",bytes);
  const sha=[...new Uint8Array(digest)].map(v=>v.toString(16).padStart(2,"0")).join("");
  await h.r2.put(masterKey,bytes,{
@@ -79,6 +83,20 @@ test("new upload is awaiting processing and never pretends to have a progress pe
    const r=await h.call("/api/editorial/job/"+op+"?job="+job.job_id,"POST",op==="decision"?{decision:"APPROVED",master_sha256:"c".repeat(64),checks:QA_CHECKS}:undefined);
    assert.equal(r.status,409);
  }
+});
+test("mislabelled binary cannot be approved as 16-bit TIFF",async()=>{
+ const h=harness(),job=await intake(h);const sha=await tech(h,job);
+ const k="tropicana-park/editorial-jobs/"+job.job_id+"/technical/master16.tif";
+ const bad=new Uint8Array(1100000);
+ const digest=await crypto.subtle.digest("SHA-256",bad);
+ const checksum=[...new Uint8Array(digest)].map(v=>v.toString(16).padStart(2,"0")).join("");
+ await h.r2.put(k,bad,{sha256:digest,httpMetadata:{contentType:"image/tiff"},customMetadata:{sha256:checksum}});
+ const qaKey="tropicana-park/editorial-jobs/"+job.job_id+"/technical/qa.json";
+ const qa=await (await h.r2.get(qaKey)).json();qa.master_sha256=checksum;
+ await h.r2.put(qaKey,JSON.stringify(qa),{httpMetadata:{contentType:"application/json"}});
+ const data=await (await h.call("/api/editorial/job/status?job="+job.job_id)).json();
+ assert.equal(data.can_approve,false);
+ assert.equal(data.technical_master_ready,false);
 });
 test("per-job access is bound to authenticated session",async()=>{
  const h=harness(),job=await intake(h);
