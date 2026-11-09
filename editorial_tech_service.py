@@ -108,7 +108,7 @@ def route(handler,method:str)->bool:
     if method!="POST" or action!="start":
         _json(handler,405,{"error":"method_not_allowed"})
         return True
-    length=int(handler.headers.get("content-length") or 0)
+    length=int(handler.headers.get("content-length") or handler.headers.get("x-mg4k-source-size") or 0)
     source_sha=str(handler.headers.get("x-source-sha256") or "").lower()
     if not SHA.fullmatch(source_sha) or length<10000 or length>MAX_SOURCE:
         _json(handler,400,{"error":"invalid_source_integrity_or_length"})
