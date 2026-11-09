@@ -40,6 +40,7 @@
         <button class="btn mutebtn" id="intake-download" disabled type="button">Скачать 16-bit TIFF</button>
         <button class="btn" id="intake-handoff" disabled type="button">Подготовить передачу в MG 4K</button>
       </div>
+      <p><a id="intake-import-link" href="#" hidden>Открыть импортированный мастер в MG 4K</a></p>
       <p class="note">Для нового JPG/PNG/WebP загрузка пока означает сохранение в R2, а не создание 16-битного RAW-мастера. До проверки технического результата утверждение, скачивание и передача закрыты. HDR запрещён.</p>
     </section>
     <section class="panel">
@@ -93,7 +94,11 @@ function setIntake(data){
  const bar=e("intake-progress");
  if(typeof data.progress==="number"&&Number.isFinite(data.progress)){bar.value=data.progress;bar.title=data.progress+"% только технического этапа"}
  else {bar.removeAttribute("value");bar.title="Процент неизвестен; техническая обработка не начата"}
- e("intake-message").textContent=data.message||"";
+ e("intake-message").textContent=data.mg4k_imported
+ ? "Утверждённый TIFF находится в MG 4K. Генерация не запускалась." : data.message||"";
+ const link=e("intake-import-link");if(link){
+   link.hidden=!data.mg4k_imported;link.href=data.mg4k_import_url||"#";
+ }
  for(const [id,flag] of [["intake-approve","can_approve"],["intake-reject","can_reject"],["intake-download","can_download"],["intake-handoff","can_handoff"]])
    e(id).disabled=intakeBusy||data[flag]!==true;
 }
@@ -144,7 +149,8 @@ async function intakeHandoff(){
  try{
   const r=await fetch(base+"/job/handoff?job="+encodeURIComponent(intakeId),{method:"POST",headers:sessionHeaders()});
   const d=await r.json();if(!r.ok)throw Error(d.error||"Handoff failed");
-  e("intake-message").textContent="Пакет передачи подготовлен и заблокирован локерами. Генерация не запускалась; импорт в MG4K ещё ожидает подключения.";
+  e("intake-message").textContent="16-битный TIFF перенесён в MG 4K. Генерация не запускалась.";
+  if(d.mg4k_import_url){e("intake-import-link").href=d.mg4k_import_url;e("intake-import-link").hidden=false;}
  }catch(err){e("intake-message").textContent=String(err)}finally{await intakeStatus().catch(()=>{})}
 }
 
