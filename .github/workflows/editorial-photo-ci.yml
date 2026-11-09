@@ -47,6 +47,18 @@ jobs:
           node --check src/editorial_tech_workflow.js
           python - <<'PY'
           from pathlib import Path
+          code=Path('src/editorial_tech_workflow.js').read_text()
+          assert 'new FixedLengthStream(expectedSize)' in code
+          assert 'response.body.pipeTo(writable)' in code
+          assert 'bucket.put(key,readable,options)' in code
+          assert 'await Promise.all([copy,save])' in code
+          assert 'persistKnownLength(env,output,master,qa.master_bytes' in code
+          assert 'persistKnownLength(env,ROOT(id)+"technical/fullres-preview.jpg",view,qa.preview_bytes' in code
+          assert '.put(output,master.body,' not in code
+          print('Known-length R2 TIFF/preview stream regression guard: PASS')
+          PY
+          python - <<'PY'
+          from pathlib import Path
           src=Path('src/editorial_tech_workflow.js').read_text()
           assert 'typeof event.payload==="string"?JSON.parse(event.payload)' in src
           assert 'const id=String(payload.job_id||"")' in src
