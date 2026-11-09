@@ -6,6 +6,9 @@ const key = (id,name) => ROOT+id+"/"+name;
 const SHA = /^[0-9a-f]{64}$/;
 const LOCKS = Object.freeze({geometry:"HARD",perspective:"HARD",composition:"HARD",architecture:"HARD",materials:"HARD",identity:"HARD",source:"IMMUTABLE",hdr:"PROHIBITED",generation:"HUMAN_QA_FIRST"});
 const hash = async bytes => [...new Uint8Array(await crypto.subtle.digest("SHA-256",bytes))].map(v=>v.toString(16).padStart(2,"0")).join("");
+const shaBytes=hex=>Uint8Array.from(String(hex).match(/.{2}/g)||[],h=>parseInt(h,16)).buffer;
+const hex=bytes=>[...new Uint8Array(bytes)].map(v=>v.toString(16).padStart(2,"0")).join("");
+
 
 export async function createEditorialIntakeJob(env,session,{filename,mime,source_key,source_sha256,bytes}) {
   const id=crypto.randomUUID();
@@ -46,7 +49,8 @@ async function verifiedTech(env,job) {
      !Number.isInteger(q.master_bytes)||q.master_bytes<1000000)return null;
   const head=await env.TROPICANA_EDITORIAL_R2.head(expected);
   if(!head||head.size!==q.master_bytes||head.httpMetadata?.contentType!=="image/tiff"||
-     head.customMetadata?.sha256!==q.master_sha256)return null;
+     head.customMetadata?.sha256!==q.master_sha256||
+     !head.checksums?.sha256||hex(head.checksums.sha256)!==q.master_sha256)return null;
   return q;
 }
 async function decision(env,id) {
@@ -99,7 +103,7 @@ async function importIntoMg4k(env,job,q) {
   const metadata={source_project:job.project,editorial_job_id:job.job_id,source_sha256:job.source_sha256,
     technical_master_sha256:q.master_sha256,qa_status:"APPROVED",generation_authorized:"false"};
   const committed=await env.TEMP_BUFFER_R7.put(dest,source.body,{
-    onlyIf:new Headers({"If-None-Match":"*"}),
+    onlyIf:new Headers({"If-None-Match":"*"}),sha256:shaBytes(q.master_sha256),
     httpMetadata:{contentType:"image/tiff"},customMetadata:metadata
   });
   const target=await env.TEMP_BUFFER_R7.head(dest);
