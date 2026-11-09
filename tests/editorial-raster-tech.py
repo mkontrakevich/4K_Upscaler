@@ -61,7 +61,7 @@ with tempfile.TemporaryDirectory() as td:
         raise AssertionError("corrupt source digest passed")
 
     alpha = root / "alpha.png"
-    assert cv2.imwrite(str(alpha), np.full((380, 510, 4), 100, dtype=np.uint8))
+    assert cv2.imwrite(str(alpha), np.random.default_rng(3).integers(0, 255, size=(380, 510, 4), dtype=np.uint8))
     try:
         tech.prepare(alpha, root / "bad-alpha", JOB, sha(alpha))
     except ValueError as err:
