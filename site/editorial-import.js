@@ -34,13 +34,15 @@ async function load(){
   let session;
   try{session=JSON.parse(sessionStorage.getItem("mg4k-editorial-session-v1")||"null")}
   catch{}
-  if(!session?.id||!session?.token){
-    description.textContent="Нет авторизованной сессии Editorial Photo. Повторно откройте страницу утверждения.";
+  let bearer="";
+  try{bearer=JSON.parse(localStorage.getItem("mg4k-editorial-job-access-v1")||"{}")[id]?.token||""}catch{}
+  if(!bearer&&(!session?.id||!session?.token)){
+    description.textContent="Нет ключа доступа к импортированному мастеру. Откройте страницу утверждения в браузере, где выполнялась загрузка.";
     return;
   }
   try{
     const response=await fetch("/api/editorial/job/import-status?job="+encodeURIComponent(id),{
-      cache:"no-store",headers:{"x-session-id":session.id,"x-session-token":session.token}
+      cache:"no-store",headers:{"x-session-id":session?.id||"","x-session-token":session?.token||"","x-editorial-job-token":bearer}
     });
     const body=await response.json().catch(()=>({}));
     if(!response.ok)throw Error(body.error||"import_status_http_"+response.status);
