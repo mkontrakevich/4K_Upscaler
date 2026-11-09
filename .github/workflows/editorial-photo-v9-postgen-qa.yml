@@ -1,0 +1,61 @@
+name: Editorial DSC09818 V9 post-gen numeric QA
+on:
+  workflow_dispatch:
+    inputs:
+      job_id:
+        description: "Editorial Photo OpenRouter run UUID (Tropicana DSC09818)"
+        required: true
+        default: "01e86a25-e3e6-4ba6-b826-a65e25cf0a3f"
+        type: string
+permissions:
+  contents: read
+jobs:
+  post-gen-geometry:
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == 'mkontrakevich/4K_Upscaler'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      EDITORIAL_JOB_ID: ${{ inputs.job_id }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Setup geometry tools
+        run: |
+          npm ci || npm install
+          python -m pip install --quiet numpy opencv-python-headless
+      - name: Download pixel-rectified source and actual OpenRouter result
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/editorial-postqa
+          [[ "${EDITORIAL_JOB_ID}" =~ ^[0-9a-f-]{36}$ ]] || { echo "invalid job UUID"; exit 2; }
+          npx wrangler r2 object get "marins-tropicana-editorial-photo/tropicana-park/DSC09818/technical-v9/DSC09818_EDITORIAL_INPUT.jpg" --file /tmp/editorial-postqa/SOURCE_PERSPECTIVE_LOCK.jpg --remote
+          npx wrangler r2 object get "marins-tropicana-editorial-photo/runs/${EDITORIAL_JOB_ID}/editorial_candidate.png" --file /tmp/editorial-postqa/OPENROUTER_EDITORIAL.png --remote
+      - name: Quantitative post-generation Perspective Lock QA
+        shell: bash
+        run: |
+          set +e
+          python editorial_geometry.py compare --reference /tmp/editorial-postqa/SOURCE_PERSPECTIVE_LOCK.jpg --candidate /tmp/editorial-postqa/OPENROUTER_EDITORIAL.png --report /tmp/editorial-postqa/POST_GENERATIVE_GEOMETRY_QA.json
+          EXIT_CODE=$?
+          echo "GEOMETRY_CHECK_EXIT=$EXIT_CODE" >> "$GITHUB_ENV"
+          if [ -f /tmp/editorial-postqa/POST_GENERATIVE_GEOMETRY_QA.json ]; then
+            cat /tmp/editorial-postqa/POST_GENERATIVE_GEOMETRY_QA.json
+            npx wrangler r2 object put "marins-tropicana-editorial-photo/runs/${EDITORIAL_JOB_ID}/post_generation_geometry_QA.json" --file /tmp/editorial-postqa/POST_GENERATIVE_GEOMETRY_QA.json --remote --content-type application/json
+          fi
+          exit 0
+      - name: Upload source/candidate evidence for human art-direction
+        uses: actions/upload-artifact@v4
+        with:
+          name: editorial-dsc09818-postgen-perspective-qa
+          path: /tmp/editorial-postqa/
+          retention-days: 14
+      - name: Hold publication when geometry changes
+        shell: bash
+        run: |
+          if [ "${GEOMETRY_CHECK_EXIT:-2}" != "0" ]; then
+            echo "::error::OPENROUTER_CANDIDATE_GEOMETRY_HOLD — do not approve or export as FINAL"
+            exit 2
+          fi
