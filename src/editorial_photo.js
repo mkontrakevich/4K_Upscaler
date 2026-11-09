@@ -159,7 +159,7 @@ export class EditorialPhotoWorkflow extends WorkflowEntrypoint{
 export async function editorialApi(request,env,url,authorizeSession){
  const path=url.pathname,method=request.method.toUpperCase();
  if(path==="/api/editorial/health"&&method==="GET"){
-  return j({ok:true,project:PROJECT,frame:FRAME,module:"Editorial Photo",storage_isolated:!!env.TROPICANA_EDITORIAL_R2,openrouter_configured:!!env.OPENROUTER_API_KEY,job_control:"Cloudflare Workflows API only",skill:"v1.10",image_model:env.EDITORIAL_IMAGE_MODEL||MODEL,workflow:"mg4k-tropicana-editorial"});
+  return j({ok:true,project:PROJECT,frame:FRAME,module:"Editorial Photo",storage_isolated:!!env.TROPICANA_EDITORIAL_R2,openrouter_configured:!!env.OPENROUTER_API_KEY,job_control:"Cloudflare Workflows API only",skill:"v1.13",technical_master_policy:"V10_NEUTRAL_NO_HDR",generation_guard:"HUMAN_QA_APPROVAL_REQUIRED",image_model:env.EDITORIAL_IMAGE_MODEL||MODEL,workflow:"mg4k-tropicana-editorial"});
  }
  if(path==="/api/editorial/upload"&&method==="POST"){
   const session=await authorizeSession(request,url,env);
@@ -343,9 +343,9 @@ export async function editorialApi(request,env,url,authorizeSession){
   if(!o)return j({error:"not_found"},404);
   if(kind==="manifest"){
     const manifest=await o.json();
-    manifest.active_skill_version="v1.10";
-    manifest.technical_master_version="V9";
-    manifest.technical_master_art_gate="ONE_AUTHORIZED_CANDIDATE_ONLY";
+    manifest.active_skill_version="v1.13";
+    manifest.technical_master_version=manifest.source_key===ROOT+"technical-v10/DSC09818_EDITORIAL_INPUT.jpg"?"V10_NEUTRAL_NO_HDR":"V9_HDR_ARCHIVE";
+    manifest.technical_master_art_gate=manifest.technical_master_version==="V10_NEUTRAL_NO_HDR"?"QA_APPROVED_FOR_THIS_CANDIDATE":"HISTORICAL_ART_ONLY";
     // Historical persisted manifest is immutable; append a verified numeric QA view.
     const latest=await env.TROPICANA_EDITORIAL_R2.get(fileKey(id,"post_generation_geometry_QA.json"));
     if(latest){
