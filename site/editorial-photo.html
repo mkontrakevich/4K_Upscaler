@@ -549,7 +549,7 @@ async function automaticRework(){
  const parentId=intakeId,token=jobToken(parentId);
  intakeBusy=true;updateIntakeActions();
  e("intake-auto-rework").disabled=true;
- e("intake-auto-eligibility").textContent="Запускается бесплатная техническая коррекция без OpenRouter...";
+ e("intake-auto-eligibility").textContent="Запускается техническая коррекция без OpenRouter. Cloudflare может учитывать вычислительные ресурсы...";
  try{
   const res=await fetch(base+"/job/rework/auto?job="+encodeURIComponent(parentId),{
     method:"POST",headers:sessionHeaders({"content-type":"application/json"}),body:"{}"
