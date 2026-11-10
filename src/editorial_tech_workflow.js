@@ -67,6 +67,9 @@ async function proof(env,id,job){
        qa.correction?.parent_job_id!==job.correction_plan.parent_job_id||
        qa.correction?.parent_master_sha256!==job.correction_plan.parent_master_sha256||
        qa.correction?.remarks_sha256!==job.correction_plan.remarks_sha256||
+       qa.master_sha256===job.correction_plan.parent_master_sha256||
+       qa.correction?.changed_mean_absolute_fraction<.003||
+       qa.correction?.correction_status!=="APPLIED"||
        qa.correction?.geometry_transform!=="IDENTITY"||
        qa.correction?.HDR_applied!==false||
        qa.correction?.generative_processing!==false
