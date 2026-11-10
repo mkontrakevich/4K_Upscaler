@@ -48,18 +48,38 @@ def _start_worker(job_id: str,filename: str,expected_sha: str)->None:
             script=Path(__file__).resolve().parent/"scripts"/"editorial_raster_technical_master.py"
             cmd=[sys.executable,str(script),"--input",str(source),"--out",str(jobdir/"technical"),
                  "--job-id",job_id,"--source-sha256",expected_sha]
+            correction_path=jobdir/"correction-plan.json"
+            if correction_path.exists():
+                cmd+=["--correction-plan",str(correction_path)]
             outcome=subprocess.run(cmd,capture_output=True,text=True,timeout=480,check=False)
             if outcome.returncode!=0:
-                raise RuntimeError("technical_script_failed:"+outcome.stderr[-1200:])
+                reason=outcome.stderr[-1200:]
+                if "CORRECTION_HOLD:" in reason:
+                    raise ValueError("CORRECTION_HOLD:"+reason.split("CORRECTION_HOLD:")[-1].splitlines()[0][:180])
+                raise RuntimeError("technical_script_failed:"+reason)
             qa=json.loads((jobdir/"technical"/"qa.json").read_text(encoding="utf-8"))
             if qa.get("technical_status")!="TECHNICAL_QA_PASS" or qa.get("HDR_applied") is not False or qa.get("master_bit_depth")!=16:
                 raise RuntimeError("technical_qa_failed")
             if qa.get("job_id")!=job_id or qa.get("source_sha256")!=expected_sha:
                 raise RuntimeError("technical_lineage_failed")
+            if correction_path.exists():
+                p=json.loads(correction_path.read_text(encoding="utf-8"))
+                proof=qa.get("correction")
+                if qa.get("correction_status")!="APPLIED" or proof is None or (
+                   proof.get("parent_job_id")!=p.get("parent_job_id") or
+                   proof.get("parent_master_sha256")!=p.get("parent_master_sha256") or
+                   proof.get("remarks_sha256")!=p.get("remarks_sha256") or
+                   proof.get("HDR_applied") is not False or
+                   proof.get("geometry_transform")!="IDENTITY"):
+                    raise RuntimeError("corrected_master_provenance_HOLD")
             _set(job_id,status="READY",stage="technical_qa_ready",progress=100,
                  master_sha256=qa["master_sha256"],master_bytes=qa["master_bytes"])
     except Exception as error:
-        _set(job_id,status="FAILED",stage="technical_failed",progress=None,error=str(error)[-1600:])
+        msg=str(error)[-1600:]
+        hold="CORRECTION_HOLD:" in msg
+        _set(job_id,status="HOLD" if hold else "FAILED",
+            stage="correction_hold" if hold else "technical_failed",
+            progress=None,error=msg)
 
 def _json(handler,status: int,body: dict)->None:
     data=json.dumps(body,ensure_ascii=False).encode("utf-8")
@@ -108,6 +128,21 @@ def route(handler,method:str)->bool:
     if method!="POST" or action!="start":
         _json(handler,405,{"error":"method_not_allowed"})
         return True
+    plan_header=str(handler.headers.get("x-mg4k-correction-plan") or "")
+    if len(plan_header)>4096:
+        _json(handler,400,{"error":"correction_plan_header_too_large"})
+        return True
+    try:
+        plan=json.loads(unquote(plan_header)) if plan_header else None
+    except (ValueError, TypeError):
+        _json(handler,400,{"error":"invalid_correction_plan_json"})
+        return True
+    if plan is not None and (not isinstance(plan,dict) or
+        plan.get("type")!="DETERMINISTIC_TECH_REWORK" or
+        plan.get("HDR_allowed") is not False or
+        plan.get("geometry_transform")!="IDENTITY"):
+        _json(handler,400,{"error":"unapproved_correction_profile"})
+        return True
     length=int(handler.headers.get("content-length") or handler.headers.get("x-mg4k-source-size") or 0)
     source_sha=str(handler.headers.get("x-source-sha256") or "").lower()
     if not SHA.fullmatch(source_sha) or length<10000 or length>MAX_SOURCE:
@@ -130,6 +165,8 @@ def route(handler,method:str)->bool:
         return True
     folder=_path(job_id);folder.mkdir(parents=True,exist_ok=True)
     (folder/"source").write_bytes(data)
+    if plan is not None:
+        (folder/"correction-plan.json").write_text(json.dumps(plan,sort_keys=True),encoding="utf-8")
     name=Path(unquote(handler.headers.get("x-source-filename") or "source.jpg")).name
     _set(job_id,status="QUEUED",stage="queued",progress=0,filename=name)
     threading.Thread(target=_start_worker,args=(job_id,name,source_sha),daemon=True,
