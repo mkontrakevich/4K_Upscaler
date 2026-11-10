@@ -14,6 +14,7 @@ on:
       - 'src/editorial_tech_workflow.js'
       - 'src/worker.js'
       - 'site/editorial-photo.html'
+      - 'tests/editorial-qa-layout.test.mjs'
       - 'site/editorial-import.js'
       - 'site/editorial-compare.js'
       - 'scripts/editorial_dsc09818_technical_master_v10.py'
@@ -74,6 +75,7 @@ jobs:
           Path('/tmp/editorial-photo-inline.js').write_text('\\n'.join(blocks),encoding='utf-8')
           PY
           node --check /tmp/editorial-photo-inline.js
+          node --test tests/editorial-qa-layout.test.mjs
           python - <<'PY'
           from pathlib import Path
           page=Path('site/editorial-photo.html').read_text(encoding='utf-8')

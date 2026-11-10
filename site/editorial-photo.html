@@ -1,16 +1,51 @@
 <!doctype html>
 <html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>MG 4K — Editorial Photo / DSC09818</title>
+<title>MG 4K — Editorial Photo / QA-пульт</title>
 <style>
 :root{--bg:#07121d;--panel:#0e2030;--line:#294055;--txt:#f2f6fb;--muted:#9cafc1;--cyan:#16c5f4;--gold:#bba582}
-*{box-sizing:border-box}html,body{margin:0;background:var(--bg);color:var(--txt);font:15px/1.5 Inter,Arial,sans-serif}body{min-height:100vh;background:radial-gradient(ellipse at 30% 0%,#183147 0%,#07121d 56%)}a{color:#a9e4fc;text-decoration:none}header{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:20px max(18px,calc((100vw - 1440px)/2));border-bottom:1px solid var(--line)}.brand{font-size:22px;font-weight:700;letter-spacing:-.04em}.brand span{color:var(--cyan)}main{max-width:1440px;margin:auto;padding:30px 18px 65px}.eyebrow{font-size:11px;letter-spacing:.16em;color:var(--gold);text-transform:uppercase}h1{font-weight:350;font-size:clamp(36px,6vw,70px);letter-spacing:-.05em;margin:8px 0 8px}h2{font-size:20px;font-weight:550;margin:0 0 12px}.lead{font-size:16px;color:var(--muted);max-width:850px;margin-bottom:26px}.grid{display:grid;grid-template-columns:320px 1fr;gap:18px}.panel{border:1px solid var(--line);background:rgba(14,32,48,.84);padding:20px;border-radius:4px}.metric{display:grid;grid-template-columns:1fr auto;gap:8px;border-bottom:1px solid var(--line);padding:11px 0}.muted,small{color:var(--muted)}.status{color:#ffe1a0}.stack{display:grid;gap:15px}.fields{display:grid;gap:9px}.fields input{padding:10px;width:100%;max-width:100%;background:#07131f;color:var(--txt);border:1px solid var(--line);border-radius:3px}.btn{background:#193d52;color:#fff;border:1px solid #4d8cae;border-radius:3px;cursor:pointer;padding:10px 16px}.btn:disabled{opacity:.5;cursor:default}.mutebtn{background:#122a3b}.triptych{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}[hidden]{display:none!important}.frame{margin:0;display:grid;grid-template-rows:auto 1fr;gap:8px;min-width:0}.frame figcaption{font-size:12px;color:var(--muted);letter-spacing:.12em;text-transform:uppercase}.frame .imagebox{background:#06121c;min-height:190px;aspect-ratio:3/2;border:1px solid #284359;display:grid;place-items:center;color:#7793a8;overflow:hidden}.frame img{width:100%;height:100%;object-fit:contain;display:none}.frame img.ready{display:block}.note{padding:12px 14px;border-left:2px solid var(--gold);background:#152838;color:#c9d4de}.report{margin-top:16px;background:#081923;border:1px solid var(--line);padding:14px;font:12px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace;white-space:pre-wrap;overflow-wrap:anywhere;max-height:280px;overflow:auto}.flex{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.key{font:12px Consolas,monospace;color:#a1b8cd;overflow-wrap:anywhere}@media(max-width:920px){.grid{grid-template-columns:1fr}.triptych{grid-template-columns:1fr}.frame .imagebox{min-height:150px}header{padding:15px 18px}}
+*{box-sizing:border-box}html,body{margin:0;background:var(--bg);color:var(--txt);font:15px/1.5 Inter,Arial,sans-serif}body{min-height:100vh;background:radial-gradient(ellipse at 30% 0%,#183147 0%,#07121d 56%)}a{color:#a9e4fc;text-decoration:none}header{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:20px max(18px,calc((100vw - 1440px)/2));border-bottom:1px solid var(--line)}.brand{font-size:22px;font-weight:700;letter-spacing:-.04em}.brand span{color:var(--cyan)}main{max-width:1440px;margin:auto;padding:30px 18px 65px}.eyebrow{font-size:11px;letter-spacing:.16em;color:var(--gold);text-transform:uppercase}h1{font-weight:350;font-size:clamp(36px,6vw,70px);letter-spacing:-.05em;margin:8px 0 8px}h2{font-size:20px;font-weight:550;margin:0 0 12px}.lead{font-size:16px;color:var(--muted);max-width:850px;margin-bottom:26px}.grid{display:grid;grid-template-columns:320px 1fr;gap:18px}
+.editorial-layout{display:grid;grid-template-columns:minmax(0,1fr) 296px;grid-template-areas:"primary rail";align-items:start;gap:18px}
+.workspace-primary{grid-area:primary;min-width:0}.workspace-rail{grid-area:rail;min-width:0}
+.qa-panel{border-color:#366079;background:linear-gradient(180deg,rgba(18,42,61,.95),rgba(9,24,36,.95))}
+.qa-head{display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px}
+.qa-head h2{font-size:clamp(22px,2.2vw,28px);letter-spacing:-.025em;margin:0}
+.qa-eyebrow{color:#8dd4e9}.qa-image-workspace{display:grid;grid-template-columns:minmax(0,1fr);gap:14px;margin:18px 0}
+.qa-image-workspace.is-compare{grid-template-columns:repeat(2,minmax(0,1fr))}
+.qa-image-workspace .imagebox{min-height:350px!important;height:min(61vh,690px);aspect-ratio:auto!important}
+.qa-image-workspace .frame img{object-fit:contain;max-height:none!important}
+.qa-image-workspace .frame figcaption{font-size:12px}
+.qa-progress{max-width:500px}
+.qa-actions{margin-top:15px;padding-top:14px;border-top:1px solid var(--line)}
+.qa-checklist{display:grid;gap:12px;padding:12px 14px;border:1px solid #345068;background:#102638}
+.qa-checklist label{display:flex;gap:10px;align-items:flex-start}
+.qa-checklist input[type=checkbox]{width:18px;height:18px;min-width:18px;accent-color:#20bade}
+.qa-panel .metric{grid-template-columns:minmax(100px,auto) minmax(0,1fr)}
+.qa-panel .metric strong{min-width:0;overflow-wrap:anywhere;text-align:right}
+.qa-compare-button{margin-top:8px}
+.archive-bundle{border:1px solid #294055;background:#091b2a}
+.archive-bundle>summary{cursor:pointer;padding:17px 20px;color:#c2d2dd;list-style-position:inside;display:list-item}
+.archive-bundle>summary strong{color:#fff;margin-right:10px}
+.archive-bundle[open]>summary{border-bottom:1px solid #294055}
+.archive-content{display:grid;gap:15px;padding:16px}
+.archive-content .triptych{grid-template-columns:repeat(2,minmax(0,1fr))}
+.workspace-rail .panel{padding:17px}
+.workspace-rail .metric{grid-template-columns:1fr;gap:4px}
+.workspace-rail .metric strong{text-align:left;overflow-wrap:anywhere}
+.fields input[type=checkbox]{width:auto;min-width:16px;accent-color:var(--cyan)}
+.fields label:has(input[type=checkbox]){display:flex;gap:9px;align-items:flex-start}
+@media(max-width:1040px){.editorial-layout{grid-template-columns:minmax(0,1fr) 260px;gap:12px}.workspace-rail .panel{padding:14px}}
+@media(max-width:800px){.editorial-layout{grid-template-columns:1fr;grid-template-areas:"primary" "rail"}.qa-image-workspace .imagebox{min-height:250px!important;height:min(57vh,550px)}}
+@media(max-width:600px){.qa-image-workspace.is-compare{grid-template-columns:1fr}.qa-panel{padding:14px}.qa-image-workspace .imagebox{min-height:210px!important;height:48vh}.archive-content{padding:9px}.archive-content .triptych{grid-template-columns:1fr}.qa-panel .metric{grid-template-columns:1fr}.qa-panel .metric strong{text-align:left}.qa-head h2{font-size:22px}}.panel{border:1px solid var(--line);background:rgba(14,32,48,.84);padding:20px;border-radius:4px}.metric{display:grid;grid-template-columns:1fr auto;gap:8px;border-bottom:1px solid var(--line);padding:11px 0}.muted,small{color:var(--muted)}.status{color:#ffe1a0}.stack{display:grid;gap:15px}.fields{display:grid;gap:9px}.fields input{padding:10px;width:100%;max-width:100%;background:#07131f;color:var(--txt);border:1px solid var(--line);border-radius:3px}.btn{background:#193d52;color:#fff;border:1px solid #4d8cae;border-radius:3px;cursor:pointer;padding:10px 16px}.btn:disabled{opacity:.5;cursor:default}.mutebtn{background:#122a3b}.triptych{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}[hidden]{display:none!important}.frame{margin:0;display:grid;grid-template-rows:auto 1fr;gap:8px;min-width:0}.frame figcaption{font-size:12px;color:var(--muted);letter-spacing:.12em;text-transform:uppercase}.frame .imagebox{background:#06121c;min-height:190px;aspect-ratio:3/2;border:1px solid #284359;display:grid;place-items:center;color:#7793a8;overflow:hidden}.frame img{width:100%;height:100%;object-fit:contain;display:none}.frame img.ready{display:block}.note{padding:12px 14px;border-left:2px solid var(--gold);background:#152838;color:#c9d4de}.report{margin-top:16px;background:#081923;border:1px solid var(--line);padding:14px;font:12px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace;white-space:pre-wrap;overflow-wrap:anywhere;max-height:280px;overflow:auto}.flex{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.key{font:12px Consolas,monospace;color:#a1b8cd;overflow-wrap:anywhere}@media(max-width:920px){.grid{grid-template-columns:1fr}.triptych{grid-template-columns:1fr}.frame .imagebox{min-height:150px}header{padding:15px 18px}}
+@media(min-width:801px) and (max-width:920px){.grid.editorial-layout{grid-template-columns:minmax(0,1fr) 260px}}
+@media(max-width:800px){.grid.editorial-layout{grid-template-columns:minmax(0,1fr);grid-template-areas:"primary" "rail"}}
+
 </style><link rel="stylesheet" href="/editorial-compare.css"></head><body>
 <header><div class="brand">MG <span>4K</span> / EDITORIAL PHOTO</div><nav><a href="/">4K Upscaler</a></nav></header>
 <main>
 <div class="eyebrow">MARINS OS / Architectural Editorial / Perspective Lock</div><h1>Editorial Photo</h1>
-<p class="lead">Оптическая коррекция Sony FE 16–35 GM при 16 мм, затем выверенная перспектива RAW V3, художественная обработка изображения через OpenRouter и независимый контроль достоверности. Не генерируем другое помещение вместо настоящей фотографии.</p>
-<div class="grid">
-  <aside class="stack">
+<p class="lead">Рабочая приёмка текущего Tech Master: проверка источника, архитектурной геометрии и деталей в полном разрешении. Архив RAW/TECH DSC09818 доступен отдельно; художественная генерация — только после вашего утверждения.</p>
+<div class="grid editorial-layout">
+  <aside class="stack workspace-rail">
     <section class="panel">
       <div class="eyebrow">Архив RAW/TECH · DSC09818</div><h2>Тропикана-парк</h2>
       <div class="metric"><span class="muted">Кадр</span><strong>DSC09818</strong></div>
@@ -26,16 +61,40 @@
       <p id="upload-result" class="key"></p>
       <p class="muted">Платный запуск OpenRouter управляется отдельно через одноразовую задачу Cloudflare Workflows. Публичных неконтролируемых запусков нет.</p>
     </section>
-    <section class="panel" aria-label="Прогресс и приемка нового снимка">
-      <div class="eyebrow">Новое изображение / собственное задание</div>
-      <h2>Tech Master → QA → MG 4K</h2>
+
+    <section class="panel">
+      <h2>Протокол</h2>
+      <div class="metric"><span class="muted">1. Верификация источника</span><strong>SHA-256</strong></div>
+      <div class="metric"><span class="muted">2. Scene / Editorial analysis</span><strong>OpenRouter</strong></div>
+      <div class="metric"><span class="muted">3. Image-to-image</span><strong>Reference lock</strong></div>
+      <div class="metric"><span class="muted">4. Fidelity QA</span><strong>HOLD / REVIEW</strong></div>
+      <div class="metric"><span class="muted">5. Финал</span><strong>Только после QA</strong></div>
+      <p><a href="https://github.com/mkontrakevich/marins-platform/blob/main/skills/marins-architectural-raw-photo/SKILL.md" target="_blank" rel="noreferrer">MARINS Architectural RAW Photo Skill</a></p>
+    </section>
+  </aside>
+  <section class="stack workspace-primary">
+    <section class="panel qa-panel" aria-label="Текущий Tech Master и визуальное QA">
+      <div class="qa-head">
+        <div><div class="eyebrow qa-eyebrow">Текущая фотография / Шаг 02 · Визуальная приёмка</div>
+        <h2>Tech Master → QA → MG 4K</h2></div>
+        <span class="muted">Без HDR · Perspective Lock · исходник неизменен</span>
+      </div>
       <div class="metric"><span class="muted">Задание</span><strong id="intake-id" class="key">Не создано</strong></div>
       <div class="metric"><span class="muted">Состояние</span><strong id="intake-status" class="status" aria-live="polite">Ожидание загрузки</strong></div>
       <div class="metric"><span class="muted">Этап</span><strong id="intake-stage">—</strong></div>
-      <progress id="intake-progress" max="100" value="0" hidden style="width:100%;height:12px"></progress>
+      <progress id="intake-progress" max="100" value="0" hidden class="qa-progress" style="width:100%;height:12px"></progress>
       <p id="intake-empty" class="note">Нет открытого задания в этом браузере. Для уже обработанной фотографии используйте персональную ссылку на QA — повторно загружать исходник не требуется.</p>
       <p id="intake-message" class="muted" role="status">Прогресс отображается только из серверных состояний, без искусственного таймера.</p>
-      <figure class="frame" id="intake-preview-frame" hidden style="margin:14px 0">
+      <div class="flex qa-compare-button">
+        <button class="btn mutebtn" id="intake-show-source" disabled hidden type="button">Сравнить с исходником</button>
+      </div>
+      <div class="qa-image-workspace" id="intake-image-workspace">
+        <figure class="frame" id="intake-source-frame" hidden>
+          <figcaption>01 / Оригинальный источник · Без генерации</figcaption>
+          <div class="imagebox"><img id="intake-source-preview" alt="Исходная фотография для сравнения с техническим мастером"></div>
+          <p><a id="intake-source-native" target="_blank" rel="noopener" href="#" hidden>Открыть исходник в полном разрешении</a></p>
+        </figure>
+      <figure class="frame" id="intake-preview-frame" hidden style="margin:0">
         <figcaption>Проверка нового Tech Master · full resolution preview</figcaption>
         <div class="imagebox" style="aspect-ratio:auto;min-height:260px">
           <img id="intake-preview" alt="Технический мастер для визуального QA" style="display:block;max-height:65vh;object-fit:contain">
@@ -43,12 +102,13 @@
         <p><a id="intake-preview-native" href="#" target="_blank" rel="noopener" hidden>Открыть техническое превью в 100% масштабе</a></p>
         <p class="muted">Браузер показывает 8-битное представление 16-битного TIFF. Масштабирование и проверка реальной геометрии остаются обязанностью визуального QA.</p>
       </figure>
-      <div id="intake-visual-checks" class="fields" hidden>
+      </div>
+      <div id="intake-visual-checks" class="qa-checklist" hidden>
         <label><input type="checkbox" id="intake-check-preview"> Изображение рассмотрено в полном разрешении</label>
         <label><input type="checkbox" id="intake-check-geometry"> Геометрия, перспектива и архитектура соответствуют исходнику</label>
         <label><input type="checkbox" id="intake-check-materials"> Материалы, свет и идентичность объектов сохранены; HDR отсутствует</label>
       </div>
-      <div class="flex">
+      <div class="flex qa-actions">
         <button class="btn" id="intake-approve" disabled type="button">Утвердить Tech Master</button>
         <button class="btn mutebtn" id="intake-reject" disabled type="button">Вернуть на доработку</button>
         <button class="btn mutebtn" id="intake-download" disabled type="button">Скачать 16-bit TIFF</button>
@@ -92,17 +152,9 @@
       <p><a id="intake-import-link" href="#" hidden>Открыть импортированный мастер в MG 4K</a></p>
       <p class="note">Для JPEG/PNG/WebP автоматически формируется нейтральный 16-битный TIFF без HDR. Если источник был 8-битным, дополнительная информация не возникает. Художественная генерация разрешается только отдельно после QA.</p>
     </section>
-    <section class="panel">
-      <h2>Протокол</h2>
-      <div class="metric"><span class="muted">1. Верификация источника</span><strong>SHA-256</strong></div>
-      <div class="metric"><span class="muted">2. Scene / Editorial analysis</span><strong>OpenRouter</strong></div>
-      <div class="metric"><span class="muted">3. Image-to-image</span><strong>Reference lock</strong></div>
-      <div class="metric"><span class="muted">4. Fidelity QA</span><strong>HOLD / REVIEW</strong></div>
-      <div class="metric"><span class="muted">5. Финал</span><strong>Только после QA</strong></div>
-      <p><a href="https://github.com/mkontrakevich/marins-platform/blob/main/skills/marins-architectural-raw-photo/SKILL.md" target="_blank" rel="noreferrer">MARINS Architectural RAW Photo Skill</a></p>
-    </section>
-  </aside>
-  <section class="stack">
+    <details class="archive-bundle" id="legacy-archive">
+      <summary><strong>Архив RAW / TECH V10 · DSC09818</strong> Историческая обработка и сравнения, не текущая приёмка</summary>
+      <div class="archive-content">
     <div class="panel">
       <div class="eyebrow">Стадия 01 / Обязательная техническая подготовка</div>
       <h2>Technical Master V10 · NO HDR · DSC09818</h2>
@@ -127,6 +179,8 @@
       <div class="flex"><label for="job" class="muted">ID одноразового задания</label><input id="job" style="flex:1;min-width:180px;padding:10px;background:#07131f;border:1px solid #294055;color:#fff" placeholder="Workflow run UUID"><button id="load" class="btn" type="button">Открыть QA</button></div>
       <pre class="report" id="report">Загрузка состояния…</pre>
     </div>
+      </div>
+    </details>
   </section>
 </div></main>
 <script>
@@ -135,6 +189,7 @@ let intakeId="",intakeProof=null,intakePoll=null,intakeBusy=false,intakeState=nu
 let comparisonFor="",comparisonUrls=[];
 
 let intakePreviewURL=null,intakePreviewFor="",intakePreviewReady=false;
+let intakeSourceURL=null,intakeSourceFor="";
 const sessionStore="mg4k-editorial-session-v1";
 const jobAccessStore="mg4k-editorial-job-access-v1";
 const lastJobStore="mg4k-editorial-last-job-v1";
@@ -196,6 +251,36 @@ async function loadComparison(data){
   e("intake-comparison").hidden=false;
  }catch(err){comparisonFor="";e("intake-message").textContent=String(err)}
 }
+async function toggleSourceComparison(){
+ if(!intakeId||!intakeState?.technical_master_ready)return;
+ const sourceFrame=e("intake-source-frame"), grid=e("intake-image-workspace"),button=e("intake-show-source");
+ if(!sourceFrame.hidden){
+  sourceFrame.hidden=true;grid.classList.remove("is-compare");
+  button.textContent="Сравнить с исходником";return;
+ }
+ const requestedId=intakeId;
+ button.disabled=true;
+ try{
+  if(intakeSourceFor!==requestedId){
+   const response=await fetch(base+"/job/source?job="+encodeURIComponent(requestedId),{
+     headers:sessionHeaders(),cache:"no-store"
+   });
+   if(!response.ok)throw Error("Исходник не доступен для сравнения (HTTP "+response.status+")");
+   const blob=await response.blob();
+   if(intakeId!==requestedId)return;
+   if(!["image/jpeg","image/png","image/webp"].includes(blob.type))throw Error("Неожиданный формат исходника");
+   if(intakeSourceURL)URL.revokeObjectURL(intakeSourceURL);
+   intakeSourceURL=URL.createObjectURL(blob);intakeSourceFor=requestedId;
+   e("intake-source-preview").src=intakeSourceURL;
+   e("intake-source-preview").classList.add("ready");
+   e("intake-source-native").href=intakeSourceURL;
+   e("intake-source-native").hidden=false;
+  }
+  sourceFrame.hidden=false;grid.classList.add("is-compare");
+  button.textContent="Скрыть сравнение";
+ }catch(error){e("intake-message").textContent=String(error?.message||error)}
+ finally{button.disabled=false}
+}
 function updateIntakeActions(){
  const data=intakeState||{};
  for(const [id,flag] of [["intake-approve","can_approve"],["intake-reject","can_rework"],["intake-download","can_download"],["intake-handoff","can_handoff"]])
@@ -221,6 +306,9 @@ function setIntake(data){
  intakeState=data;
  intakeProof=data.technical_qa||null;
  e("intake-empty").hidden=true;
+ const sourceButton=e("intake-show-source");
+ sourceButton.hidden=!data.technical_master_ready;
+ sourceButton.disabled=!data.technical_master_ready;
  e("intake-id").textContent=(data.job_id||"—")+" · V"+(data.revision_num||1);
  e("intake-status").textContent=readableStatus[data.status]||data.status||"Неизвестно";
  e("intake-stage").textContent=data.stage||"—";
@@ -271,6 +359,12 @@ function activateIntake(id){
  if(jobToken(id))try{localStorage.setItem(lastJobStore,id)}catch{}
 
  intakePreviewFor="";intakePreviewReady=false;intakeState=null;
+ e("intake-source-frame").hidden=true;
+ e("intake-image-workspace").classList.remove("is-compare");
+ e("intake-show-source").textContent="Сравнить с исходником";
+ e("intake-show-source").hidden=true;
+ if(intakeSourceURL){URL.revokeObjectURL(intakeSourceURL);intakeSourceURL=null}
+ intakeSourceFor="";
  resetComparison();e("intake-rework-form").hidden=true;e("intake-revision-panel").hidden=true;
  ["intake-check-preview","intake-check-geometry","intake-check-materials"].forEach(k=>e(k).checked=false);
  e("intake-visual-checks").hidden=true;e("intake-preview-frame").hidden=true;
@@ -389,6 +483,7 @@ e("open-editorial").addEventListener("click",()=>{
 });
 e("upload").addEventListener("click",()=>upload().catch(err=>say(String(err))));e("load").addEventListener("click",()=>load().catch(err=>say(String(err))));e("refresh").addEventListener("click",()=>load().catch(err=>health().catch(e=>say(String(e)))));["intake-check-preview","intake-check-geometry","intake-check-materials"].forEach(id=>
  e(id).addEventListener("change",updateIntakeActions));
+e("intake-show-source").addEventListener("click",toggleSourceComparison);
 e("intake-approve").addEventListener("click",()=>intakeDecision("APPROVED"));
 e("intake-reject").addEventListener("click",()=>{e("intake-rework-form").hidden=false;e("intake-rework-note").focus()});
 e("intake-rework-submit").addEventListener("click",submitRework);
