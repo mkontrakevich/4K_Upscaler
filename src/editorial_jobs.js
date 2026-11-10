@@ -57,7 +57,15 @@ async function verifiedTech(env,job) {
   if(q.job_id!==job.job_id||q.source_sha256!==job.source_sha256||
      q.technical_status!=="TECHNICAL_QA_PASS"||q.HDR_applied!==false||
      q.virtual_exposures!==false||q.local_HDR!==false||
-     q.qa_checks?.HDR_ABSENT!=="PASS"||q.master_bit_depth!==16||
+     q.qa_checks?.HDR_ABSENT!=="PASS"||
+     q.qa_checks?.SOURCE_SHA256!=="PASS"||
+     q.qa_checks?.GEOMETRY_UNCHANGED!=="PASS"||
+     q.qa_checks?.TIFF_READBACK!=="PASS"||
+     q.geometry!=="IDENTITY_NO_CORRECTION"||
+     ![8,16].includes(q.source_signal_bits)||
+     !Number.isInteger(q.width)||q.width<320||
+     !Number.isInteger(q.height)||q.height<320||
+     q.master_bit_depth!==16||
      q.master_key!==expected||!SHA.test(String(q.master_sha256||""))||
      !Number.isInteger(q.master_bytes)||q.master_bytes<200000)return null;
   const head=await env.TROPICANA_EDITORIAL_R2.head(expected);
