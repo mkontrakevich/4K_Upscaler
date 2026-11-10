@@ -36,7 +36,7 @@ test("primary QA shows source integrity proof separately from visual acceptance"
   assert.ok(html.includes('fetch(base+"/job/source?job="'));
   assert.match(html,/id="intake-preview-native"/);
   assert.match(html,/id="intake-split-source-native"/);
-  assert.match(html,/function updateSourceVerification\\(data\\)/);
+  assert.ok(html.includes('function updateSourceVerification(data)'));
   assert.match(html,/Проверка исходника/);
   assert.match(html,/Автоматическая коррекция объектива/);
   assert.match(html,/id="intake-check-geometry"/);
