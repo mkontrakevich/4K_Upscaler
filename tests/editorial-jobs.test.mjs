@@ -392,3 +392,43 @@ test("auto rework geometry requires anchors; no V2 and no paid generation",async
  assert.equal(runs.length,0);
  assert.equal(await h.r2.get("tropicana-park/editorial-jobs/"+job.job_id+"/rework/revision.json"),null);
 });
+
+test("auto V2 preserves source, changes master and keeps human QA mandatory",async()=>{
+ const h=harness(),job=await intake(h),sha=await tech(h,job);
+ await h.call("/api/editorial/job/decision?job="+job.job_id,"POST",{
+  decision:"REWORK_REQUESTED",master_sha256:sha,categories:["exposure","color"],
+  note:"Fix measured underexposure and neutral white balance"
+ });
+ const created=[];h.env.TROPICANA_TECH_WORKFLOW={async create(x){created.push(x);return x}};
+ const forbidden=await h.call("/api/editorial/job/rework/auto?job="+job.job_id,"POST",{},false);
+ assert.equal(forbidden.status,404);
+ const res=await h.call("/api/editorial/job/rework/auto?job="+job.job_id,"POST",{});
+ assert.equal(res.status,201);
+ const out=await res.json();assert.equal(out.source_unchanged,true);
+ assert.equal(out.generation_started,false);
+ assert.equal(created.length,1);assert.equal(created[0].id,out.job_id);
+ const k="tropicana-park/editorial-jobs/";
+ const original=await (await h.r2.get(k+job.job_id+"/job.json")).json();
+ const v2=await (await h.r2.get(k+out.job_id+"/job.json")).json();
+ assert.equal(v2.source_key,original.source_key);
+ assert.equal(v2.source_sha256,original.source_sha256);
+ assert.equal(v2.access_hash,original.access_hash);
+ assert.equal(v2.correction_plan.parent_master_sha256,sha);
+ assert.equal(v2.correction_plan.geometry_transform,"IDENTITY");
+ const unready=await (await h.call("/api/editorial/job/status?job="+v2.job_id,"GET",null,false,job.job_token)).json();
+ assert.equal(unready.can_approve,false);
+ const correctedSha=await tech(h,v2);assert.notEqual(correctedSha,sha);
+ const ready=await (await h.call("/api/editorial/job/status?job="+v2.job_id,"GET",null,false,job.job_token)).json();
+ assert.equal(ready.technical_master_ready,true);
+ assert.equal(ready.technical_correction.status,"APPLIED");
+ assert.equal(ready.can_handoff,false);
+ const blocked=await h.call("/api/editorial/job/handoff?job="+v2.job_id,"POST",null,false,job.job_token);
+ assert.equal(blocked.status,409);
+ const approved=await h.call("/api/editorial/job/decision?job="+v2.job_id,"POST",{
+  decision:"APPROVED",master_sha256:correctedSha,checks:QA_CHECKS
+ },false,job.job_token);
+ assert.equal(approved.status,200);
+ const status=await (await h.call("/api/editorial/job/status?job="+v2.job_id,"GET",null,false,job.job_token)).json();
+ assert.equal(status.can_handoff,true);
+ assert.equal((await h.call("/api/editorial/job/rework/auto?job="+job.job_id,"POST",{})).status,409);
+});
