@@ -77,7 +77,9 @@ async function tech(h,job){
    master_key:masterKey,master_sha256:sha,master_bytes:1100000,
    preview_sha256:proxySHA,preview_bytes:proxyBytes.byteLength,
    master_bit_depth:16,technical_status:"TECHNICAL_QA_PASS",
-   HDR_applied:false,virtual_exposures:false,local_HDR:false,qa_checks:{HDR_ABSENT:"PASS"}
+   width:640,height:480,source_signal_bits:8,geometry:"IDENTITY_NO_CORRECTION",
+   HDR_applied:false,virtual_exposures:false,local_HDR:false,
+   qa_checks:{HDR_ABSENT:"PASS",SOURCE_SHA256:"PASS",GEOMETRY_UNCHANGED:"PASS",TIFF_READBACK:"PASS"}
  }),{httpMetadata:{contentType:"application/json"}});
  return sha;
 }
@@ -109,6 +111,40 @@ test("mislabelled binary cannot be approved as 16-bit TIFF",async()=>{
  const data=await (await h.call("/api/editorial/job/status?job="+job.job_id)).json();
  assert.equal(data.can_approve,false);
  assert.equal(data.technical_master_ready,false);
+});
+test("verified source evidence is explicit and never substitutes for visual QA",async()=>{
+ const h=harness(),job=await intake(h);
+ let data=await (await h.call("/api/editorial/job/status?job="+job.job_id)).json();
+ assert.equal(data.source_verification.status,"PENDING");
+ assert.equal(data.source_verification.visual_review,"PENDING_HUMAN_QA");
+ await tech(h,job);
+ data=await (await h.call("/api/editorial/job/status?job="+job.job_id)).json();
+ assert.equal(data.source_verification.status,"TECHNICAL_PASS");
+ assert.equal(data.source_verification.sha256_status,"PASS");
+ assert.equal(data.source_verification.raster_status,"PASS");
+ assert.equal(data.source_verification.geometry_preservation,"PASS");
+ assert.equal(data.source_verification.width,640);
+ assert.equal(data.source_verification.height,480);
+ assert.equal(data.source_verification.signal_bits,8);
+ assert.equal(data.source_verification.perspective_correction,"NOT_PERFORMED");
+ assert.equal(data.source_verification.optical_correction,"NOT_PERFORMED");
+ assert.equal(data.source_verification.visual_review,"PENDING_HUMAN_QA");
+ assert.equal(data.can_approve,true);
+ assert.equal(data.can_handoff,false);
+});
+test("missing actual source-integrity proof blocks Tech Master QA and handoff",async()=>{
+ const h=harness(),job=await intake(h);
+ await tech(h,job);
+ const p="tropicana-park/editorial-jobs/"+job.job_id+"/technical/qa.json";
+ const q=await (await h.r2.get(p)).json();
+ delete q.qa_checks.SOURCE_SHA256;
+ await h.r2.put(p,JSON.stringify(q),{httpMetadata:{contentType:"application/json"}});
+ const data=await (await h.call("/api/editorial/job/status?job="+job.job_id)).json();
+ assert.equal(data.technical_master_ready,false);
+ assert.equal(data.can_approve,false);
+ assert.equal(data.can_download,false);
+ assert.equal(data.can_handoff,false);
+ assert.equal(data.source_verification.status,"PENDING");
 });
 test("per-job access is bound to authenticated session",async()=>{
  const h=harness(),job=await intake(h);
