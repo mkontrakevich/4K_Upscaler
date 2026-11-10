@@ -33,7 +33,7 @@ test("primary QA shows source integrity proof separately from visual acceptance"
     assert.ok(ids.includes(id),"missing "+id);
   assert.equal(ids.length,new Set(ids).size,"Duplicate element IDs");
   assert.doesNotMatch(html,/intake-show-source|toggleSourceComparison|Показать два кадра рядом/);
-  assert.match(html,/fetch\\(base\\+"\\/job\\/source\\?job="/);
+  assert.ok(html.includes('fetch(base+"/job/source?job="'));
   assert.match(html,/id="intake-preview-native"/);
   assert.match(html,/id="intake-split-source-native"/);
   assert.match(html,/function updateSourceVerification\\(data\\)/);
