@@ -375,3 +375,20 @@ test("concurrent corrected-source submissions allow exactly one version and clea
  const revisedInputs=[...h.r2.map.keys()].filter(k=>k.startsWith("tropicana-park/editorial-revisions/"));
  assert.equal(revisedInputs.length,1);
 });
+
+test("auto rework geometry requires anchors; no V2 and no paid generation",async()=>{
+ const h=harness(),job=await intake(h),sha=await tech(h,job);
+ await h.call("/api/editorial/job/decision?job="+job.job_id,"POST",{
+   decision:"REWORK_REQUESTED",master_sha256:sha,
+   categories:["geometry"],note:"Correct facade perspective with verified architectural controls"
+ });
+ const st=await (await h.call("/api/editorial/job/status?job="+job.job_id)).json();
+ assert.equal(st.can_auto_rework,false);
+ const runs=[];h.env.TROPICANA_TECH_WORKFLOW={async create(x){runs.push(x);return x}};
+ const r=await h.call("/api/editorial/job/rework/auto?job="+job.job_id,"POST",{});
+ assert.equal(r.status,409);
+ const body=await r.json();assert.equal(body.status,"HOLD");
+ assert.equal(body.generation_started,false);
+ assert.equal(runs.length,0);
+ assert.equal(await h.r2.get("tropicana-park/editorial-jobs/"+job.job_id+"/rework/revision.json"),null);
+});
