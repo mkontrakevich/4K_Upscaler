@@ -61,6 +61,7 @@ async function intake(h){
 async function tech(h,job){
  const masterKey="tropicana-park/editorial-jobs/"+job.job_id+"/technical/master16.tif";
  const bytes=new Uint8Array(1100000);bytes.set([73,73,43,0]); // Genuine BigTIFF magic for negative file-type gate.
+ if(job.correction_plan)bytes[256]=23;
  const digest=await crypto.subtle.digest("SHA-256",bytes);
  const sha=[...new Uint8Array(digest)].map(v=>v.toString(16).padStart(2,"0")).join("");
  await h.r2.put(masterKey,bytes,{
@@ -79,7 +80,14 @@ async function tech(h,job){
    master_bit_depth:16,technical_status:"TECHNICAL_QA_PASS",
    width:640,height:480,source_signal_bits:8,geometry:"IDENTITY_NO_CORRECTION",
    HDR_applied:false,virtual_exposures:false,local_HDR:false,
-   qa_checks:{HDR_ABSENT:"PASS",SOURCE_SHA256:"PASS",GEOMETRY_UNCHANGED:"PASS",TIFF_READBACK:"PASS"}
+   qa_checks:{HDR_ABSENT:"PASS",SOURCE_SHA256:"PASS",GEOMETRY_UNCHANGED:"PASS",TIFF_READBACK:"PASS"},
+   correction_status:job.correction_plan?"APPLIED":"NOT_REQUESTED",
+   correction:job.correction_plan?{correction_status:"APPLIED",
+     parent_job_id:job.correction_plan.parent_job_id,
+     parent_master_sha256:job.correction_plan.parent_master_sha256,
+     remarks_sha256:job.correction_plan.remarks_sha256,
+     changed_mean_absolute_fraction:.02,geometry_transform:"IDENTITY",
+     HDR_applied:false,generative_processing:false}:null
  }),{httpMetadata:{contentType:"application/json"}});
  return sha;
 }
