@@ -40,7 +40,16 @@ function harness(){
    const request=new Request(url,{method,headers,body:body?JSON.stringify(body):undefined});
    return editorialJobApi(request,env,url,authorize);
  };
- return {r2,mg4k,env,session,call};
+ const formCall=(path,fileBytes,allow=true,editorialBearer="")=>{
+   const url=new URL("https://app.example"+path);
+   const headers=allow?{"x-session-id":"session-allow","x-session-token":"secret"}:
+                       {"x-session-id":"intruder","x-session-token":"wrong"};
+   if(editorialBearer)headers["x-editorial-job-token"]=editorialBearer;
+   const form=new FormData();
+   form.append("file",new Blob([fileBytes],{type:"image/png"}),"corrected-version.png");
+   return editorialJobApi(new Request(url,{method:"POST",headers,body:form}),env,url,authorize);
+ };
+ return {r2,mg4k,env,session,call,formCall};
 }
 const QA_CHECKS={preview_reviewed:true,geometry:true,materials:true,no_hdr:true};
 async function intake(h){
@@ -187,4 +196,110 @@ test("invalid MG4K storage leaves no falsely completed handoff",async()=>{
  assert.equal(r.status,503);
  const record=await h.r2.get("tropicana-park/editorial-jobs/"+job.job_id+"/handoff.json");
  assert.equal(record,null);
+});
+
+test("structured rework is an immutable QA decision; approval and handoff stay blocked",async()=>{
+ const h=harness(),job=await intake(h),master=await tech(h,job);
+ const endpoint="/api/editorial/job/decision?job="+job.job_id;
+ let r=await h.call(endpoint,"POST",{decision:"REWORK_REQUESTED",master_sha256:master,categories:[],note:"Please fix geometry precisely"});
+ assert.equal(r.status,400);
+ r=await h.call(endpoint,"POST",{decision:"REWORK_REQUESTED",master_sha256:master,
+   categories:["geometry","materials"],note:"Correct verticals without changing any facade detail"});
+ assert.equal(r.status,200);
+ const d=await r.json();assert.equal(d.decision,"REWORK_REQUESTED");
+ const status=await (await h.call("/api/editorial/job/status?job="+job.job_id)).json();
+ assert.equal(status.status,"REWORK_REQUESTED");
+ assert.equal(status.revision_num,1);
+ assert.equal(status.can_approve,false);
+ assert.equal(status.can_rework,false);
+ assert.equal(status.can_upload_revision,true);
+ assert.deepEqual(status.rework.categories,["geometry","materials"]);
+ assert.equal(status.rework.note,"Correct verticals without changing any facade detail");
+ r=await h.call(endpoint,"POST",{decision:"APPROVED",master_sha256:master,checks:QA_CHECKS});
+ assert.equal(r.status,409);
+ r=await h.call("/api/editorial/job/download?job="+job.job_id);
+ assert.equal(r.status,409);
+ r=await h.call("/api/editorial/job/handoff?job="+job.job_id,"POST");
+ assert.equal(r.status,409);
+ const saved=await (await h.r2.get("tropicana-park/editorial-jobs/"+job.job_id+"/technical/decision.json")).json();
+ assert.equal(saved.master_sha256,master);
+ assert.equal(saved.decision,"REWORK_REQUESTED");
+});
+test("revised upload creates V2 with original+V1 immutable and repeats Tech QA before MG4K",async()=>{
+ const h=harness(),job=await intake(h),master=await tech(h,job);
+ const dispatched=[];
+ h.env.TROPICANA_TECH_WORKFLOW={async create(info){dispatched.push(info);return {id:info.id}}};
+ await h.call("/api/editorial/job/decision?job="+job.job_id,"POST",{
+   decision:"REWORK_REQUESTED",master_sha256:master,
+   categories:["geometry"],note:"Correct verticals and perspective with strict architectural locks"
+ });
+ const bytes=new Uint8Array(34000);bytes.set([137,80,78,71,13,10,26,10]);bytes[101]=43;
+ const revise="/api/editorial/job/revision?job="+job.job_id;
+ let r=await h.formCall(revise,bytes,false);
+ assert.equal(r.status,404);
+ r=await h.formCall(revise,bytes,false,job.job_token);
+ assert.equal(r.status,201);
+ const created=await r.json();
+ assert.equal(created.revision_num,2);
+ assert.equal(created.parent_job_id,job.job_id);
+ assert.equal(created.root_job_id,job.job_id);
+ assert.equal(created.status,"QUEUED");
+ assert.equal(created.generation_started,false);
+ assert.equal(dispatched.length,1);
+ assert.equal(dispatched[0].id,created.job_id);
+ assert.notEqual(created.job_id,job.job_id);
+ const parent=await (await h.r2.get("tropicana-park/editorial-jobs/"+job.job_id+"/job.json")).json();
+ const child=await (await h.r2.get("tropicana-park/editorial-jobs/"+created.job_id+"/job.json")).json();
+ assert.equal(parent.parent_job_id,null);
+ assert.equal(parent.revision_num,1);
+ assert.equal(child.parent_job_id,job.job_id);
+ assert.equal(child.revision_num,2);
+ assert.equal(child.access_hash,parent.access_hash);
+ assert.notEqual(child.source_key,parent.source_key);
+ const revisionLink=await (await h.r2.get("tropicana-park/editorial-jobs/"+job.job_id+"/rework/revision.json")).json();
+ assert.equal(revisionLink.job_id,created.job_id);
+ const statusParent=await (await h.call("/api/editorial/job/status?job="+job.job_id)).json();
+ assert.equal(statusParent.status,"REVISION_CREATED");
+ assert.equal(statusParent.next_revision_job_id,created.job_id);
+ const statusChild=await (await h.call("/api/editorial/job/status?job="+created.job_id,"GET",null,false,job.job_token)).json();
+ assert.equal(statusChild.status,"AWAITING_TECH_PROCESSING");
+ assert.equal(statusChild.can_approve,false);
+ assert.equal(statusChild.parent_job_id,job.job_id);
+ const source=await h.call("/api/editorial/job/source?job="+created.job_id,"GET",null,false,job.job_token);
+ assert.equal(source.status,200);
+ assert.equal(source.headers.get("content-type"),"image/png");
+ const a=await source.arrayBuffer();
+ assert.equal(a.byteLength,34000);
+ r=await h.formCall(revise,bytes);
+ assert.equal(r.status,409);
+ assert.equal((await h.r2.get("tropicana-park/editorial-jobs/"+job.job_id+"/technical/master16.tif")).size,1100000);
+ const childMaster=await tech(h,child);
+ r=await h.call("/api/editorial/job/decision?job="+created.job_id,"POST",{
+   decision:"APPROVED",master_sha256:childMaster,checks:QA_CHECKS},false,job.job_token);
+ assert.equal(r.status,200);
+ r=await h.call("/api/editorial/job/handoff?job="+created.job_id,"POST",null,false,job.job_token);
+ assert.equal(r.status,200);
+ const handoff=await (await h.r2.get("tropicana-park/editorial-jobs/"+created.job_id+"/handoff.json")).json();
+ assert.equal(handoff.master_sha256,childMaster);
+ assert.notEqual(handoff.master_sha256,undefined);
+ assert.equal(handoff.generation_authorized,false);
+ const originalDecision=await (await h.r2.get("tropicana-park/editorial-jobs/"+job.job_id+"/technical/decision.json")).json();
+ assert.equal(originalDecision.decision,"REWORK_REQUESTED");
+});
+test("unchanged revised source is held; already rejected job requires new version",async()=>{
+ const h=harness(),job=await intake(h),master=await tech(h,job);
+ await h.call("/api/editorial/job/decision?job="+job.job_id,"POST",{
+   decision:"REWORK_REQUESTED",master_sha256:master,categories:["color"],note:"Fix white balance while preserving actual material colors"
+ });
+ const bytes=new Uint8Array(20000);
+ const digest=await crypto.subtle.digest("SHA-256",bytes);
+ const identicalSHA=[...new Uint8Array(digest)].map(v=>v.toString(16).padStart(2,"0")).join("");
+ // Simulate a correction identical to the registered source (no-op).
+ const k="tropicana-park/editorial-jobs/"+job.job_id+"/job.json";
+ const stored=await (await h.r2.get(k)).json();
+ stored.source_sha256=identicalSHA;
+ await h.r2.put(k,JSON.stringify(stored),{httpMetadata:{contentType:"application/json"}});
+ const r=await h.formCall("/api/editorial/job/revision?job="+job.job_id,bytes);
+ assert.equal(r.status,409);
+ const result=await r.json();assert.equal(result.error,"revision_source_unchanged");
 });
