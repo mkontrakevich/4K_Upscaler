@@ -433,3 +433,34 @@ test("auto V2 preserves source, changes master and keeps human QA mandatory",asy
  assert.equal(status.can_handoff,true);
  assert.equal((await h.call("/api/editorial/job/rework/auto?job="+job.job_id,"POST",{})).status,409);
 });
+
+test("auto correction HOLD permits controlled corrected-source V3 without overwriting V1/V2",async()=>{
+ const h=harness(),v1=await intake(h),sha=await tech(h,v1);
+ await h.call("/api/editorial/job/decision?job="+v1.job_id,"POST",{
+  decision:"REWORK_REQUESTED",master_sha256:sha,categories:["exposure"],
+  note:"Exposure needs measured correction; review all bright regions"
+ });
+ h.env.TROPICANA_TECH_WORKFLOW={async create(x){return {id:x.id}}};
+ const auto=await (await h.call("/api/editorial/job/rework/auto?job="+v1.job_id,"POST",{})).json();
+ const v2=auto.job_id;
+ await h.r2.put("tropicana-park/editorial-jobs/"+v2+"/processing-state.json",
+  JSON.stringify({job_id:v2,status:"HOLD",stage:"correction_hold",
+   message:"No safe change measurable",progress:null}),
+  {httpMetadata:{contentType:"application/json"}});
+ const state=await (await h.call("/api/editorial/job/status?job="+v2,"GET",null,false,v1.job_token)).json();
+ assert.equal(state.status,"HOLD");
+ assert.equal(state.can_upload_revision,true);
+ assert.equal(state.can_approve,false);
+ assert.equal(state.can_handoff,false);
+ const img=new Uint8Array(30000);img.set([137,80,78,71,13,10,26,10]);img[20]=92;
+ const created=await h.formCall("/api/editorial/job/revision?job="+v2,img,false,v1.job_token);
+ assert.equal(created.status,201);
+ const result=await created.json();
+ assert.equal(result.revision_num,3);
+ const v3=await (await h.r2.get("tropicana-park/editorial-jobs/"+result.job_id+"/job.json")).json();
+ assert.equal(v3.parent_job_id,v2);
+ assert.equal(v3.root_job_id,v1.job_id);
+ assert.equal(v3.correction_plan,null);
+ const old=await (await h.r2.get("tropicana-park/editorial-jobs/"+v1.job_id+"/technical/decision.json")).json();
+ assert.equal(old.decision,"REWORK_REQUESTED");
+});
