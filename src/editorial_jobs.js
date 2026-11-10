@@ -108,7 +108,13 @@ async function decision(env,id) {
 }
 async function availability(env,job) {
   const q=await verifiedTech(env,job),d=await decision(env,job.job_id);
-  const revision=d?.decision==="REWORK_REQUESTED"?await revisionLink(env,job.job_id):null;
+  const autoHold=!!(job.correction_plan&&await (async()=>{
+    const v=await env.TROPICANA_EDITORIAL_R2.get(key(job.job_id,"processing-state.json"));
+    if(!v)return false;
+    try{return (await v.json()).status==="HOLD"}catch{return false}
+  })());
+  const revision=d?.decision==="REWORK_REQUESTED"||autoHold?
+    await revisionLink(env,job.job_id):null;
   const approved=!!(q&&d&&d.decision==="APPROVED"&&d.master_sha256===q.master_sha256&&d.source_sha256===q.source_sha256);
   let imported=null;
   if(approved&&env.TEMP_BUFFER_R7){
@@ -124,7 +130,8 @@ async function availability(env,job) {
   const processObject=await env.TROPICANA_EDITORIAL_R2.get(key(job.job_id,"processing-state.json"));
   let processing=null;
   if(processObject){try{processing=await processObject.json()}catch{}}
-  return {q,d,approved,imported,processing,revision};
+  return {q,d,approved,imported,processing,revision,
+    autoHold:!!(job.correction_plan&&processing?.status==="HOLD")};
 }
 function sourceVerification(job,a){
   const q=a.q,checks=q?.qa_checks||{};
@@ -153,7 +160,8 @@ function sourceVerification(job,a){
   };
 }
 function state(job,a) {
-  const status=a.d?.decision==="REWORK_REQUESTED"?(a.revision?"REVISION_CREATED":"REWORK_REQUESTED"):a.d?.decision==="REJECTED"?"REJECTED":a.imported?"MG4K_MASTER_IMPORTED":a.approved?"TECH_MASTER_APPROVED":a.q?"AWAITING_HUMAN_QA":a.processing?.status||job.status;
+  const status=a.autoHold&&a.revision?"REVISION_CREATED":
+    a.d?.decision==="REWORK_REQUESTED"?(a.revision?"REVISION_CREATED":"REWORK_REQUESTED"):a.d?.decision==="REJECTED"?"REJECTED":a.imported?"MG4K_MASTER_IMPORTED":a.approved?"TECH_MASTER_APPROVED":a.q?"AWAITING_HUMAN_QA":a.processing?.status||job.status;
   return {
     ok:true,job_id:job.job_id,filename:job.filename,project:job.project,
     revision_num:job.revision_num||1,parent_job_id:job.parent_job_id||null,
@@ -179,14 +187,17 @@ function state(job,a) {
     locks:job.locks,approval:a.d?{decision:a.d.decision,at:a.d.at}:null,
     can_approve:!!a.q&&!a.d,can_reject:!!a.q&&!a.d,
     can_rework:!!a.q&&!a.d,
-    can_upload_revision:a.d?.decision==="REWORK_REQUESTED"&&!a.revision,
+    can_upload_revision:(a.d?.decision==="REWORK_REQUESTED"||a.autoHold)&&!a.revision,
     can_auto_rework:a.d?.decision==="REWORK_REQUESTED"&&!a.revision&&
       Array.isArray(a.d.categories)&&a.d.categories.length>0&&
       a.d.categories.every(c=>c==="exposure"||c==="color"),
     auto_rework_hold_reason:a.d?.decision==="REWORK_REQUESTED"&&
       a.d.categories?.some(c=>c!=="exposure"&&c!=="color")?
       "Автоматическая коррекция перспективы, фактур и деталей требует проверенных опорных точек/профиля. HOLD.":"",
-    rework:a.d?.decision==="REWORK_REQUESTED"?{categories:a.d.categories,note:a.d.note,at:a.d.at}:null,
+    rework:a.d?.decision==="REWORK_REQUESTED"?{categories:a.d.categories,note:a.d.note,at:a.d.at}:
+      a.autoHold?{categories:job.correction_plan?.categories||[],
+        note:"Автоматическая коррекция остановлена по защитному HOLD. Загрузите исправленный исходник, чтобы создать новую версию.",
+        at:job.created_at}:null,
     next_revision_job_id:a.revision?.job_id||null,
     can_download:a.approved,can_handoff:a.approved&&!a.imported,
     mg4k_imported:!!a.imported,
@@ -330,7 +341,8 @@ export async function editorialJobApi(request,env,url,authorizeSession) {
   }
 
   if(path==="/api/editorial/job/revision"&&method==="POST"){
-    if(a.d?.decision!=="REWORK_REQUESTED")return json({error:"rework_decision_required"},409);
+    if(a.d?.decision!=="REWORK_REQUESTED"&&!a.autoHold)
+      return json({error:"rework_decision_or_auto_hold_required"},409);
     if(a.revision)return json({error:"revision_already_created",job_id:a.revision.job_id},409);
     let form;try{form=await request.formData()}catch{return json({error:"invalid_revision_form"},400)}
     const file=form.get("file");
@@ -352,7 +364,10 @@ export async function editorialJobApi(request,env,url,authorizeSession) {
       inherit_access_hash:job.access_hash
     });
     const link={schema:1,job_id:child.job_id,revision_num:version,source_sha256:newSha,
-      parent_master_sha256:a.d.master_sha256,rework_decision_at:a.d.at,created_at:new Date().toISOString()};
+      parent_master_sha256:a.d?.master_sha256||job.correction_plan?.parent_master_sha256,
+      rework_decision_at:a.d?.at||null,
+      fallback_from_auto_hold:a.autoHold,
+      created_at:new Date().toISOString()};
     const written=await env.TROPICANA_EDITORIAL_R2.put(key(id,"rework/revision.json"),JSON.stringify(link),{
       onlyIf:new Headers({"If-None-Match":"*"}),httpMetadata:{contentType:"application/json"}
     });
