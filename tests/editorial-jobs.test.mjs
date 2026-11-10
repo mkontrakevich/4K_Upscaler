@@ -87,6 +87,7 @@ async function tech(h,job){
      parent_master_sha256:job.correction_plan.parent_master_sha256,
      remarks_sha256:job.correction_plan.remarks_sha256,
      changed_mean_absolute_fraction:.02,geometry_transform:"IDENTITY",
+     operations:[{op:"GLOBAL_EXPOSURE",ev:.25}],
      HDR_applied:false,generative_processing:false}:null
  }),{httpMetadata:{contentType:"application/json"}});
  return sha;
