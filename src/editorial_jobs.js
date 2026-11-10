@@ -68,7 +68,11 @@ async function verifiedTech(env,job) {
        q.correction?.parent_master_sha256!==job.correction_plan.parent_master_sha256||
        q.correction?.remarks_sha256!==job.correction_plan.remarks_sha256||
        q.master_sha256===job.correction_plan.parent_master_sha256||
-       q.correction?.changed_mean_absolute_fraction<.003||
+       (!Number.isFinite(q.correction?.changed_mean_absolute_fraction)||
+        q.correction.changed_mean_absolute_fraction<.003||
+        q.correction.changed_mean_absolute_fraction>.99)||
+       !Array.isArray(q.correction?.operations)||
+       q.correction.operations.length<1||
        q.correction?.correction_status!=="APPLIED"||
        q.correction?.geometry_transform!=="IDENTITY"||
        q.correction?.generative_processing!==false
