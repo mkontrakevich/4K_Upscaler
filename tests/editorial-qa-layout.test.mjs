@@ -24,18 +24,21 @@ test("current user QA is the primary wide workspace, archival V10 is collapsed",
   assert.doesNotMatch(html,/<details class="archive-bundle" id="legacy-archive" open/);
   assert.ok(html.indexOf('id="intake-preview-frame"')<archive);
 });
-test("live preview and source comparison are full width and preserve user QA controls",()=>{
-  for(const id of ["intake-id","intake-status","intake-preview-frame","intake-image-workspace","intake-source-frame",
-    "intake-source-preview","intake-show-source","intake-approve","intake-reject","intake-download",
-    "intake-handoff","intake-visual-checks","intake-rework-form","intake-revision-panel","intake-comparison"])
+test("primary QA shows source integrity proof separately from visual acceptance",()=>{
+  for(const id of ["intake-id","intake-status","intake-preview-frame","intake-image-workspace",
+    "intake-source-verification","intake-source-sha","intake-source-raster","intake-source-dimensions",
+    "intake-source-geometry","intake-source-visual-status","intake-source-visual-note",
+    "intake-approve","intake-reject","intake-download","intake-handoff","intake-visual-checks",
+    "intake-rework-form","intake-revision-panel","intake-comparison"])
     assert.ok(ids.includes(id),"missing "+id);
   assert.equal(ids.length,new Set(ids).size,"Duplicate element IDs");
-  assert.match(html,/qa-image-workspace\.is-compare\{grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
-  assert.match(html,/function toggleSourceComparison\(\)/);
-  assert.match(html,/fetch\(base\+"\/job\/source\?job="/);
-  assert.match(html,/e\("intake-show-source"\)\.addEventListener\("click",toggleSourceComparison\)/);
+  assert.doesNotMatch(html,/intake-show-source|toggleSourceComparison|Показать два кадра рядом/);
+  assert.ok(html.includes('fetch(base+"/job/source?job="'));
   assert.match(html,/id="intake-preview-native"/);
-  assert.match(html,/id="intake-source-native"/);
+  assert.match(html,/id="intake-split-source-native"/);
+  assert.ok(html.includes('function updateSourceVerification(data)'));
+  assert.match(html,/Проверка исходника/);
+  assert.match(html,/Автоматическая коррекция объектива/);
   assert.match(html,/id="intake-check-geometry"/);
   assert.match(html,/id="intake-check-materials"/);
   assert.match(html,/id="intake-rework-note"/);

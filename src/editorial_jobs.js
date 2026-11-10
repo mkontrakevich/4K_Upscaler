@@ -57,7 +57,15 @@ async function verifiedTech(env,job) {
   if(q.job_id!==job.job_id||q.source_sha256!==job.source_sha256||
      q.technical_status!=="TECHNICAL_QA_PASS"||q.HDR_applied!==false||
      q.virtual_exposures!==false||q.local_HDR!==false||
-     q.qa_checks?.HDR_ABSENT!=="PASS"||q.master_bit_depth!==16||
+     q.qa_checks?.HDR_ABSENT!=="PASS"||
+     q.qa_checks?.SOURCE_SHA256!=="PASS"||
+     q.qa_checks?.GEOMETRY_UNCHANGED!=="PASS"||
+     q.qa_checks?.TIFF_READBACK!=="PASS"||
+     q.geometry!=="IDENTITY_NO_CORRECTION"||
+     ![8,16].includes(q.source_signal_bits)||
+     !Number.isInteger(q.width)||q.width<320||
+     !Number.isInteger(q.height)||q.height<320||
+     q.master_bit_depth!==16||
      q.master_key!==expected||!SHA.test(String(q.master_sha256||""))||
      !Number.isInteger(q.master_bytes)||q.master_bytes<200000)return null;
   const head=await env.TROPICANA_EDITORIAL_R2.head(expected);
@@ -102,6 +110,32 @@ async function availability(env,job) {
   if(processObject){try{processing=await processObject.json()}catch{}}
   return {q,d,approved,imported,processing,revision};
 }
+function sourceVerification(job,a){
+  const q=a.q,checks=q?.qa_checks||{};
+  // This is a truthful record of automated checks, NOT an approval of photo quality.
+  const shaOK=checks.SOURCE_SHA256==="PASS"&&q?.source_sha256===job.source_sha256;
+  const rasterOK=shaOK&&[8,16].includes(q?.source_signal_bits)&&
+    Number.isInteger(q?.width)&&Number.isInteger(q?.height)&&
+    q.width>=320&&q.height>=320;
+  const geometryUnchanged=rasterOK&&checks.GEOMETRY_UNCHANGED==="PASS"&&
+    q.geometry==="IDENTITY_NO_CORRECTION";
+  return {
+    status:shaOK&&rasterOK?"TECHNICAL_PASS":q?"INCOMPLETE_EVIDENCE":"PENDING",
+    sha256_status:shaOK?"PASS":q?"NOT_CONFIRMED":"PENDING",
+    raster_status:rasterOK?"PASS":q?"NOT_CONFIRMED":"PENDING",
+    geometry_preservation:geometryUnchanged?"PASS":q?"NOT_CONFIRMED":"PENDING",
+    mime:job.mime,source_bytes:job.source_bytes,
+    source_sha256:job.source_sha256,
+    width:rasterOK?q.width:null,height:rasterOK?q.height:null,
+    signal_bits:rasterOK?q.source_signal_bits:null,
+    alpha_handling:rasterOK?(q.alpha_handling||"none"):null,
+    optical_correction:"NOT_PERFORMED",
+    perspective_correction:"NOT_PERFORMED",
+    visual_review:a.d?.decision==="APPROVED"?"INCLUDED_IN_APPROVED_TECH_QA":
+      a.d?.decision==="REWORK_REQUESTED"?"REWORK_REQUESTED":"PENDING_HUMAN_QA",
+    verified_proof_sha:q?.master_sha256||null
+  };
+}
 function state(job,a) {
   const status=a.d?.decision==="REWORK_REQUESTED"?(a.revision?"REVISION_CREATED":"REWORK_REQUESTED"):a.d?.decision==="REJECTED"?"REJECTED":a.imported?"MG4K_MASTER_IMPORTED":a.approved?"TECH_MASTER_APPROVED":a.q?"AWAITING_HUMAN_QA":a.processing?.status||job.status;
   return {
@@ -109,6 +143,7 @@ function state(job,a) {
     revision_num:job.revision_num||1,parent_job_id:job.parent_job_id||null,
     root_job_id:job.root_job_id||job.job_id,
     source_sha256:job.source_sha256,source_bytes:job.source_bytes,
+    source_verification:sourceVerification(job,a),
     status,stage:a.q?"technical_qa_ready":a.processing?.stage||job.stage,
     progress:a.q?100:typeof a.processing?.progress==="number"?a.processing.progress:null,
     progress_kind:a.q?"TECHNICAL_STAGE_COMPLETE":a.processing?.status==="PROCESSING"?"TECHNICAL_STAGE_MEASURED":"NOT_MEASURED",

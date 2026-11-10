@@ -96,8 +96,10 @@ test("split drag and keyboard-accessible native slider update same separator",as
 test("current QA UI has split tabs, native fullscreen, honest preview and unchanged QA gates",()=>{
  const pageIds=[...html.matchAll(/\bid="([^"]+)"/g)].map(x=>x[1]);
  assert.equal(new Set(pageIds).size,pageIds.length,"duplicate IDs");
+ assert.ok(!pageIds.includes("intake-show-source"));
+ assert.doesNotMatch(html,/Показать два кадра рядом|toggleSourceComparison/);
  for(const id of ["intake-split-viewer","intake-split-canvas","intake-split-range","intake-split-native",
-  "intake-split-fit","intake-split-fullscreen","intake-split-handle","intake-show-source",
+  "intake-split-fit","intake-split-fullscreen","intake-split-handle","intake-source-verification",
   "intake-approve","intake-reject","intake-download","intake-handoff","intake-check-geometry",
   "intake-check-materials","intake-rework-form"])assert.ok(pageIds.includes(id),id);
  for(const mode of ["source","tech","split"])
