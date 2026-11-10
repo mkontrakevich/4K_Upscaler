@@ -21,7 +21,20 @@
 .qa-checklist input[type=checkbox]{width:18px;height:18px;min-width:18px;accent-color:#20bade}
 .qa-panel .metric{grid-template-columns:minmax(100px,auto) minmax(0,1fr)}
 .qa-panel .metric strong{min-width:0;overflow-wrap:anywhere;text-align:right}
-.qa-compare-button{margin-top:8px}
+.qa-source-review{border:1px solid #34556c;background:#0a1c2a;margin:14px 0;padding:15px 17px}
+.qa-source-review-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.qa-source-review-head h3{font-size:16px;margin:0;font-weight:600}
+.qa-source-verified{font-weight:650;color:#aad4e9}
+.qa-source-verified[data-status="TECHNICAL_PASS"]{color:#80d8bb}
+.qa-source-verified[data-status="INCOMPLETE_EVIDENCE"]{color:#edba76}
+.qa-source-evidence{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:22px;row-gap:9px;margin-bottom:14px}
+.qa-source-evidence>div{display:flex;flex-direction:column;gap:1px;border-bottom:1px solid #284254;padding-bottom:7px;min-width:0}
+.qa-source-evidence span{color:#9bb5c8;font-size:12px}
+.qa-source-evidence strong{overflow-wrap:anywhere;font-size:13px;font-weight:550}
+.qa-source-boundary{border-top:1px solid #34556c;padding-top:10px;color:#c8d8e5;font-size:13px;line-height:1.5}
+.qa-source-boundary strong{color:#efbc73}
+@media(max-width:600px){.qa-source-evidence{grid-template-columns:1fr}}
+
 .qa-split-viewer{border:1px solid #365970;background:#081722;padding:12px;margin:14px 0;min-width:0}
 .qa-split-toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:space-between;margin-bottom:10px}
 .qa-split-modes{display:flex;gap:0;border:1px solid #34566b}
@@ -108,9 +121,23 @@
       <progress id="intake-progress" max="100" value="0" hidden class="qa-progress" style="width:100%;height:12px"></progress>
       <p id="intake-empty" class="note">Нет открытого задания в этом браузере. Для уже обработанной фотографии используйте персональную ссылку на QA — повторно загружать исходник не требуется.</p>
       <p id="intake-message" class="muted" role="status">Прогресс отображается только из серверных состояний, без искусственного таймера.</p>
-      <div class="flex qa-compare-button">
-        <button class="btn mutebtn" id="intake-show-source" disabled hidden type="button">Показать кадры рядом</button>
-      </div>
+
+      <section id="intake-source-verification" class="qa-source-review" aria-label="Протокол проверки исходного изображения" hidden>
+        <div class="qa-source-review-head">
+          <h3>01 / Проверка исходника</h3>
+          <strong id="intake-source-verified" class="qa-source-verified" data-status="PENDING">Ожидание проверки</strong>
+        </div>
+        <div class="qa-source-evidence">
+          <div><span>Контроль целостности SHA-256</span><strong id="intake-source-sha">Ожидание</strong></div>
+          <div><span>Формат и декодирование</span><strong id="intake-source-raster">Ожидание</strong></div>
+          <div><span>Размер / глубина сигнала</span><strong id="intake-source-dimensions">Не определено</strong></div>
+          <div><span>Геометрия при создании Tech Master</span><strong id="intake-source-geometry">Ожидание</strong></div>
+        </div>
+        <div class="qa-source-boundary">
+          <strong id="intake-source-visual-status">Визуальная проверка: ожидает решения</strong>
+          <div id="intake-source-visual-note">Автоматическая коррекция объектива, вертикалей и перспективы не выполнялась. Сохранение геометрии исходника не подтверждает правильность съёмки. Оцените композицию, фактуры и перспективу через Сплит и 100% масштаб.</div>
+        </div>
+      </section>
       <section id="intake-split-viewer" class="qa-split-viewer" hidden aria-label="Сравнение исходника и Tech Master в одной геометрии">
         <div class="qa-split-toolbar">
           <div class="qa-split-modes" role="group" aria-label="Режим просмотра">
@@ -145,11 +172,6 @@
         <p class="muted" id="intake-split-notice" role="status">Оба изображения должны иметь одинаковые пиксельные размеры для точного совмещения.</p>
       </section>
       <div class="qa-image-workspace" id="intake-image-workspace" hidden>
-        <figure class="frame" id="intake-source-frame" hidden>
-          <figcaption>01 / Оригинальный источник · Без генерации</figcaption>
-          <div class="imagebox"><img id="intake-source-preview" alt="Исходная фотография для сравнения с техническим мастером"></div>
-          <p><a id="intake-source-native" target="_blank" rel="noopener" href="#" hidden>Открыть исходник в полном разрешении</a></p>
-        </figure>
       <figure class="frame" id="intake-preview-frame" hidden style="margin:0">
         <figcaption>Проверка нового Tech Master · full resolution preview</figcaption>
         <div class="imagebox" style="aspect-ratio:auto;min-height:260px">
@@ -329,8 +351,6 @@ async function ensureIntakeSource(requestedId){
    throw Error("Неожиданный формат исходника");
  if(intakeSourceURL)URL.revokeObjectURL(intakeSourceURL);
  intakeSourceURL=URL.createObjectURL(blob);intakeSourceFor=requestedId;
- e("intake-source-preview").src=intakeSourceURL;
- e("intake-source-native").href=intakeSourceURL;e("intake-source-native").hidden=false;
  return intakeSourceURL;
 }
 async function startInlineSplit(id,masterSHA){
@@ -347,8 +367,6 @@ async function startInlineSplit(id,masterSHA){
   intakeSplitFor=key;
   e("intake-split-viewer").hidden=false;
   e("intake-image-workspace").hidden=true;
-  e("intake-source-frame").hidden=true;
-  e("intake-show-source").textContent="Показать два кадра рядом";
   const dims=viewer.getState();
   if(!dims.aligned)e("intake-message").textContent=
    "Внимание: разные размеры исходника и Tech Master. Сплит заблокирован; проверьте геометрию вручную.";
@@ -359,28 +377,6 @@ async function startInlineSplit(id,masterSHA){
    e("intake-message").textContent="Сплит недоступен: "+String(err.message||err);
   }
  }finally{if(intakeSplitRequest===key)intakeSplitRequest=""}
-}
-async function toggleSourceComparison(){
- if(!intakeId||!intakeState?.technical_master_ready)return;
- const grid=e("intake-image-workspace"),viewer=e("intake-split-viewer"),button=e("intake-show-source");
- button.disabled=true;
- try{
-  if(grid.hidden){
-   const src=await ensureIntakeSource(intakeId);
-   if(!src)return;
-   grid.hidden=false;e("intake-source-frame").hidden=false;
-   grid.classList.add("is-compare");
-   viewer.hidden=true;
-   button.textContent="Вернуться к сплиту";
-  }else{
-   grid.hidden=true;
-   if(intakeSplitFor===intakeId+intakeProof?.master_sha256){
-    viewer.hidden=false;getIntakeSplitViewer().setMode("split");
-   }else await startInlineSplit(intakeId,intakeProof?.master_sha256||"");
-   button.textContent="Показать два кадра рядом";
-  }
- }catch(err){e("intake-message").textContent=String(err.message||err)}
- finally{button.disabled=false}
 }
 
 function updateIntakeActions(){
@@ -406,13 +402,38 @@ async function loadIntakePreview(id,sha){
  intakePreviewReady=true;updateIntakeActions();
  startInlineSplit(id,sha).catch(err=>{e("intake-message").textContent=String(err)});
 }
+function updateSourceVerification(data){
+ const panel=e("intake-source-verification");
+ panel.hidden=false;
+ const v=data.source_verification||{};
+ const st=v.status||"PENDING";
+ const status=e("intake-source-verified");
+ status.dataset.status=st;
+ status.textContent=st==="TECHNICAL_PASS"?"Технически проверен · PASS":
+    st==="INCOMPLETE_EVIDENCE"?"Недостаточно доказательств":"Техническая проверка ожидается";
+ const result=x=>x==="PASS"?"PASS":x==="NOT_CONFIRMED"?"Не подтверждено":"Ожидание";
+ const short=String(v.source_sha256||data.source_sha256||"");
+ e("intake-source-sha").textContent=result(v.sha256_status)+(v.sha256_status==="PASS"?" · "+short.slice(0,16)+"…":"");
+ e("intake-source-raster").textContent=result(v.raster_status)+(v.raster_status==="PASS"?" · "+String(v.mime||"").replace("image/","").toUpperCase():"");
+ e("intake-source-dimensions").textContent=Number.isInteger(v.width)&&Number.isInteger(v.height)?
+    v.width+"×"+v.height+" px · "+v.signal_bits+" бит входного сигнала":"Данные ещё не подтверждены";
+ e("intake-source-geometry").textContent=v.geometry_preservation==="PASS"?
+   "PASS · пиксельная геометрия сохранена":result(v.geometry_preservation);
+ const visual=e("intake-source-visual-status");
+ visual.textContent=v.visual_review==="INCLUDED_IN_APPROVED_TECH_QA"?
+   "Визуальная QA: утверждено человеком":
+   v.visual_review==="REWORK_REQUESTED"?"Визуальная QA: возвращено на доработку":
+   "Визуальная QA: ожидает вашего решения";
+ e("intake-source-visual-note").textContent=
+   "Автоматическая коррекция объектива, вертикалей и перспективы не выполнялась. "+
+   "Проверка сохранности пикселей не означает проверку правильности архитектурной геометрии. "+
+   "Выполните оценку исходника и Tech Master через «Сплит» при 100% масштабе.";
+}
 function setIntake(data){
  intakeState=data;
  intakeProof=data.technical_qa||null;
  e("intake-empty").hidden=true;
- const sourceButton=e("intake-show-source");
- sourceButton.hidden=!data.technical_master_ready;
- sourceButton.disabled=!data.technical_master_ready;
+ updateSourceVerification(data);
  e("intake-id").textContent=(data.job_id||"—")+" · V"+(data.revision_num||1);
  const techTab=e("intake-split-viewer").querySelector('[data-intake-mode="tech"]');
  if(techTab)techTab.textContent="Tech V"+(data.revision_num||1);
@@ -469,10 +490,7 @@ function activateIntake(id){
  if(intakeSplitViewer)intakeSplitViewer.reset();
  e("intake-split-viewer").hidden=true;
  e("intake-image-workspace").hidden=true;
- e("intake-source-frame").hidden=true;
- e("intake-image-workspace").classList.remove("is-compare");
- e("intake-show-source").textContent="Показать два кадра рядом";
- e("intake-show-source").hidden=true;
+ e("intake-source-verification").hidden=true;
  if(intakeSourceURL){URL.revokeObjectURL(intakeSourceURL);intakeSourceURL=null}
  intakeSourceFor="";
  resetComparison();e("intake-rework-form").hidden=true;e("intake-revision-panel").hidden=true;
@@ -593,7 +611,6 @@ e("open-editorial").addEventListener("click",()=>{
 });
 e("upload").addEventListener("click",()=>upload().catch(err=>say(String(err))));e("load").addEventListener("click",()=>load().catch(err=>say(String(err))));e("refresh").addEventListener("click",()=>load().catch(err=>health().catch(e=>say(String(e)))));["intake-check-preview","intake-check-geometry","intake-check-materials"].forEach(id=>
  e(id).addEventListener("change",updateIntakeActions));
-e("intake-show-source").addEventListener("click",toggleSourceComparison);
 e("intake-approve").addEventListener("click",()=>intakeDecision("APPROVED"));
 e("intake-reject").addEventListener("click",()=>{e("intake-rework-form").hidden=false;e("intake-rework-note").focus()});
 e("intake-rework-submit").addEventListener("click",submitRework);
