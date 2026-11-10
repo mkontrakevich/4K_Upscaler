@@ -74,6 +74,18 @@ jobs:
           Path('/tmp/editorial-photo-inline.js').write_text('\\n'.join(blocks),encoding='utf-8')
           PY
           node --check /tmp/editorial-photo-inline.js
+          python - <<'PY'
+          from pathlib import Path
+          page=Path('site/editorial-photo.html').read_text(encoding='utf-8')
+          assert '[hidden]{display:none!important}' in page, 'hidden frame may bleed into empty UI'
+          assert 'id="intake-progress" max="100" value="0" hidden' in page, 'empty progress must not animate'
+          assert 'bar.value=0;bar.hidden=true;' in page
+          assert 'const recent=recentAuthorizedJob();' in page
+          assert 'if(recent)activateIntake(recent);' in page
+          assert 'jobToken(last)' in page, 'never auto restore unauthenticated jobs'
+          assert 'id="intake-empty"' in page
+          print('Editorial empty state and job restoration safeguards: PASS')
+          PY
           node --check site/editorial-compare.js
           node --check site/editorial-import.js
           python -m py_compile editorial_tech_service.py cloud_processor_service.py scripts/editorial_raster_technical_master.py
