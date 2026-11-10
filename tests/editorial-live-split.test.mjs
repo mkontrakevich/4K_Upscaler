@@ -76,7 +76,7 @@ test("dimensions mismatch blocks pixel overlay rather than inventing homography"
  assert.equal(f.viewer.getState().mode,"tech");
  assert.equal(f.buttons[2].disabled,true);
  f.viewer.setMode("split");assert.equal(f.viewer.getState().mode,"tech");
- assert.match(f.element("intake-split-notice").textContent,/Сплит заблокирован/);
+ assert.match(f.element("intake-split-notice").textContent,/сплит заблокирован/i);
 });
 test("bad decode does not produce a false ready state",async()=>{
  const f=getFixture();const ok=await f.viewer.setImages({sourceUrl:"source",techUrl:"bad"});
