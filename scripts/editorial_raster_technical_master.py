@@ -27,7 +27,7 @@ def sha(path: Path) -> str:
     return h.hexdigest()
 
 
-def prepare(source: Path, out: Path, job_id: str, expected_sha: str) -> dict:
+def prepare(source: Path, out: Path, job_id: str, expected_sha: str, correction_plan: Path | None = None) -> dict:
     if not UUID.fullmatch(job_id):
         raise ValueError("invalid_job_id")
     if not re.fullmatch(r"[0-9a-f]{64}", expected_sha, re.I):
@@ -61,6 +61,11 @@ def prepare(source: Path, out: Path, job_id: str, expected_sha: str) -> dict:
     signal_bits = 16 if rgb.dtype == np.uint16 else 8
     # No HDR, virtual exposures, tone recovery, resampling or new details.
     rgb16 = rgb if signal_bits == 16 else rgb.astype(np.uint16) * np.uint16(257)
+    correction = None
+    if correction_plan is not None:
+        from editorial_deterministic_correction import correct
+        payload = json.loads(correction_plan.read_text(encoding="utf-8"))
+        rgb16, correction = correct(rgb16, payload)
     out.mkdir(parents=True, exist_ok=True)
     master = out / "master16.tif"
     preview = out / "fullres-preview.jpg"
@@ -93,7 +98,9 @@ def prepare(source: Path, out: Path, job_id: str, expected_sha: str) -> dict:
         "master_bytes": master.stat().st_size,
         "preview_sha256": sha(preview),
         "preview_bytes": preview.stat().st_size,
-        "technical_version": "GENERIC_RASTER_NEUTRAL_NO_HDR_V1",
+        "technical_version": "DETERMINISTIC_PHOTOMETRIC_REWORK_V1" if correction else "GENERIC_RASTER_NEUTRAL_NO_HDR_V1",
+        "correction": correction,
+        "correction_status": correction["correction_status"] if correction else "NOT_REQUESTED",
         "technical_status": "TECHNICAL_QA_PASS",
         "HDR_applied": False,
         "virtual_exposures": False,
@@ -124,8 +131,9 @@ def main() -> None:
     p.add_argument("--out", type=Path, required=True)
     p.add_argument("--job-id", required=True)
     p.add_argument("--source-sha256", required=True)
+    p.add_argument("--correction-plan", type=Path, default=None)
     args = p.parse_args()
-    print(json.dumps(prepare(args.input, args.out, args.job_id, args.source_sha256),
+    print(json.dumps(prepare(args.input, args.out, args.job_id, args.source_sha256, args.correction_plan),
                      ensure_ascii=False, indent=2))
 
 
