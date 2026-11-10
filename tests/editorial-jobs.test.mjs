@@ -177,10 +177,11 @@ test("only verified technical NO HDR evidence unlocks QA; approval enables downl
    /editorial_import_forbidden/
  );
 });
-test("reject is final and cannot be overwritten or handed off",async()=>{
+test("rework decision is immutable and cannot be overwritten or handed off",async()=>{
  const h=harness(),job=await intake(h);
  const sha=await tech(h,job);
- let r=await h.call("/api/editorial/job/decision?job="+job.job_id,"POST",{decision:"REJECTED",master_sha256:sha});
+ let r=await h.call("/api/editorial/job/decision?job="+job.job_id,"POST",{decision:"REWORK_REQUESTED",master_sha256:sha,
+   categories:["geometry"],note:"Straighten verticals and retain unchanged architectural geometry"});
  assert.equal(r.status,200);
  r=await h.call("/api/editorial/job/decision?job="+job.job_id,"POST",{decision:"APPROVED",master_sha256:sha,checks:QA_CHECKS});
  assert.equal(r.status,409);
