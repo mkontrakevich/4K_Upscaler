@@ -14,14 +14,15 @@ const hex=bytes=>[...new Uint8Array(bytes)].map(v=>v.toString(16).padStart(2,"0"
 
 
 export async function createEditorialIntakeJob(env,session,{filename,mime,source_key,source_sha256,bytes,
-  parent_job_id=null,root_job_id=null,revision_num=1,inherit_access_hash=null}) {
+  parent_job_id=null,root_job_id=null,revision_num=1,inherit_access_hash=null,
+  correction_plan=null}) {
   const id=crypto.randomUUID();
   const token=crypto.randomUUID().replaceAll("-","")+crypto.randomUUID().replaceAll("-","");
   const stamp=new Date().toISOString();
   const record={
     schema:1,job_id:id,owner_session_id:session.id,
     access_hash:inherit_access_hash||await hash(new TextEncoder().encode(token)),
-    parent_job_id,root_job_id,revision_num,
+    parent_job_id,root_job_id,revision_num,correction_plan,
     project:"tropicana-park",filename:String(filename||"image").slice(0,128),
     mime,source_key,source_sha256,source_bytes:bytes,created_at:stamp,
     status:"AWAITING_TECH_PROCESSING",stage:"source_stored",progress:null,
@@ -61,6 +62,21 @@ async function verifiedTech(env,job) {
      q.qa_checks?.SOURCE_SHA256!=="PASS"||
      q.qa_checks?.GEOMETRY_UNCHANGED!=="PASS"||
      q.qa_checks?.TIFF_READBACK!=="PASS"||
+     (job.correction_plan&&(
+       q.correction_status!=="APPLIED"||
+       q.correction?.parent_job_id!==job.correction_plan.parent_job_id||
+       q.correction?.parent_master_sha256!==job.correction_plan.parent_master_sha256||
+       q.correction?.remarks_sha256!==job.correction_plan.remarks_sha256||
+       q.master_sha256===job.correction_plan.parent_master_sha256||
+       (!Number.isFinite(q.correction?.changed_mean_absolute_fraction)||
+        q.correction.changed_mean_absolute_fraction<.003||
+        q.correction.changed_mean_absolute_fraction>.99)||
+       !Array.isArray(q.correction?.operations)||
+       q.correction.operations.length<1||
+       q.correction?.correction_status!=="APPLIED"||
+       q.correction?.geometry_transform!=="IDENTITY"||
+       q.correction?.generative_processing!==false
+     ))||
      q.geometry!=="IDENTITY_NO_CORRECTION"||
      ![8,16].includes(q.source_signal_bits)||
      !Number.isInteger(q.width)||q.width<320||
@@ -92,7 +108,6 @@ async function decision(env,id) {
 }
 async function availability(env,job) {
   const q=await verifiedTech(env,job),d=await decision(env,job.job_id);
-  const revision=d?.decision==="REWORK_REQUESTED"?await revisionLink(env,job.job_id):null;
   const approved=!!(q&&d&&d.decision==="APPROVED"&&d.master_sha256===q.master_sha256&&d.source_sha256===q.source_sha256);
   let imported=null;
   if(approved&&env.TEMP_BUFFER_R7){
@@ -108,7 +123,10 @@ async function availability(env,job) {
   const processObject=await env.TROPICANA_EDITORIAL_R2.get(key(job.job_id,"processing-state.json"));
   let processing=null;
   if(processObject){try{processing=await processObject.json()}catch{}}
-  return {q,d,approved,imported,processing,revision};
+  const autoHold=!!(job.correction_plan&&processing?.status==="HOLD");
+  const revision=d?.decision==="REWORK_REQUESTED"||autoHold?
+    await revisionLink(env,job.job_id):null;
+  return {q,d,approved,imported,processing,revision,autoHold};
 }
 function sourceVerification(job,a){
   const q=a.q,checks=q?.qa_checks||{};
@@ -137,24 +155,44 @@ function sourceVerification(job,a){
   };
 }
 function state(job,a) {
-  const status=a.d?.decision==="REWORK_REQUESTED"?(a.revision?"REVISION_CREATED":"REWORK_REQUESTED"):a.d?.decision==="REJECTED"?"REJECTED":a.imported?"MG4K_MASTER_IMPORTED":a.approved?"TECH_MASTER_APPROVED":a.q?"AWAITING_HUMAN_QA":a.processing?.status||job.status;
+  const status=a.autoHold&&a.revision?"REVISION_CREATED":
+    a.d?.decision==="REWORK_REQUESTED"?(a.revision?"REVISION_CREATED":"REWORK_REQUESTED"):a.d?.decision==="REJECTED"?"REJECTED":a.imported?"MG4K_MASTER_IMPORTED":a.approved?"TECH_MASTER_APPROVED":a.q?"AWAITING_HUMAN_QA":a.processing?.status||job.status;
   return {
     ok:true,job_id:job.job_id,filename:job.filename,project:job.project,
     revision_num:job.revision_num||1,parent_job_id:job.parent_job_id||null,
     root_job_id:job.root_job_id||job.job_id,
     source_sha256:job.source_sha256,source_bytes:job.source_bytes,
     source_verification:sourceVerification(job,a),
+    technical_correction:job.correction_plan?{
+      requested:true,categories:job.correction_plan.categories,
+      status:a.q?.correction_status||a.processing?.status||"QUEUED",
+      evidence:a.q?.correction||null,
+      geometry_correction:"NOT_PERFORMED",
+      source_sha256:job.source_sha256,
+      parent_master_sha256:job.correction_plan.parent_master_sha256
+    }:null,
     status,stage:a.q?"technical_qa_ready":a.processing?.stage||job.stage,
     progress:a.q?100:typeof a.processing?.progress==="number"?a.processing.progress:null,
     progress_kind:a.q?"TECHNICAL_STAGE_COMPLETE":a.processing?.status==="PROCESSING"?"TECHNICAL_STAGE_MEASURED":"NOT_MEASURED",
-    message:a.d?.decision==="REWORK_REQUESTED"?"Мастер возвращён на доработку; требуется исправленный исходник новой версии.":a.q?"Технический мастер готов; требуется визуальное утверждение QA.":a.processing?.message||job.message,
+    message:a.d?.decision==="REWORK_REQUESTED"?
+      "Мастер возвращён на доработку. Для света/цвета доступна измеримая автоматическая коррекция; геометрия без опорных точек — HOLD.":
+      a.q?"Технический мастер готов; требуется визуальное утверждение QA.":a.processing?.message||job.message,
     error:a.processing?.error||null,
     technical_master_ready:!!a.q,technical_qa:a.q?{master_sha256:a.q.master_sha256,master_bytes:a.q.master_bytes,bit_depth:16,HDR_applied:false}:null,
     locks:job.locks,approval:a.d?{decision:a.d.decision,at:a.d.at}:null,
     can_approve:!!a.q&&!a.d,can_reject:!!a.q&&!a.d,
     can_rework:!!a.q&&!a.d,
-    can_upload_revision:a.d?.decision==="REWORK_REQUESTED"&&!a.revision,
-    rework:a.d?.decision==="REWORK_REQUESTED"?{categories:a.d.categories,note:a.d.note,at:a.d.at}:null,
+    can_upload_revision:(a.d?.decision==="REWORK_REQUESTED"||a.autoHold)&&!a.revision,
+    can_auto_rework:a.d?.decision==="REWORK_REQUESTED"&&!a.revision&&
+      Array.isArray(a.d.categories)&&a.d.categories.length>0&&
+      a.d.categories.every(c=>c==="exposure"||c==="color"),
+    auto_rework_hold_reason:a.d?.decision==="REWORK_REQUESTED"&&
+      a.d.categories?.some(c=>c!=="exposure"&&c!=="color")?
+      "Автоматическая коррекция перспективы, фактур и деталей требует проверенных опорных точек/профиля. HOLD.":"",
+    rework:a.d?.decision==="REWORK_REQUESTED"?{categories:a.d.categories,note:a.d.note,at:a.d.at}:
+      a.autoHold?{categories:job.correction_plan?.categories||[],
+        note:"Автоматическая коррекция остановлена по защитному HOLD. Загрузите исправленный исходник, чтобы создать новую версию.",
+        at:job.created_at}:null,
     next_revision_job_id:a.revision?.job_id||null,
     can_download:a.approved,can_handoff:a.approved&&!a.imported,
     mg4k_imported:!!a.imported,
@@ -234,8 +272,72 @@ export async function editorialJobApi(request,env,url,authorizeSession) {
     return new Response(src.body,{headers:{"content-type":job.mime,"cache-control":"private,no-store",
        "x-content-type-options":"nosniff"}});
   }
+  if(path==="/api/editorial/job/rework/auto"&&method==="POST"){
+    if(a.d?.decision!=="REWORK_REQUESTED"||!a.q)
+      return json({error:"rework_decision_and_verified_master_required"},409);
+    if(a.revision)return json({error:"revision_already_created",job_id:a.revision.job_id},409);
+    if(!Array.isArray(a.d.categories)||!a.d.categories.length)
+      return json({error:"invalid_rework_remarks"},409);
+    const unsupported=a.d.categories.filter(c=>c!=="exposure"&&c!=="color");
+    if(unsupported.length)
+      return json({ok:false,status:"HOLD",error:"verified_geometry_or_detail_references_required",
+        categories:unsupported,reason:"Нужны достоверные опорные геометрические точки/калибровка или работа специалиста. "+
+        "Без них автоматическая коррекция этих замечаний запрещена. Исходник и V1 сохранены.",
+        generation_started:false},409);
+    if(!env.TROPICANA_TECH_WORKFLOW)
+      return json({error:"free_technical_workflow_missing"},503);
+    const version=(job.revision_num||1)+1;
+    if(version>12)return json({error:"revision_limit_reached"},409);
+    const noteHash=await hash(new TextEncoder().encode(a.d.note));
+    const plan={schema:1,type:"DETERMINISTIC_TECH_REWORK",
+      parent_job_id:id,parent_master_sha256:a.d.master_sha256,
+      remarks_sha256:noteHash,categories:[...a.d.categories],
+      HDR_allowed:false,geometry_transform:"IDENTITY",
+      allowed_algorithm:"BOUNDED_GLOBAL_PHOTOMETRY",human_approval_required:true};
+    // V2 derives its pixels from the same original immutable source. This is
+    // NOT a second user upload; only the corrected technical output differs.
+    const child=await createEditorialIntakeJob(env,{id:job.owner_session_id},{
+      filename:job.filename,mime:job.mime,source_key:job.source_key,
+      source_sha256:job.source_sha256,bytes:job.source_bytes,
+      parent_job_id:id,root_job_id:job.root_job_id||id,revision_num:version,
+      inherit_access_hash:job.access_hash,correction_plan:plan
+    });
+    const link={schema:2,job_id:child.job_id,revision_num:version,
+      source_sha256:job.source_sha256,source_unchanged:true,
+      correction_type:plan.type,correction_categories:plan.categories,
+      remarks_sha256:noteHash,parent_master_sha256:a.d.master_sha256,
+      rework_decision_at:a.d.at,created_at:new Date().toISOString()};
+    const written=await env.TROPICANA_EDITORIAL_R2.put(
+      key(id,"rework/revision.json"),JSON.stringify(link),{
+      onlyIf:new Headers({"If-None-Match":"*"}),
+      httpMetadata:{contentType:"application/json"}});
+    if(!written){
+      await env.TROPICANA_EDITORIAL_R2.delete(key(child.job_id,"job.json"));
+      const winner=await revisionLink(env,id);
+      return json({error:"revision_race_conflict",job_id:winner?.job_id||null},409);
+    }
+    let started=false,error=null;
+    try{
+      await env.TROPICANA_TECH_WORKFLOW.create({id:child.job_id,params:{job_id:child.job_id}});
+      started=true;
+    }catch(err){
+      error=String(err?.message||err).slice(0,250);
+      await env.TROPICANA_EDITORIAL_R2.put(key(child.job_id,"processing-state.json"),
+        JSON.stringify({job_id:child.job_id,status:"HOLD",
+          stage:"correction_dispatch_hold",progress:null,error,
+          message:"Технический процессор не запущен. Генеративные кредиты не расходуются."}),
+        {httpMetadata:{contentType:"application/json"}});
+    }
+    return json({ok:true,job_id:child.job_id,parent_job_id:id,
+      revision_num:version,status:started?"QUEUED":"HOLD",
+      workflow_started:started,source_unchanged:true,
+      correction_type:"DETERMINISTIC_GLOBAL_PHOTOMETRY",
+      corrected_master_ready:false,generation_started:false,error},201);
+  }
+
   if(path==="/api/editorial/job/revision"&&method==="POST"){
-    if(a.d?.decision!=="REWORK_REQUESTED")return json({error:"rework_decision_required"},409);
+    if(a.d?.decision!=="REWORK_REQUESTED"&&!a.autoHold)
+      return json({error:"rework_decision_or_auto_hold_required"},409);
     if(a.revision)return json({error:"revision_already_created",job_id:a.revision.job_id},409);
     let form;try{form=await request.formData()}catch{return json({error:"invalid_revision_form"},400)}
     const file=form.get("file");
@@ -257,7 +359,10 @@ export async function editorialJobApi(request,env,url,authorizeSession) {
       inherit_access_hash:job.access_hash
     });
     const link={schema:1,job_id:child.job_id,revision_num:version,source_sha256:newSha,
-      parent_master_sha256:a.d.master_sha256,rework_decision_at:a.d.at,created_at:new Date().toISOString()};
+      parent_master_sha256:a.d?.master_sha256||job.correction_plan?.parent_master_sha256,
+      rework_decision_at:a.d?.at||null,
+      fallback_from_auto_hold:a.autoHold,
+      created_at:new Date().toISOString()};
     const written=await env.TROPICANA_EDITORIAL_R2.put(key(id,"rework/revision.json"),JSON.stringify(link),{
       onlyIf:new Headers({"If-None-Match":"*"}),httpMetadata:{contentType:"application/json"}
     });

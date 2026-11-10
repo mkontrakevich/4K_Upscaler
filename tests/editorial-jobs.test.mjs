@@ -61,6 +61,7 @@ async function intake(h){
 async function tech(h,job){
  const masterKey="tropicana-park/editorial-jobs/"+job.job_id+"/technical/master16.tif";
  const bytes=new Uint8Array(1100000);bytes.set([73,73,43,0]); // Genuine BigTIFF magic for negative file-type gate.
+ if(job.correction_plan)bytes[256]=23;
  const digest=await crypto.subtle.digest("SHA-256",bytes);
  const sha=[...new Uint8Array(digest)].map(v=>v.toString(16).padStart(2,"0")).join("");
  await h.r2.put(masterKey,bytes,{
@@ -79,7 +80,15 @@ async function tech(h,job){
    master_bit_depth:16,technical_status:"TECHNICAL_QA_PASS",
    width:640,height:480,source_signal_bits:8,geometry:"IDENTITY_NO_CORRECTION",
    HDR_applied:false,virtual_exposures:false,local_HDR:false,
-   qa_checks:{HDR_ABSENT:"PASS",SOURCE_SHA256:"PASS",GEOMETRY_UNCHANGED:"PASS",TIFF_READBACK:"PASS"}
+   qa_checks:{HDR_ABSENT:"PASS",SOURCE_SHA256:"PASS",GEOMETRY_UNCHANGED:"PASS",TIFF_READBACK:"PASS"},
+   correction_status:job.correction_plan?"APPLIED":"NOT_REQUESTED",
+   correction:job.correction_plan?{correction_status:"APPLIED",
+     parent_job_id:job.correction_plan.parent_job_id,
+     parent_master_sha256:job.correction_plan.parent_master_sha256,
+     remarks_sha256:job.correction_plan.remarks_sha256,
+     changed_mean_absolute_fraction:.02,geometry_transform:"IDENTITY",
+     operations:[{op:"GLOBAL_EXPOSURE",ev:.25}],
+     HDR_applied:false,generative_processing:false}:null
  }),{httpMetadata:{contentType:"application/json"}});
  return sha;
 }
@@ -366,4 +375,92 @@ test("concurrent corrected-source submissions allow exactly one version and clea
  assert.equal(childRecords.length,1);
  const revisedInputs=[...h.r2.map.keys()].filter(k=>k.startsWith("tropicana-park/editorial-revisions/"));
  assert.equal(revisedInputs.length,1);
+});
+
+test("auto rework geometry requires anchors; no V2 and no paid generation",async()=>{
+ const h=harness(),job=await intake(h),sha=await tech(h,job);
+ await h.call("/api/editorial/job/decision?job="+job.job_id,"POST",{
+   decision:"REWORK_REQUESTED",master_sha256:sha,
+   categories:["geometry"],note:"Correct facade perspective with verified architectural controls"
+ });
+ const st=await (await h.call("/api/editorial/job/status?job="+job.job_id)).json();
+ assert.equal(st.can_auto_rework,false);
+ const runs=[];h.env.TROPICANA_TECH_WORKFLOW={async create(x){runs.push(x);return x}};
+ const r=await h.call("/api/editorial/job/rework/auto?job="+job.job_id,"POST",{});
+ assert.equal(r.status,409);
+ const body=await r.json();assert.equal(body.status,"HOLD");
+ assert.equal(body.generation_started,false);
+ assert.equal(runs.length,0);
+ assert.equal(await h.r2.get("tropicana-park/editorial-jobs/"+job.job_id+"/rework/revision.json"),null);
+});
+
+test("auto V2 preserves source, changes master and keeps human QA mandatory",async()=>{
+ const h=harness(),job=await intake(h),sha=await tech(h,job);
+ await h.call("/api/editorial/job/decision?job="+job.job_id,"POST",{
+  decision:"REWORK_REQUESTED",master_sha256:sha,categories:["exposure","color"],
+  note:"Fix measured underexposure and neutral white balance"
+ });
+ const created=[];h.env.TROPICANA_TECH_WORKFLOW={async create(x){created.push(x);return x}};
+ const forbidden=await h.call("/api/editorial/job/rework/auto?job="+job.job_id,"POST",{},false);
+ assert.equal(forbidden.status,404);
+ const res=await h.call("/api/editorial/job/rework/auto?job="+job.job_id,"POST",{});
+ assert.equal(res.status,201);
+ const out=await res.json();assert.equal(out.source_unchanged,true);
+ assert.equal(out.generation_started,false);
+ assert.equal(created.length,1);assert.equal(created[0].id,out.job_id);
+ const k="tropicana-park/editorial-jobs/";
+ const original=await (await h.r2.get(k+job.job_id+"/job.json")).json();
+ const v2=await (await h.r2.get(k+out.job_id+"/job.json")).json();
+ assert.equal(v2.source_key,original.source_key);
+ assert.equal(v2.source_sha256,original.source_sha256);
+ assert.equal(v2.access_hash,original.access_hash);
+ assert.equal(v2.correction_plan.parent_master_sha256,sha);
+ assert.equal(v2.correction_plan.geometry_transform,"IDENTITY");
+ const unready=await (await h.call("/api/editorial/job/status?job="+v2.job_id,"GET",null,false,job.job_token)).json();
+ assert.equal(unready.can_approve,false);
+ const correctedSha=await tech(h,v2);assert.notEqual(correctedSha,sha);
+ const ready=await (await h.call("/api/editorial/job/status?job="+v2.job_id,"GET",null,false,job.job_token)).json();
+ assert.equal(ready.technical_master_ready,true);
+ assert.equal(ready.technical_correction.status,"APPLIED");
+ assert.equal(ready.can_handoff,false);
+ const blocked=await h.call("/api/editorial/job/handoff?job="+v2.job_id,"POST",null,false,job.job_token);
+ assert.equal(blocked.status,409);
+ const approved=await h.call("/api/editorial/job/decision?job="+v2.job_id,"POST",{
+  decision:"APPROVED",master_sha256:correctedSha,checks:QA_CHECKS
+ },false,job.job_token);
+ assert.equal(approved.status,200);
+ const status=await (await h.call("/api/editorial/job/status?job="+v2.job_id,"GET",null,false,job.job_token)).json();
+ assert.equal(status.can_handoff,true);
+ assert.equal((await h.call("/api/editorial/job/rework/auto?job="+job.job_id,"POST",{})).status,409);
+});
+
+test("auto correction HOLD permits controlled corrected-source V3 without overwriting V1/V2",async()=>{
+ const h=harness(),v1=await intake(h),sha=await tech(h,v1);
+ await h.call("/api/editorial/job/decision?job="+v1.job_id,"POST",{
+  decision:"REWORK_REQUESTED",master_sha256:sha,categories:["exposure"],
+  note:"Exposure needs measured correction; review all bright regions"
+ });
+ h.env.TROPICANA_TECH_WORKFLOW={async create(x){return {id:x.id}}};
+ const auto=await (await h.call("/api/editorial/job/rework/auto?job="+v1.job_id,"POST",{})).json();
+ const v2=auto.job_id;
+ await h.r2.put("tropicana-park/editorial-jobs/"+v2+"/processing-state.json",
+  JSON.stringify({job_id:v2,status:"HOLD",stage:"correction_hold",
+   message:"No safe change measurable",progress:null}),
+  {httpMetadata:{contentType:"application/json"}});
+ const state=await (await h.call("/api/editorial/job/status?job="+v2,"GET",null,false,v1.job_token)).json();
+ assert.equal(state.status,"HOLD");
+ assert.equal(state.can_upload_revision,true);
+ assert.equal(state.can_approve,false);
+ assert.equal(state.can_handoff,false);
+ const img=new Uint8Array(30000);img.set([137,80,78,71,13,10,26,10]);img[20]=92;
+ const created=await h.formCall("/api/editorial/job/revision?job="+v2,img,false,v1.job_token);
+ assert.equal(created.status,201);
+ const result=await created.json();
+ assert.equal(result.revision_num,3);
+ const v3=await (await h.r2.get("tropicana-park/editorial-jobs/"+result.job_id+"/job.json")).json();
+ assert.equal(v3.parent_job_id,v2);
+ assert.equal(v3.root_job_id,v1.job_id);
+ assert.equal(v3.correction_plan,null);
+ const old=await (await h.r2.get("tropicana-park/editorial-jobs/"+v1.job_id+"/technical/decision.json")).json();
+ assert.equal(old.decision,"REWORK_REQUESTED");
 });
