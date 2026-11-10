@@ -13,6 +13,8 @@ function mockR2(){
      const digest=await crypto.subtle.digest("SHA-256",bytes);
      const valid=!opts.sha256||[...new Uint8Array(opts.sha256)].every((b,i)=>b===new Uint8Array(digest)[i]);
      if(!valid)throw Error("r2_sha256_mismatch");
+     // Emulate R2's atomic onlyIf at commit, not before asynchronous hashing.
+     if(opts.onlyIf?.get?.("If-None-Match")==="*"&&map.has(key))return null;
      map.set(key,{bytes,httpMetadata:opts.httpMetadata||{},customMetadata:opts.customMetadata||{},
        checksums:opts.sha256?{sha256:digest}:{}});
      return {key,size:bytes.length};
