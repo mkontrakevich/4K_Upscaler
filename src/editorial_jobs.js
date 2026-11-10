@@ -108,13 +108,6 @@ async function decision(env,id) {
 }
 async function availability(env,job) {
   const q=await verifiedTech(env,job),d=await decision(env,job.job_id);
-  const autoHold=!!(job.correction_plan&&await (async()=>{
-    const v=await env.TROPICANA_EDITORIAL_R2.get(key(job.job_id,"processing-state.json"));
-    if(!v)return false;
-    try{return (await v.json()).status==="HOLD"}catch{return false}
-  })());
-  const revision=d?.decision==="REWORK_REQUESTED"||autoHold?
-    await revisionLink(env,job.job_id):null;
   const approved=!!(q&&d&&d.decision==="APPROVED"&&d.master_sha256===q.master_sha256&&d.source_sha256===q.source_sha256);
   let imported=null;
   if(approved&&env.TEMP_BUFFER_R7){
@@ -130,8 +123,10 @@ async function availability(env,job) {
   const processObject=await env.TROPICANA_EDITORIAL_R2.get(key(job.job_id,"processing-state.json"));
   let processing=null;
   if(processObject){try{processing=await processObject.json()}catch{}}
-  return {q,d,approved,imported,processing,revision,
-    autoHold:!!(job.correction_plan&&processing?.status==="HOLD")};
+  const autoHold=!!(job.correction_plan&&processing?.status==="HOLD");
+  const revision=d?.decision==="REWORK_REQUESTED"||autoHold?
+    await revisionLink(env,job.job_id):null;
+  return {q,d,approved,imported,processing,revision,autoHold};
 }
 function sourceVerification(job,a){
   const q=a.q,checks=q?.qa_checks||{};
