@@ -43,3 +43,22 @@
 - Проверка в production на **синтетическом** техническом изображении после деплоя не должна создавать human APPROVED или платный генеративный job.
 
 **Невыполненный следующий приоритет — Geometry Engine:** проверенный профиль объектива или корректные линии/опорные точки, проектная гомография с действительной проверкой маски и архитектурной непротиворечивости, нейтральная RAW-проявка без HDR. Для текущего PNG нельзя достоверно угадать camera/lens distortion. Не заявлять автоматическую архитектурную коррекцию до независимой QA и real RAW/anchors acceptance.
+
+## Production acceptance 10.11.2026
+
+**Релиз:** PR [#55](https://github.com/mkontrakevich/4K_Upscaler/pull/55) squash-merged `d895dd331e24a7c7c3fd6628a5f26c8aeda28ba3`. Editorial Photo CI и 4K Upscaler Regression Guard — SUCCESS на head SHA `fb7c5051d2c20eb53148eeff44b0872951e8d46f`. Cloudflare Worker deployment 10.11.2026 15:55:17 UTC, Container application v140 (обновлён 15:56:55 UTC).
+
+**Положительная реальная синтетическая проверка:**
+- Workflow `d68a2b53-867d-412f-8e1b-8f54494183ac` завершился `complete`.
+- Синтетический исходник PNG 500×500, 373 972 байта, SHA-256 `a9b772cd31f3f01a16d3eda99fc8fac02dc5cb48d6002b6bbf73c2567f891635`.
+- Система измерила медиану яркости 0.13529 и **действительно применила +0.30 EV** (bounded); средняя абсолютная доля изменения пикселей 0.0312744; клиппинг 0.
+- Сохранены R2 `technical/master16.tif` **1 500 480 байт**, SHA-256 `327bb1dd662157ef4c93acff45d7bfdb74fd840b4ec3434da18aa330c754f2ae`, `fullres-preview.jpg` 61 876 байт, QA-протокол с исходным SHA и исправленной операцией.
+- `technical_status=TECHNICAL_QA_PASS`, `correction_status=APPLIED`, `HDR_applied=false`, `generative_processing=false`, `geometry_transform=IDENTITY`, `human_visual_QA=PENDING`. Нет автоматического утверждения.
+
+**Отрицательная проверка HOLD:**
+- Workflow `c47d90df-fd98-4b29-8f63-6b0d3fe83792` с равномерно освещённым синтетическим RGB 500×500 завершился `complete` c `status=HOLD` и `CORRECTION_HOLD:exposure_is_not_objectively_out_of_safe_range`.
+- **TIFF/preview/QA PASS для этой V2 НЕ создано**; в R2 остались только job и `processing-state.json`. Тем самым не создаётся ложный мастер.
+
+**Подтверждена неприкосновенность реального задания пользователя:** `d2bca507-dbb9-4c2f-aaab-8413f2180492` остаётся `AWAITING_HUMAN_QA`; TIFF 19 776 522 байта и JPEG-превью 809 742 байта на месте, файлов `technical/decision.json`, `rework/revision.json` и `handoff.json` нет. Оригинальный пользовательский QA не подменён синтетическими проверками.
+
+**Итог релизного гейта:** функционирование реальной ограниченной фотометрической коррекции на Cloudflare в production подтверждено. Коррекция оптики и перспективы остаётся HOLD без доказанного профиля/опорных точек. Утверждать «полностью готовую архитектурную коррекцию» нельзя.
