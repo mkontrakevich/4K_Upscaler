@@ -17,6 +17,7 @@ function mockR2(){
        checksums:opts.sha256?{sha256:digest}:{}});
      return {key,size:bytes.length};
    },
+   async delete(keys){for(const key of Array.isArray(keys)?keys:[keys])map.delete(key)},
    async head(key){const obj=map.get(key);return obj?{size:obj.bytes.length,httpMetadata:obj.httpMetadata,customMetadata:obj.customMetadata,checksums:obj.checksums}:null},
    async get(key,opts={}){const obj=map.get(key);if(!obj)return null;
      const part=opts.range?obj.bytes.subarray(opts.range.offset||0,(opts.range.offset||0)+(opts.range.length||obj.bytes.length)):obj.bytes;
@@ -303,4 +304,28 @@ test("unchanged revised source is held; already rejected job requires new versio
  const r=await h.formCall("/api/editorial/job/revision?job="+job.job_id,bytes);
  assert.equal(r.status,409);
  const result=await r.json();assert.equal(result.error,"revision_source_unchanged");
+});
+
+test("concurrent corrected-source submissions allow exactly one version and clean up losers",async()=>{
+ const h=harness(),job=await intake(h),sha=await tech(h,job);
+ await h.call("/api/editorial/job/decision?job="+job.job_id,"POST",{
+   decision:"REWORK_REQUESTED",master_sha256:sha,categories:["detail"],
+   note:"Correct image detail without sharpening architectural edges unnaturally"
+ });
+ const launched=[];
+ h.env.TROPICANA_TECH_WORKFLOW={async create(x){launched.push(x.id);return {id:x.id}}};
+ const image=new Uint8Array(25000);image[0]=137;image[1]=80;image[88]=73;
+ const path="/api/editorial/job/revision?job="+job.job_id;
+ const [a,b]=await Promise.all([h.formCall(path,image),h.formCall(path,image)]);
+ const statuses=[a.status,b.status].sort();
+ assert.deepEqual(statuses,[201,409]);
+ assert.equal(launched.length,1);
+ const root="tropicana-park/editorial-jobs/"+job.job_id+"/";
+ const revision=await (await h.r2.get(root+"rework/revision.json")).json();
+ assert.equal(launched[0],revision.job_id);
+ const childRecords=[...h.r2.map.keys()].filter(k=>k.startsWith("tropicana-park/editorial-jobs/")&&
+   k.endsWith("/job.json")&&k!==root+"job.json");
+ assert.equal(childRecords.length,1);
+ const revisedInputs=[...h.r2.map.keys()].filter(k=>k.startsWith("tropicana-park/editorial-revisions/"));
+ assert.equal(revisedInputs.length,1);
 });
