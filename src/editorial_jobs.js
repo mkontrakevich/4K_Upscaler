@@ -4,19 +4,24 @@ const idOK = id => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
 const json = (x,status=200) => Response.json(x,{status,headers:{"cache-control":"private, no-store","x-content-type-options":"nosniff"}});
 const key = (id,name) => ROOT+id+"/"+name;
 const SHA = /^[0-9a-f]{64}$/;
+const DEFECT_TYPES=Object.freeze(["geometry","exposure","color","detail","materials","other"]);
+const MAX_UPLOAD=8*1024*1024;
+
 const LOCKS = Object.freeze({geometry:"HARD",perspective:"HARD",composition:"HARD",architecture:"HARD",materials:"HARD",identity:"HARD",source:"IMMUTABLE",hdr:"PROHIBITED",generation:"HUMAN_QA_FIRST"});
 const hash = async bytes => [...new Uint8Array(await crypto.subtle.digest("SHA-256",bytes))].map(v=>v.toString(16).padStart(2,"0")).join("");
 const shaBytes=hex=>Uint8Array.from(String(hex).match(/.{2}/g)||[],h=>parseInt(h,16)).buffer;
 const hex=bytes=>[...new Uint8Array(bytes)].map(v=>v.toString(16).padStart(2,"0")).join("");
 
 
-export async function createEditorialIntakeJob(env,session,{filename,mime,source_key,source_sha256,bytes}) {
+export async function createEditorialIntakeJob(env,session,{filename,mime,source_key,source_sha256,bytes,
+  parent_job_id=null,root_job_id=null,revision_num=1,inherit_access_hash=null}) {
   const id=crypto.randomUUID();
   const token=crypto.randomUUID().replaceAll("-","")+crypto.randomUUID().replaceAll("-","");
   const stamp=new Date().toISOString();
   const record={
     schema:1,job_id:id,owner_session_id:session.id,
-    access_hash:await hash(new TextEncoder().encode(token)),
+    access_hash:inherit_access_hash||await hash(new TextEncoder().encode(token)),
+    parent_job_id,root_job_id,revision_num,
     project:"tropicana-park",filename:String(filename||"image").slice(0,128),
     mime,source_key,source_sha256,source_bytes:bytes,created_at:stamp,
     status:"AWAITING_TECH_PROCESSING",stage:"source_stored",progress:null,
@@ -24,7 +29,7 @@ export async function createEditorialIntakeJob(env,session,{filename,mime,source
     locks:LOCKS,auto_generation:false,technical_master_ready:false
   };
   await env.TROPICANA_EDITORIAL_R2.put(key(id,"job.json"),JSON.stringify(record),{httpMetadata:{contentType:"application/json"}});
-  return {...record,job_token:token};
+  return {...record,job_token:inherit_access_hash?null:token};
 }
 
 async function owned(request,env,url,authorizeSession,id) {
@@ -69,12 +74,17 @@ async function verifiedTech(env,job) {
   if(!tiff)return null;
   return q;
 }
+async function revisionLink(env,id){
+  const o=await env.TROPICANA_EDITORIAL_R2.get(key(id,"rework/revision.json"));
+  return o?o.json():null;
+}
 async function decision(env,id) {
   const o=await env.TROPICANA_EDITORIAL_R2.get(key(id,"technical/decision.json"));
   return o?o.json():null;
 }
 async function availability(env,job) {
   const q=await verifiedTech(env,job),d=await decision(env,job.job_id);
+  const revision=d?.decision==="REWORK_REQUESTED"?await revisionLink(env,job.job_id):null;
   const approved=!!(q&&d&&d.decision==="APPROVED"&&d.master_sha256===q.master_sha256&&d.source_sha256===q.source_sha256);
   let imported=null;
   if(approved&&env.TEMP_BUFFER_R7){
@@ -90,21 +100,27 @@ async function availability(env,job) {
   const processObject=await env.TROPICANA_EDITORIAL_R2.get(key(job.job_id,"processing-state.json"));
   let processing=null;
   if(processObject){try{processing=await processObject.json()}catch{}}
-  return {q,d,approved,imported,processing};
+  return {q,d,approved,imported,processing,revision};
 }
 function state(job,a) {
-  const status=a.d?.decision==="REJECTED"?"REJECTED":a.imported?"MG4K_MASTER_IMPORTED":a.approved?"TECH_MASTER_APPROVED":a.q?"AWAITING_HUMAN_QA":a.processing?.status||job.status;
+  const status=a.d?.decision==="REWORK_REQUESTED"?(a.revision?"REVISION_CREATED":"REWORK_REQUESTED"):a.d?.decision==="REJECTED"?"REJECTED":a.imported?"MG4K_MASTER_IMPORTED":a.approved?"TECH_MASTER_APPROVED":a.q?"AWAITING_HUMAN_QA":a.processing?.status||job.status;
   return {
     ok:true,job_id:job.job_id,filename:job.filename,project:job.project,
+    revision_num:job.revision_num||1,parent_job_id:job.parent_job_id||null,
+    root_job_id:job.root_job_id||job.job_id,
     source_sha256:job.source_sha256,source_bytes:job.source_bytes,
     status,stage:a.q?"technical_qa_ready":a.processing?.stage||job.stage,
     progress:a.q?100:typeof a.processing?.progress==="number"?a.processing.progress:null,
     progress_kind:a.q?"TECHNICAL_STAGE_COMPLETE":a.processing?.status==="PROCESSING"?"TECHNICAL_STAGE_MEASURED":"NOT_MEASURED",
-    message:a.q?"Технический мастер готов; требуется визуальное утверждение QA.":a.processing?.message||job.message,
+    message:a.d?.decision==="REWORK_REQUESTED"?"Мастер возвращён на доработку; требуется исправленный исходник новой версии.":a.q?"Технический мастер готов; требуется визуальное утверждение QA.":a.processing?.message||job.message,
     error:a.processing?.error||null,
     technical_master_ready:!!a.q,technical_qa:a.q?{master_sha256:a.q.master_sha256,master_bytes:a.q.master_bytes,bit_depth:16,HDR_applied:false}:null,
     locks:job.locks,approval:a.d?{decision:a.d.decision,at:a.d.at}:null,
     can_approve:!!a.q&&!a.d,can_reject:!!a.q&&!a.d,
+    can_rework:!!a.q&&!a.d,
+    can_upload_revision:a.d?.decision==="REWORK_REQUESTED"&&!a.revision,
+    rework:a.d?.decision==="REWORK_REQUESTED"?{categories:a.d.categories,note:a.d.note,at:a.d.at}:null,
+    next_revision_job_id:a.revision?.job_id||null,
     can_download:a.approved,can_handoff:a.approved&&!a.imported,
     mg4k_imported:!!a.imported,
     mg4k_import_url:a.imported?"/?editorial_import="+encodeURIComponent(job.job_id):null,
@@ -175,6 +191,65 @@ export async function editorialJobApi(request,env,url,authorizeSession) {
   const a=await availability(env,job);
 
   if(path==="/api/editorial/job/status"&&method==="GET")return json(state(job,a));
+  if(path==="/api/editorial/job/source"&&method==="GET"){
+    const src=await env.TROPICANA_EDITORIAL_R2.get(job.source_key);
+    if(!src||src.size!==job.source_bytes||src.customMetadata?.sha256!==job.source_sha256||
+       !["image/jpeg","image/png","image/webp"].includes(src.httpMetadata?.contentType))
+      return json({error:"source_integrity_HOLD"},409);
+    return new Response(src.body,{headers:{"content-type":job.mime,"cache-control":"private,no-store",
+       "x-content-type-options":"nosniff"}});
+  }
+  if(path==="/api/editorial/job/revision"&&method==="POST"){
+    if(a.d?.decision!=="REWORK_REQUESTED")return json({error:"rework_decision_required"},409);
+    if(a.revision)return json({error:"revision_already_created",job_id:a.revision.job_id},409);
+    let form;try{form=await request.formData()}catch{return json({error:"invalid_revision_form"},400)}
+    const file=form.get("file");
+    if(!file||typeof file.arrayBuffer!=="function"||file.size<10000||file.size>MAX_UPLOAD||
+      !["image/jpeg","image/png","image/webp"].includes(file.type))
+      return json({error:"valid_revision_image_required_max_8mb"},400);
+    const bytes=await file.arrayBuffer(),newSha=await hash(bytes);
+    if(newSha===job.source_sha256)return json({error:"revision_source_unchanged"},409);
+    const version=(job.revision_num||1)+1;
+    if(version>12)return json({error:"revision_limit_reached"},409);
+    const sourceKey="tropicana-park/editorial-revisions/"+id+"/"+crypto.randomUUID()+
+      (file.type==="image/png"?".png":file.type==="image/webp"?".webp":".jpg");
+    await env.TROPICANA_EDITORIAL_R2.put(sourceKey,bytes,{
+      httpMetadata:{contentType:file.type},customMetadata:{sha256:newSha,parent_job_id:id}
+    });
+    const child=await createEditorialIntakeJob(env,{id:job.owner_session_id},{
+      filename:file.name,mime:file.type,source_key:sourceKey,source_sha256:newSha,bytes:bytes.byteLength,
+      parent_job_id:id,root_job_id:job.root_job_id||id,revision_num:version,
+      inherit_access_hash:job.access_hash
+    });
+    const link={schema:1,job_id:child.job_id,revision_num:version,source_sha256:newSha,
+      parent_master_sha256:a.d.master_sha256,rework_decision_at:a.d.at,created_at:new Date().toISOString()};
+    const written=await env.TROPICANA_EDITORIAL_R2.put(key(id,"rework/revision.json"),JSON.stringify(link),{
+      onlyIf:new Headers({"If-None-Match":"*"}),httpMetadata:{contentType:"application/json"}
+    });
+    if(!written){
+      // Only the successful conditional writer owns the new revision. The
+      // losing request has not launched Workflow, so delete its unlinked input.
+      await env.TROPICANA_EDITORIAL_R2.delete([sourceKey,key(child.job_id,"job.json")]);
+      const winner=await revisionLink(env,id);
+      return json({error:"revision_race_conflict",job_id:winner?.job_id||null},409);
+    }
+    let started=false,error=null;
+    try{
+      if(!env.TROPICANA_TECH_WORKFLOW)throw Error("technical_workflow_missing");
+      await env.TROPICANA_TECH_WORKFLOW.create({id:child.job_id,params:{job_id:child.job_id}});
+      started=true;
+    }catch(err){
+      error=String(err?.message||err).slice(0,180);
+      await env.TROPICANA_EDITORIAL_R2.put(key(child.job_id,"processing-state.json"),
+        JSON.stringify({job_id:child.job_id,status:"FAILED",stage:"workflow_dispatch_failed",
+          progress:null,error,message:"Техническая обработка V"+version+" не запущена."}),
+        {httpMetadata:{contentType:"application/json"}});
+    }
+    return json({ok:true,job_id:child.job_id,parent_job_id:id,root_job_id:job.root_job_id||id,
+      revision_num:version,source_sha256:newSha,
+      status:started?"QUEUED":"FAILED",workflow_started:started,error,generation_started:false},201);
+  }
+
   if(path==="/api/editorial/job/preview"&&method==="GET"){
     if(!a.q)return json({error:"technical_preview_not_ready"},409);
     const obj=await env.TROPICANA_EDITORIAL_R2.get(key(id,"technical/fullres-preview.jpg"));
@@ -199,7 +274,13 @@ export async function editorialJobApi(request,env,url,authorizeSession) {
 
   if(path==="/api/editorial/job/decision"&&method==="POST") {
     let input;try{input=await request.json()}catch{return json({error:"invalid_json"},400)}
-    if(!["APPROVED","REJECTED"].includes(input?.decision))return json({error:"invalid_decision"},400);
+    if(!["APPROVED","REWORK_REQUESTED"].includes(input?.decision))return json({error:"invalid_decision"},400);
+    const categories=input?.categories;
+    if(input.decision==="REWORK_REQUESTED"&&
+       (!Array.isArray(categories)||!categories.length||categories.length>DEFECT_TYPES.length||
+        new Set(categories).size!==categories.length||!categories.every(x=>DEFECT_TYPES.includes(x))||
+        typeof input.note!=="string"||input.note.trim().length<12||input.note.trim().length>2000))
+      return json({error:"structured_rework_remarks_required"},400);
     if(input.decision==="APPROVED"&&
       !["preview_reviewed","geometry","materials","no_hdr"].every(k=>input.checks?.[k]===true))
       return json({error:"visual_QA_checklist_required"},400);
@@ -208,7 +289,10 @@ export async function editorialJobApi(request,env,url,authorizeSession) {
     if(input.master_sha256!==a.q.master_sha256)return json({error:"master_hash_mismatch"},409);
     const d={schema:1,job_id:id,decision:input.decision,source_sha256:job.source_sha256,
       master_sha256:a.q.master_sha256,at:new Date().toISOString(),owner_session_id:owner.session.id,
-      visual_qa_checks:input.decision==="APPROVED"?input.checks:null};
+      visual_qa_checks:input.decision==="APPROVED"?input.checks:null,
+      categories:input.decision==="REWORK_REQUESTED"?categories:null,
+      note:input.decision==="REWORK_REQUESTED"?input.note.trim():null,
+      revision_num:job.revision_num||1};
     const result=await env.TROPICANA_EDITORIAL_R2.put(key(id,"technical/decision.json"),JSON.stringify(d),{
       onlyIf:new Headers({"If-None-Match":"*"}),httpMetadata:{contentType:"application/json"}
     });

@@ -49,9 +49,44 @@
       </div>
       <div class="flex">
         <button class="btn" id="intake-approve" disabled type="button">Утвердить Tech Master</button>
-        <button class="btn mutebtn" id="intake-reject" disabled type="button">Отклонить QA</button>
+        <button class="btn mutebtn" id="intake-reject" disabled type="button">Вернуть на доработку</button>
         <button class="btn mutebtn" id="intake-download" disabled type="button">Скачать 16-bit TIFF</button>
         <button class="btn" id="intake-handoff" disabled type="button">Подготовить передачу в MG 4K</button>
+      </div>
+
+      <div id="intake-rework-form" hidden style="margin:14px 0;padding:14px;border:1px solid #4d6070">
+        <h3>Замечания к техническому мастеру</h3>
+        <p class="muted">Выберите категории и обязательно опишите конкретные изменения. Исходник и отклонённая версия сохраняются.</p>
+        <div class="fields" id="intake-rework-categories">
+          <label><input type="checkbox" value="geometry"> Геометрия, перспектива, вертикали</label>
+          <label><input type="checkbox" value="exposure"> Свет и экспозиция</label>
+          <label><input type="checkbox" value="color"> Цвет и баланс белого</label>
+          <label><input type="checkbox" value="detail"> Резкость и детализация</label>
+          <label><input type="checkbox" value="materials"> Материалы и фактуры</label>
+          <label><input type="checkbox" value="other"> Другое</label>
+        </div>
+        <label for="intake-rework-note">Что исправить</label>
+        <textarea id="intake-rework-note" rows="3" maxlength="2000" placeholder="Например: исправить наклон вертикалей без изменения габаритов здания; сохранить естественный свет и фактуры." style="width:100%"></textarea>
+        <div class="flex">
+          <button class="btn" id="intake-rework-submit" type="button">Зафиксировать возврат</button>
+          <button class="btn mutebtn" id="intake-rework-cancel" type="button">Отмена</button>
+        </div>
+      </div>
+      <div id="intake-revision-panel" hidden style="margin:14px 0;padding:14px;border:1px solid #4d6070">
+        <h3 id="intake-revision-title">Исправленная версия</h3>
+        <p class="muted" id="intake-rework-remarks"></p>
+        <p class="muted">Загрузите исправленный исходник JPG/PNG/WebP (до 8 МБ). V1 остаётся неизменной, новая версия проходит технический Workflow и повторное QA. Изменения геометрии автоматически не выполняются.</p>
+        <input id="intake-revision-file" type="file" accept="image/jpeg,image/png,image/webp">
+        <button class="btn" id="intake-revision-submit" type="button">Создать исправленную версию</button>
+        <a id="intake-next-revision-link" href="#" hidden>Открыть созданную версию</a>
+      </div>
+      <div id="intake-comparison" hidden style="margin:12px 0">
+        <h3>Контроль версий — исходник / предыдущий мастер / текущий мастер</h3>
+        <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px">
+          <figure><figcaption>Исходник</figcaption><a id="compare-original-link" target="_blank" rel="noopener"><img id="compare-original" alt="Исходная фотография" style="width:100%;object-fit:contain"></a></figure>
+          <figure><figcaption>Предыдущий Tech Master</figcaption><a id="compare-previous-link" target="_blank" rel="noopener"><img id="compare-previous" alt="Предыдущая версия мастера" style="width:100%;object-fit:contain"></a></figure>
+          <figure><figcaption>Текущий Tech Master</figcaption><a id="compare-current-link" target="_blank" rel="noopener"><img id="compare-current" alt="Новая версия мастера" style="width:100%;object-fit:contain"></a></figure>
+        </div>
       </div>
       <p><a id="intake-import-link" href="#" hidden>Открыть импортированный мастер в MG 4K</a></p>
       <p class="note">Для JPEG/PNG/WebP автоматически формируется нейтральный 16-битный TIFF без HDR. Если источник был 8-битным, дополнительная информация не возникает. Художественная генерация разрешается только отдельно после QA.</p>
@@ -96,6 +131,8 @@
 <script>
 const base="/api/editorial";let session=null,sourceURL=null;
 let intakeId="",intakeProof=null,intakePoll=null,intakeBusy=false,intakeState=null;
+let comparisonFor="",comparisonUrls=[];
+
 let intakePreviewURL=null,intakePreviewFor="",intakePreviewReady=false;
 const sessionStore="mg4k-editorial-session-v1";
 const jobAccessStore="mg4k-editorial-job-access-v1";
@@ -109,15 +146,48 @@ function persistJobToken(id,token){
  for(const [k,v] of Object.entries(current)){if(!v||now-Number(v.at||0)>30*24*3600*1000)delete current[k]}
  current[id]={token,at:now};localStorage.setItem(jobAccessStore,JSON.stringify(current));
 }
-const readableStatus={AWAITING_TECH_PROCESSING:"Ожидает технической обработки",QUEUED:"В очереди технической обработки",PROCESSING:"Выполняется Tech Master",TECHNICAL_QA_PENDING:"Проверка технического мастера",AWAITING_HUMAN_QA:"Ожидает визуального QA",TECH_MASTER_APPROVED:"Мастер утверждён",MG4K_MASTER_IMPORTED:"Импортировано в MG 4K",FAILED:"Ошибка технической обработки",REJECTED:"QA отклонён"};
+const readableStatus={AWAITING_TECH_PROCESSING:"Ожидает технической обработки",QUEUED:"В очереди технической обработки",PROCESSING:"Выполняется Tech Master",TECHNICAL_QA_PENDING:"Проверка технического мастера",AWAITING_HUMAN_QA:"Ожидает визуального QA",TECH_MASTER_APPROVED:"Мастер утверждён",MG4K_MASTER_IMPORTED:"Импортировано в MG 4K",FAILED:"Ошибка технической обработки",REWORK_REQUESTED:"Возвращено на доработку",REVISION_CREATED:"Исправленная версия создана",REJECTED:"QA отклонён"};
 function sessionHeaders(extra={}){return {...extra,"x-session-id":session?.id||"","x-session-token":session?.token||"","x-editorial-job-token":jobToken(intakeId)}}
 function reviewChecksPass(){
  return intakePreviewReady&&["intake-check-preview","intake-check-geometry","intake-check-materials"].every(id=>e(id).checked);
 }
+function reworkCategories(){
+ return [...e("intake-rework-categories").querySelectorAll("input:checked")].map(x=>x.value);
+}
+function resetComparison(){
+ for(const url of comparisonUrls)URL.revokeObjectURL(url);
+ comparisonUrls=[];comparisonFor="";
+ e("intake-comparison").hidden=true;
+}
+async function loadComparison(data){
+ if(!data.parent_job_id||!data.technical_master_ready)return;
+ const signature=data.job_id+data.technical_qa?.master_sha256;
+ if(comparisonFor===signature)return;
+ comparisonFor=signature;
+ const entries=[
+  ["original",data.root_job_id||data.parent_job_id,"source"],
+  ["previous",data.parent_job_id,"preview"],
+  ["current",data.job_id,"preview"]
+ ];
+ try{
+  for(const [name,id,kind] of entries){
+   const response=await fetch(base+"/job/"+kind+"?job="+encodeURIComponent(id),{
+    headers:{...sessionHeaders(),"x-editorial-job-token":jobToken(data.job_id)},
+    cache:"no-store"
+   });
+   if(!response.ok)throw Error("Сравнение версий недоступно: "+kind+" HTTP "+response.status);
+   const objectURL=URL.createObjectURL(await response.blob());
+   comparisonUrls.push(objectURL);
+   e("compare-"+name).src=objectURL;e("compare-"+name+"-link").href=objectURL;
+  }
+  e("intake-comparison").hidden=false;
+ }catch(err){comparisonFor="";e("intake-message").textContent=String(err)}
+}
 function updateIntakeActions(){
  const data=intakeState||{};
- for(const [id,flag] of [["intake-approve","can_approve"],["intake-reject","can_reject"],["intake-download","can_download"],["intake-handoff","can_handoff"]])
+ for(const [id,flag] of [["intake-approve","can_approve"],["intake-reject","can_rework"],["intake-download","can_download"],["intake-handoff","can_handoff"]])
    e(id).disabled=intakeBusy||data[flag]!==true||(id==="intake-approve"&&!reviewChecksPass());
+ e("intake-revision-submit").disabled=intakeBusy||data.can_upload_revision!==true;
 }
 async function loadIntakePreview(id,sha){
  if(intakePreviewFor===id+sha)return;
@@ -137,7 +207,7 @@ async function loadIntakePreview(id,sha){
 function setIntake(data){
  intakeState=data;
  intakeProof=data.technical_qa||null;
- e("intake-id").textContent=data.job_id||"—";
+ e("intake-id").textContent=(data.job_id||"—")+" · V"+(data.revision_num||1);
  e("intake-status").textContent=readableStatus[data.status]||data.status||"Неизвестно";
  e("intake-stage").textContent=data.stage||"—";
  const bar=e("intake-progress");
@@ -147,6 +217,17 @@ function setIntake(data){
    data.mg4k_imported?"Утверждённый TIFF находится в MG 4K. Генерация не запускалась.":data.message||"";
  const link=e("intake-import-link");if(link){
    link.hidden=!data.mg4k_imported;link.href=data.mg4k_import_url||"#";
+ }
+ const form=e("intake-rework-form");
+ if(!data.can_rework)form.hidden=true;
+ const revisionPanel=e("intake-revision-panel");
+ revisionPanel.hidden=!data.rework;
+ if(data.rework){
+   e("intake-revision-title").textContent="Возврат V"+(data.revision_num||1)+" → V"+((data.revision_num||1)+1);
+   e("intake-rework-remarks").textContent=(data.rework.categories||[]).join(", ")+" — "+(data.rework.note||"");
+   const link=e("intake-next-revision-link");
+   link.hidden=!data.next_revision_job_id;
+   link.href="#intake="+encodeURIComponent(data.next_revision_job_id||"");
  }
  updateIntakeActions();
 }
@@ -158,19 +239,55 @@ async function intakeStatus(){
  if(!r.ok){e("intake-status").textContent="Ошибка "+r.status;e("intake-message").textContent=d.error||"Нет доступа к заданию";return}
  setIntake(d);
  if(d.technical_master_ready&&d.technical_qa?.master_sha256)
-  loadIntakePreview(id,d.technical_qa.master_sha256).catch(err=>{
+  loadIntakePreview(intakeId,d.technical_qa.master_sha256).catch(err=>{
    e("intake-message").textContent=String(err);updateIntakeActions();
   });
+ if(d.parent_job_id&&d.technical_master_ready)
+  loadComparison(d).catch(err=>{e("intake-message").textContent=String(err)});
 }
 function activateIntake(id){
  if(!/^[0-9a-f-]{36}$/i.test(id))return;
  intakeId=id;location.hash="intake="+encodeURIComponent(id);
  intakePreviewFor="";intakePreviewReady=false;intakeState=null;
+ resetComparison();e("intake-rework-form").hidden=true;e("intake-revision-panel").hidden=true;
  ["intake-check-preview","intake-check-geometry","intake-check-materials"].forEach(k=>e(k).checked=false);
  e("intake-visual-checks").hidden=true;e("intake-preview-frame").hidden=true;
  if(intakePoll)clearInterval(intakePoll);
  intakeStatus().catch(err=>{e("intake-message").textContent=String(err)});
  intakePoll=setInterval(()=>intakeStatus().catch(err=>{e("intake-message").textContent=String(err)}),5000);
+}
+async function submitRework(){
+ if(!intakeProof?.master_sha256||!intakeId)return;
+ const categories=reworkCategories(),note=e("intake-rework-note").value.trim();
+ if(!categories.length||note.length<12)
+  return e("intake-message").textContent="Выберите минимум одну категорию и напишите замечание не короче 12 символов.";
+ intakeBusy=true;updateIntakeActions();e("intake-rework-submit").disabled=true;
+ try{
+  const res=await fetch(base+"/job/decision?job="+encodeURIComponent(intakeId),{
+   method:"POST",headers:sessionHeaders({"content-type":"application/json"}),
+   body:JSON.stringify({decision:"REWORK_REQUESTED",master_sha256:intakeProof.master_sha256,categories,note})
+  });
+  const result=await res.json();if(!res.ok)throw Error(result.error||"Не удалось вернуть на доработку");
+  e("intake-rework-form").hidden=true;await intakeStatus();
+ }catch(err){e("intake-message").textContent=String(err)}
+ finally{intakeBusy=false;e("intake-rework-submit").disabled=false;updateIntakeActions()}
+}
+async function uploadRevision(){
+ if(!intakeId||!intakeState?.can_upload_revision)return;
+ const file=e("intake-revision-file").files[0];
+ if(!file||file.size>8*1024*1024)return e("intake-message").textContent="Выберите исправленное изображение до 8 МБ";
+ const parentId=intakeId,parentToken=jobToken(parentId);
+ const form=new FormData();form.append("file",file);
+ intakeBusy=true;updateIntakeActions();
+ try{
+  const res=await fetch(base+"/job/revision?job="+encodeURIComponent(parentId),{
+   method:"POST",headers:sessionHeaders(),body:form
+  });
+  const result=await res.json();if(!res.ok)throw Error(result.error||"revision upload failed");
+  if(parentToken)persistJobToken(result.job_id,parentToken);
+  activateIntake(result.job_id);
+ }catch(err){e("intake-message").textContent=String(err)}
+ finally{intakeBusy=false;updateIntakeActions()}
 }
 async function intakeDecision(decision){
  if(!intakeProof?.master_sha256||!intakeId)return;
@@ -251,7 +368,19 @@ e("open-editorial").addEventListener("click",()=>{
 e("upload").addEventListener("click",()=>upload().catch(err=>say(String(err))));e("load").addEventListener("click",()=>load().catch(err=>say(String(err))));e("refresh").addEventListener("click",()=>load().catch(err=>health().catch(e=>say(String(e)))));["intake-check-preview","intake-check-geometry","intake-check-materials"].forEach(id=>
  e(id).addEventListener("change",updateIntakeActions));
 e("intake-approve").addEventListener("click",()=>intakeDecision("APPROVED"));
-e("intake-reject").addEventListener("click",()=>intakeDecision("REJECTED"));
+e("intake-reject").addEventListener("click",()=>{e("intake-rework-form").hidden=false;e("intake-rework-note").focus()});
+e("intake-rework-submit").addEventListener("click",submitRework);
+e("intake-rework-cancel").addEventListener("click",()=>e("intake-rework-form").hidden=true);
+e("intake-revision-submit").addEventListener("click",uploadRevision);
+e("intake-next-revision-link").addEventListener("click",evt=>{
+ evt.preventDefault();
+ const id=new URL(e("intake-next-revision-link").href).hash.replace(/^#intake=/,"");
+ if(id&&intakeId){
+  const parentToken=jobToken(intakeId);
+  if(parentToken)persistJobToken(id,parentToken);
+  activateIntake(id);
+ }
+});
 e("intake-download").addEventListener("click",intakeDownload);
 e("intake-handoff").addEventListener("click",intakeHandoff);
 const hash=new URLSearchParams(location.hash.slice(1));
