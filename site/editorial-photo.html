@@ -247,6 +247,15 @@ let comparisonFor="",comparisonUrls=[];
 
 let intakePreviewURL=null,intakePreviewFor="",intakePreviewReady=false;
 let intakeSourceURL=null,intakeSourceFor="";
+let intakeSplitViewer=null,intakeSplitFor="",intakeSplitRequest="";
+function getIntakeSplitViewer(){
+ if(!intakeSplitViewer){
+  if(!window.MG4KEditorialSplit)throw Error("Модуль сплит-сравнения не загрузился");
+  intakeSplitViewer=window.MG4KEditorialSplit.create(document.getElementById("intake-split-viewer"));
+ }
+ return intakeSplitViewer;
+}
+
 const sessionStore="mg4k-editorial-session-v1";
 const jobAccessStore="mg4k-editorial-job-access-v1";
 const lastJobStore="mg4k-editorial-last-job-v1";
@@ -308,36 +317,72 @@ async function loadComparison(data){
   e("intake-comparison").hidden=false;
  }catch(err){comparisonFor="";e("intake-message").textContent=String(err)}
 }
+async function ensureIntakeSource(requestedId){
+ if(intakeSourceFor===requestedId&&intakeSourceURL)return intakeSourceURL;
+ const response=await fetch(base+"/job/source?job="+encodeURIComponent(requestedId),{
+   headers:sessionHeaders(),cache:"no-store"
+ });
+ if(!response.ok)throw Error("Исходник не доступен (HTTP "+response.status+")");
+ const blob=await response.blob();
+ if(intakeId!==requestedId)return null;
+ if(!["image/jpeg","image/png","image/webp"].includes(blob.type))
+   throw Error("Неожиданный формат исходника");
+ if(intakeSourceURL)URL.revokeObjectURL(intakeSourceURL);
+ intakeSourceURL=URL.createObjectURL(blob);intakeSourceFor=requestedId;
+ e("intake-source-preview").src=intakeSourceURL;
+ e("intake-source-native").href=intakeSourceURL;e("intake-source-native").hidden=false;
+ return intakeSourceURL;
+}
+async function startInlineSplit(id,masterSHA){
+ const key=id+masterSHA;
+ if(intakeSplitFor===key||intakeSplitRequest===key)return;
+ intakeSplitRequest=key;
+ try{
+  const sourceUrl=await ensureIntakeSource(id);
+  if(intakeId!==id||intakePreviewFor!==key||!sourceUrl||!intakePreviewURL)return;
+  const viewer=getIntakeSplitViewer();
+  const ok=await viewer.setImages({sourceUrl,techUrl:intakePreviewURL});
+  if(intakeId!==id||intakePreviewFor!==key)return;
+  if(!ok)throw Error("Не удалось декодировать пару для сплита");
+  intakeSplitFor=key;
+  e("intake-split-viewer").hidden=false;
+  e("intake-image-workspace").hidden=true;
+  e("intake-source-frame").hidden=true;
+  e("intake-show-source").textContent="Показать два кадра рядом";
+  const dims=viewer.getState();
+  if(!dims.aligned)e("intake-message").textContent=
+   "Внимание: разные размеры исходника и Tech Master. Сплит заблокирован; проверьте геометрию вручную.";
+ }catch(err){
+  if(intakeId===id){
+   e("intake-image-workspace").hidden=false;
+   e("intake-preview-frame").hidden=false;
+   e("intake-message").textContent="Сплит недоступен: "+String(err.message||err);
+  }
+ }finally{if(intakeSplitRequest===key)intakeSplitRequest=""}
+}
 async function toggleSourceComparison(){
  if(!intakeId||!intakeState?.technical_master_ready)return;
- const sourceFrame=e("intake-source-frame"), grid=e("intake-image-workspace"),button=e("intake-show-source");
- if(!sourceFrame.hidden){
-  sourceFrame.hidden=true;grid.classList.remove("is-compare");
-  button.textContent="Сравнить с исходником";return;
- }
- const requestedId=intakeId;
+ const grid=e("intake-image-workspace"),viewer=e("intake-split-viewer"),button=e("intake-show-source");
  button.disabled=true;
  try{
-  if(intakeSourceFor!==requestedId){
-   const response=await fetch(base+"/job/source?job="+encodeURIComponent(requestedId),{
-     headers:sessionHeaders(),cache:"no-store"
-   });
-   if(!response.ok)throw Error("Исходник не доступен для сравнения (HTTP "+response.status+")");
-   const blob=await response.blob();
-   if(intakeId!==requestedId)return;
-   if(!["image/jpeg","image/png","image/webp"].includes(blob.type))throw Error("Неожиданный формат исходника");
-   if(intakeSourceURL)URL.revokeObjectURL(intakeSourceURL);
-   intakeSourceURL=URL.createObjectURL(blob);intakeSourceFor=requestedId;
-   e("intake-source-preview").src=intakeSourceURL;
-   e("intake-source-preview").classList.add("ready");
-   e("intake-source-native").href=intakeSourceURL;
-   e("intake-source-native").hidden=false;
+  if(grid.hidden){
+   const src=await ensureIntakeSource(intakeId);
+   if(!src)return;
+   grid.hidden=false;e("intake-source-frame").hidden=false;
+   grid.classList.add("is-compare");
+   viewer.hidden=true;
+   button.textContent="Вернуться к сплиту";
+  }else{
+   grid.hidden=true;
+   if(intakeSplitFor===intakeId+intakeProof?.master_sha256){
+    viewer.hidden=false;getIntakeSplitViewer().setMode("split");
+   }else await startInlineSplit(intakeId,intakeProof?.master_sha256||"");
+   button.textContent="Показать два кадра рядом";
   }
-  sourceFrame.hidden=false;grid.classList.add("is-compare");
-  button.textContent="Скрыть сравнение";
- }catch(error){e("intake-message").textContent=String(error?.message||error)}
+ }catch(err){e("intake-message").textContent=String(err.message||err)}
  finally{button.disabled=false}
 }
+
 function updateIntakeActions(){
  const data=intakeState||{};
  for(const [id,flag] of [["intake-approve","can_approve"],["intake-reject","can_rework"],["intake-download","can_download"],["intake-handoff","can_handoff"]])
@@ -351,6 +396,7 @@ async function loadIntakePreview(id,sha){
   headers:sessionHeaders(),cache:"no-store"});
  if(!r.ok){intakePreviewFor="";throw Error("Превью технического мастера пока недоступно")}
  const blob=await r.blob();if(blob.type!=="image/jpeg")throw Error("Некорректный формат превью");
+ if(intakeId!==id||intakePreviewFor!==id+sha)return;
  if(intakePreviewURL)URL.revokeObjectURL(intakePreviewURL);
  intakePreviewURL=URL.createObjectURL(blob);
  e("intake-preview").src=intakePreviewURL;
@@ -358,6 +404,7 @@ async function loadIntakePreview(id,sha){
  e("intake-preview-frame").hidden=false;
  e("intake-visual-checks").hidden=false;
  intakePreviewReady=true;updateIntakeActions();
+ startInlineSplit(id,sha).catch(err=>{e("intake-message").textContent=String(err)});
 }
 function setIntake(data){
  intakeState=data;
@@ -416,9 +463,13 @@ function activateIntake(id){
  if(jobToken(id))try{localStorage.setItem(lastJobStore,id)}catch{}
 
  intakePreviewFor="";intakePreviewReady=false;intakeState=null;
+ intakeSplitFor="";intakeSplitRequest="";
+ if(intakeSplitViewer)intakeSplitViewer.reset();
+ e("intake-split-viewer").hidden=true;
+ e("intake-image-workspace").hidden=true;
  e("intake-source-frame").hidden=true;
  e("intake-image-workspace").classList.remove("is-compare");
- e("intake-show-source").textContent="Сравнить с исходником";
+ e("intake-show-source").textContent="Показать два кадра рядом";
  e("intake-show-source").hidden=true;
  if(intakeSourceURL){URL.revokeObjectURL(intakeSourceURL);intakeSourceURL=null}
  intakeSourceFor="";
