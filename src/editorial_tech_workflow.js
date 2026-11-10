@@ -68,7 +68,11 @@ async function proof(env,id,job){
        qa.correction?.parent_master_sha256!==job.correction_plan.parent_master_sha256||
        qa.correction?.remarks_sha256!==job.correction_plan.remarks_sha256||
        qa.master_sha256===job.correction_plan.parent_master_sha256||
-       qa.correction?.changed_mean_absolute_fraction<.003||
+       (!Number.isFinite(qa.correction?.changed_mean_absolute_fraction)||
+        qa.correction.changed_mean_absolute_fraction<.003||
+        qa.correction.changed_mean_absolute_fraction>.99)||
+       !Array.isArray(qa.correction?.operations)||
+       qa.correction.operations.length<1||
        qa.correction?.correction_status!=="APPLIED"||
        qa.correction?.geometry_transform!=="IDENTITY"||
        qa.correction?.HDR_applied!==false||
