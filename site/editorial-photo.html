@@ -22,6 +22,29 @@
 .qa-panel .metric{grid-template-columns:minmax(100px,auto) minmax(0,1fr)}
 .qa-panel .metric strong{min-width:0;overflow-wrap:anywhere;text-align:right}
 .qa-compare-button{margin-top:8px}
+.qa-split-viewer{border:1px solid #365970;background:#081722;padding:12px;margin:14px 0;min-width:0}
+.qa-split-toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:space-between;margin-bottom:10px}
+.qa-split-modes{display:flex;gap:0;border:1px solid #34566b}
+.qa-split-modes button{background:#102739;border:0;border-right:1px solid #34566b;color:#a6bbcf;padding:9px 15px;cursor:pointer;min-width:95px}
+.qa-split-modes button:last-child{border-right:0}
+.qa-split-modes button.active,.qa-split-modes button[aria-pressed=true]{background:#235370;color:#fff}
+.qa-split-modes button:focus-visible,.qa-split-viewer button:focus-visible,.qa-split-viewer input:focus-visible{outline:2px solid #5bd7f5;outline-offset:2px}
+.qa-split-tools{display:flex;gap:6px;flex-wrap:wrap}
+.qa-split-tools button{padding:8px 12px;background:#102739;border:1px solid #34566b;color:#e4f2fa;cursor:pointer}
+.qa-split-viewport{position:relative;height:clamp(330px,60vh,750px);background:#06111d;overflow:hidden;min-width:0;border:1px solid #34566b}
+.qa-split-viewport canvas{width:100%;height:100%;display:block;touch-action:none;cursor:crosshair}
+.qa-split-handle{pointer-events:none;position:absolute;top:0;bottom:0;width:28px;transform:translateX(-50%);z-index:2;border-left:0;display:flex;align-items:center;justify-content:center}
+.qa-split-handle:before{content:"";height:100%;width:2px;background:#e7f9ff}
+.qa-split-handle:after{content:"↔";position:absolute;background:#fff;color:#092133;border-radius:50%;width:30px;height:30px;display:grid;place-items:center;font-size:20px;box-shadow:0 1px 8px #000a}
+.qa-split-range{display:flex;align-items:center;gap:12px;margin-top:10px;color:#b1cde1;font-size:13px}
+.qa-split-range input{flex:1;min-width:80px;accent-color:#34c9ee}
+.qa-split-meta{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;padding-top:10px;font-size:12px;color:#a8c0d3}
+.qa-split-meta p{margin:0;max-width:75ch}
+.qa-split-viewer:fullscreen{background:#06111c;padding:16px;display:flex;flex-direction:column}
+.qa-split-viewer:fullscreen .qa-split-viewport{height:auto;min-height:0;flex:1}
+.qa-split-viewer:fullscreen .qa-split-toolbar{flex:none}
+@media(max-width:600px){.qa-split-viewport{height:min(60vh,540px)}.qa-split-modes{width:100%}.qa-split-modes button{flex:1;min-width:0;padding:10px 6px}.qa-split-tools button{flex:1}.qa-split-meta{font-size:11px}}
+
 .archive-bundle{border:1px solid #294055;background:#091b2a}
 .archive-bundle>summary{cursor:pointer;padding:17px 20px;color:#c2d2dd;list-style-position:inside;display:list-item}
 .archive-bundle>summary strong{color:#fff;margin-right:10px}
@@ -86,9 +109,42 @@
       <p id="intake-empty" class="note">Нет открытого задания в этом браузере. Для уже обработанной фотографии используйте персональную ссылку на QA — повторно загружать исходник не требуется.</p>
       <p id="intake-message" class="muted" role="status">Прогресс отображается только из серверных состояний, без искусственного таймера.</p>
       <div class="flex qa-compare-button">
-        <button class="btn mutebtn" id="intake-show-source" disabled hidden type="button">Сравнить с исходником</button>
+        <button class="btn mutebtn" id="intake-show-source" disabled hidden type="button">Показать кадры рядом</button>
       </div>
-      <div class="qa-image-workspace" id="intake-image-workspace">
+      <section id="intake-split-viewer" class="qa-split-viewer" hidden aria-label="Сравнение исходника и Tech Master в одной геометрии">
+        <div class="qa-split-toolbar">
+          <div class="qa-split-modes" role="group" aria-label="Режим просмотра">
+            <button type="button" data-intake-mode="source" aria-pressed="false">Исходник</button>
+            <button type="button" data-intake-mode="tech" aria-pressed="false">Tech V1</button>
+            <button type="button" data-intake-mode="split" aria-pressed="true">Сплит</button>
+          </div>
+          <div class="qa-split-tools">
+            <button type="button" id="intake-split-fit">По размеру</button>
+            <button type="button" id="intake-split-native">100%</button>
+            <button type="button" id="intake-split-minus" aria-label="Уменьшить масштаб">−</button>
+            <button type="button" id="intake-split-plus" aria-label="Увеличить масштаб">+</button>
+            <button type="button" id="intake-split-fullscreen">Полный экран</button>
+          </div>
+        </div>
+        <div id="intake-split-viewport" class="qa-split-viewport">
+          <canvas id="intake-split-canvas" role="img" aria-label="Сплит исходника и технического мастера. Для управления границей используйте ползунок ниже." tabindex="0"></canvas>
+          <div id="intake-split-handle" class="qa-split-handle" aria-hidden="true" style="left:50%"></div>
+        </div>
+        <div class="qa-split-range">
+          <span>Исходник</span>
+          <input type="range" id="intake-split-range" min="2" max="98" step="1" value="50" aria-label="Положение вертикальной границы сплита">
+          <span>Tech Master</span><output id="intake-split-percent" for="intake-split-range">50%</output>
+        </div>
+        <div class="qa-split-meta">
+          <p id="intake-split-zoom-label" aria-live="polite">Ожидание двух изображений</p>
+          <div class="flex">
+            <a id="intake-split-source-native" href="#" target="_blank" rel="noopener">Исходник · оригинал</a>
+            <a id="intake-split-tech-native" href="#" target="_blank" rel="noopener">Tech Master · 8-bit preview</a>
+          </div>
+        </div>
+        <p class="muted" id="intake-split-notice" role="status">Оба изображения должны иметь одинаковые пиксельные размеры для точного совмещения.</p>
+      </section>
+      <div class="qa-image-workspace" id="intake-image-workspace" hidden>
         <figure class="frame" id="intake-source-frame" hidden>
           <figcaption>01 / Оригинальный источник · Без генерации</figcaption>
           <div class="imagebox"><img id="intake-source-preview" alt="Исходная фотография для сравнения с техническим мастером"></div>
@@ -183,6 +239,7 @@
     </details>
   </section>
 </div></main>
+<script src="/editorial-split.js"></script>
 <script>
 const base="/api/editorial";let session=null,sourceURL=null;
 let intakeId="",intakeProof=null,intakePoll=null,intakeBusy=false,intakeState=null;
