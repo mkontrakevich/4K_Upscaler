@@ -213,6 +213,12 @@
       </div>
       <div id="intake-revision-panel" hidden style="margin:14px 0;padding:14px;border:1px solid #4d6070">
         <h3 id="intake-revision-title">Исправленная версия</h3>
+        <section id="intake-auto-panel" style="border:1px solid #3b6178;padding:13px;margin:10px 0">
+          <strong>Автоматическая техническая коррекция → V2</strong>
+          <p class="muted">Работает только при измеримых отклонениях глобальной экспозиции или нейтрального баланса белого. Без HDR и ИИ. Для архитектурной перспективы, оптики, деталей и материалов без достоверной калибровки — HOLD, а не выдуманное исправление.</p>
+          <p class="muted" id="intake-auto-eligibility">Условия коррекции проверяются после регистрации замечаний.</p>
+          <button class="btn" id="intake-auto-rework" type="button" disabled>Запустить безопасную коррекцию</button>
+        </section>
         <p class="muted" id="intake-rework-remarks"></p>
         <p class="muted">Загрузите исправленный исходник JPG/PNG/WebP (до 8 МБ). V1 остаётся неизменной, новая версия проходит технический Workflow и повторное QA. Изменения геометрии автоматически не выполняются.</p>
         <input id="intake-revision-file" type="file" accept="image/jpeg,image/png,image/webp">
@@ -227,6 +233,7 @@
           <figure><figcaption>Текущий Tech Master</figcaption><a id="compare-current-link" target="_blank" rel="noopener"><img id="compare-current" alt="Новая версия мастера" style="width:100%;object-fit:contain"></a></figure>
         </div>
       </div>
+      <p id="intake-correction-report" class="note" hidden></p>
       <p><a id="intake-import-link" href="#" hidden>Открыть импортированный мастер в MG 4K</a></p>
       <p class="note">Для JPEG/PNG/WebP автоматически формируется нейтральный 16-битный TIFF без HDR. Если источник был 8-битным, дополнительная информация не возникает. Художественная генерация разрешается только отдельно после QA.</p>
     </section>
@@ -302,7 +309,7 @@ function persistJobToken(id,token){
  for(const [k,v] of Object.entries(current)){if(!v||now-Number(v.at||0)>30*24*3600*1000)delete current[k]}
  current[id]={token,at:now};localStorage.setItem(jobAccessStore,JSON.stringify(current));
 }
-const readableStatus={AWAITING_TECH_PROCESSING:"Ожидает технической обработки",QUEUED:"В очереди технической обработки",PROCESSING:"Выполняется Tech Master",TECHNICAL_QA_PENDING:"Проверка технического мастера",AWAITING_HUMAN_QA:"Ожидает визуального QA",TECH_MASTER_APPROVED:"Мастер утверждён",MG4K_MASTER_IMPORTED:"Импортировано в MG 4K",FAILED:"Ошибка технической обработки",REWORK_REQUESTED:"Возвращено на доработку",REVISION_CREATED:"Исправленная версия создана",REJECTED:"QA отклонён"};
+const readableStatus={HOLD:"Техническая коррекция: HOLD",AWAITING_TECH_PROCESSING:"Ожидает технической обработки",QUEUED:"В очереди технической обработки",PROCESSING:"Выполняется Tech Master",TECHNICAL_QA_PENDING:"Проверка технического мастера",AWAITING_HUMAN_QA:"Ожидает визуального QA",TECH_MASTER_APPROVED:"Мастер утверждён",MG4K_MASTER_IMPORTED:"Импортировано в MG 4K",FAILED:"Ошибка технической обработки",REWORK_REQUESTED:"Возвращено на доработку",REVISION_CREATED:"Исправленная версия создана",REJECTED:"QA отклонён"};
 function sessionHeaders(extra={}){return {...extra,"x-session-id":session?.id||"","x-session-token":session?.token||"","x-editorial-job-token":jobToken(intakeId)}}
 function reviewChecksPass(){
  return intakePreviewReady&&["intake-check-preview","intake-check-geometry","intake-check-materials"].every(id=>e(id).checked);
@@ -456,6 +463,27 @@ function setIntake(data){
  if(!data.can_rework)form.hidden=true;
  const revisionPanel=e("intake-revision-panel");
  revisionPanel.hidden=!data.rework;
+ const autoButton=e("intake-auto-rework");
+ autoButton.disabled=intakeBusy||!data.can_auto_rework;
+ e("intake-auto-eligibility").textContent=data.rework?
+   (data.can_auto_rework?"Доступна ограниченная автоматическая коррекция по замечаниям: "+
+     (data.rework.categories||[]).join(", ")+". Создаст V"+((data.revision_num||1)+1)+
+     " с отдельным TIFF и повторным QA, исходник останется неизменным.":
+     data.auto_rework_hold_reason||"Коррекция не поддерживается автоматически; требуется исправленный исходник."):
+   "Сначала укажите конкретные замечания при возврате мастера.";
+ const correction=data.technical_correction;
+ const proofText=e("intake-correction-report");
+ proofText.hidden=!correction;
+ if(correction){
+   const ops=correction.evidence?.operations||[];
+   proofText.textContent="Техническая доработка: "+correction.status+
+     ". Источник сохранён; корректировался только новый Tech Master. "+
+     (ops.length?"Измеримые операции: "+ops.map(o=>
+       o.op+(o.ev!==undefined?" "+o.ev+" EV":"")+
+       (o.gain_rgb?" RGB ×"+o.gain_rgb.join("/"):"")).join("; ")+".":
+       "Ожидается анализ измеримых отклонений.")+
+     " Геометрия и объектив автоматически НЕ исправлялись; решение QA обязательно.";
+ }
  if(data.rework){
    e("intake-revision-title").textContent="Возврат V"+(data.revision_num||1)+" → V"+((data.revision_num||1)+1);
    e("intake-rework-remarks").textContent=(data.rework.categories||[]).join(", ")+" — "+(data.rework.note||"");
@@ -515,6 +543,26 @@ async function submitRework(){
   e("intake-rework-form").hidden=true;await intakeStatus();
  }catch(err){e("intake-message").textContent=String(err)}
  finally{intakeBusy=false;e("intake-rework-submit").disabled=false;updateIntakeActions()}
+}
+async function automaticRework(){
+ if(!intakeId||!intakeState?.can_auto_rework)return;
+ const parentId=intakeId,token=jobToken(parentId);
+ intakeBusy=true;updateIntakeActions();
+ e("intake-auto-rework").disabled=true;
+ e("intake-auto-eligibility").textContent="Запускается бесплатная техническая коррекция без OpenRouter...";
+ try{
+  const res=await fetch(base+"/job/rework/auto?job="+encodeURIComponent(parentId),{
+    method:"POST",headers:sessionHeaders({"content-type":"application/json"}),body:"{}"
+  });
+  const data=await res.json().catch(()=>({}));
+  if(!res.ok)throw Error(data.reason||data.error||"correction_HOLD");
+  if(!data.job_id)throw Error("correction_job_missing");
+  if(token)persistJobToken(data.job_id,token);
+  activateIntake(data.job_id);
+ }catch(error){
+  e("intake-auto-eligibility").textContent="HOLD: "+String(error.message||error);
+  e("intake-message").textContent="Техническая коррекция остановлена: "+String(error.message||error);
+ }finally{intakeBusy=false;updateIntakeActions()}
 }
 async function uploadRevision(){
  if(!intakeId||!intakeState?.can_upload_revision)return;
@@ -616,6 +664,7 @@ e("intake-reject").addEventListener("click",()=>{e("intake-rework-form").hidden=
 e("intake-rework-submit").addEventListener("click",submitRework);
 e("intake-rework-cancel").addEventListener("click",()=>e("intake-rework-form").hidden=true);
 e("intake-revision-submit").addEventListener("click",uploadRevision);
+e("intake-auto-rework").addEventListener("click",automaticRework);
 e("intake-next-revision-link").addEventListener("click",evt=>{
  evt.preventDefault();
  const id=new URL(e("intake-next-revision-link").href).hash.replace(/^#intake=/,"");
