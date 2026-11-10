@@ -58,7 +58,6 @@ cast[:,:,2]=np.uint16(.40*65535)
 balance={**PLAN,"categories":["color"]}
 fixed,colorProof=correct(cast,balance)
 assert fixed.shape==cast.shape and colorProof["operations"][0]["op"]=="NEUTRAL_GRAY_PATCH_GAIN"
-assert np.abs(fixed.astype(np.float64).mean(axis=(0,1)).ptp()) if False else True
 # The correction should reduce, not increase, the global RGB imbalance.
 assert np.ptp(fixed.astype(np.float64).mean(axis=(0,1)))<np.ptp(cast.astype(np.float64).mean(axis=(0,1)))
 
