@@ -14,6 +14,8 @@ on:
       - 'src/editorial_tech_workflow.js'
       - 'src/worker.js'
       - 'site/editorial-photo.html'
+      - 'site/editorial-split.js'
+      - 'tests/editorial-live-split.test.mjs'
       - 'tests/editorial-qa-layout.test.mjs'
       - 'site/editorial-import.js'
       - 'site/editorial-compare.js'
@@ -76,6 +78,8 @@ jobs:
           PY
           node --check /tmp/editorial-photo-inline.js
           node --test tests/editorial-qa-layout.test.mjs
+          node --check site/editorial-split.js
+          node --test tests/editorial-live-split.test.mjs
           python - <<'PY'
           from pathlib import Path
           page=Path('site/editorial-photo.html').read_text(encoding='utf-8')
