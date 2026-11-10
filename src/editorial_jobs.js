@@ -226,7 +226,13 @@ export async function editorialJobApi(request,env,url,authorizeSession) {
     const written=await env.TROPICANA_EDITORIAL_R2.put(key(id,"rework/revision.json"),JSON.stringify(link),{
       onlyIf:new Headers({"If-None-Match":"*"}),httpMetadata:{contentType:"application/json"}
     });
-    if(!written)return json({error:"revision_race_conflict"},409);
+    if(!written){
+      // Only the successful conditional writer owns the new revision. The
+      // losing request has not launched Workflow, so delete its unlinked input.
+      await env.TROPICANA_EDITORIAL_R2.delete([sourceKey,key(child.job_id,"job.json")]);
+      const winner=await revisionLink(env,id);
+      return json({error:"revision_race_conflict",job_id:winner?.job_id||null},409);
+    }
     let started=false,error=null;
     try{
       if(!env.TROPICANA_TECH_WORKFLOW)throw Error("technical_workflow_missing");
