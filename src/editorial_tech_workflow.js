@@ -38,7 +38,8 @@ async function start(env,id,job){
   const res=await c.fetch(new Request(endpoint(id,"start"),{
     method:"POST",body:bytes,headers:{
       "content-type":job.mime,"x-source-sha256":job.source_sha256,
-      "x-source-filename":encodeURIComponent(job.filename),"x-mg4k-source-size":String(bytes.byteLength)
+      "x-source-filename":encodeURIComponent(job.filename),"x-mg4k-source-size":String(bytes.byteLength),
+      ...(job.correction_plan?{"x-mg4k-correction-plan":encodeURIComponent(JSON.stringify(job.correction_plan))}:{})
     }
   }));
   const data=await res.json().catch(()=>({}));
@@ -60,7 +61,16 @@ async function proof(env,id,job){
      qa.technical_status!=="TECHNICAL_QA_PASS"||qa.master_bit_depth!==16||
      qa.HDR_applied!==false||qa.virtual_exposures!==false||qa.local_HDR!==false||
      qa.qa_checks?.HDR_ABSENT!=="PASS"||!SHA.test(qa.master_sha256||"")||
-     !Number.isInteger(qa.master_bytes)||qa.master_bytes<200000)
+     !Number.isInteger(qa.master_bytes)||qa.master_bytes<200000||
+     (job.correction_plan&&(
+       qa.correction_status!=="APPLIED"||
+       qa.correction?.parent_job_id!==job.correction_plan.parent_job_id||
+       qa.correction?.parent_master_sha256!==job.correction_plan.parent_master_sha256||
+       qa.correction?.remarks_sha256!==job.correction_plan.remarks_sha256||
+       qa.correction?.geometry_transform!=="IDENTITY"||
+       qa.correction?.HDR_applied!==false||
+       qa.correction?.generative_processing!==false
+     )))
     throw Error("technical_QA_proof_HOLD");
   return qa;
 }
@@ -138,7 +148,8 @@ export class EditorialTechWorkflow extends WorkflowEntrypoint{
         if(j.job_id!==id||!SHA.test(j.source_sha256)||j.source_bytes>8*1024*1024)
           throw Error("technical_job_invalid");
         return {source_key:j.source_key,source_sha256:j.source_sha256,source_bytes:j.source_bytes,
-                filename:j.filename,mime:j.mime};
+                filename:j.filename,mime:j.mime,
+                correction_plan:j.correction_plan||null};
       });
       await update(env,id,{status:"PROCESSING",stage:"technical_dispatch",progress:0,
         message:"Сохранённый источник проверяется и передаётся техническому процессору."});
@@ -156,13 +167,23 @@ export class EditorialTechWorkflow extends WorkflowEntrypoint{
         });
         if(state.status==="READY"){ready=true;break}
         if(state.status==="FAILED")throw Error("technical_processor_failed:"+String(state.error||"unknown"));
+        if(state.status==="HOLD"){
+          const reason=String(state.error||"technical_correction_requires_review").slice(0,240);
+          await update(env,id,{status:"HOLD",stage:"correction_hold",progress:null,
+            message:"Безопасная автоматическая коррекция остановлена: "+reason,
+            error:reason});
+          return {job_id:id,status:"HOLD",reason,generation_started:false};
+        }
         if(state.status==="NOT_FOUND")await step.do("restart-technical-"+n,()=>start(env,id,job));
       }
       if(!ready)throw Error("technical_processing_timeout");
       const qa=await step.do("validate-technical-QA",()=>proof(env,id,job));
       const saved=await step.do("persist-verified-technical-master",()=>persist(env,id,job,qa));
       await update(env,id,{status:"AWAITING_HUMAN_QA",stage:"technical_qa_ready",progress:100,
-        message:"Технический 16-битный TIFF готов. Проверьте полный размер и утвердите QA.",
+        message:job.correction_plan?
+          "Исправленная V2 готова: "+job.correction_plan.categories.join(", ")+
+          ". Проверьте изменения визуально, автоматически не утверждается.":
+          "Технический 16-битный TIFF готов. Проверьте полный размер и утвердите QA.",
         technical_master_sha256:saved.master_sha256});
       return {job_id:id,status:"AWAITING_HUMAN_QA",...saved};
     }catch(error){
