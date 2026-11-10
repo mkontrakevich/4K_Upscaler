@@ -325,7 +325,7 @@ export async function editorialJobApi(request,env,url,authorizeSession) {
       await env.TROPICANA_EDITORIAL_R2.put(key(child.job_id,"processing-state.json"),
         JSON.stringify({job_id:child.job_id,status:"HOLD",
           stage:"correction_dispatch_hold",progress:null,error,
-          message:"Бесплатный технический процессор не запущен. Без генерации."}),
+          message:"Технический процессор не запущен. Генеративные кредиты не расходуются."}),
         {httpMetadata:{contentType:"application/json"}});
     }
     return json({ok:true,job_id:child.job_id,parent_job_id:id,
