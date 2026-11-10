@@ -414,6 +414,8 @@ function setIntake(data){
  sourceButton.hidden=!data.technical_master_ready;
  sourceButton.disabled=!data.technical_master_ready;
  e("intake-id").textContent=(data.job_id||"—")+" · V"+(data.revision_num||1);
+ const techTab=e("intake-split-viewer").querySelector('[data-intake-mode="tech"]');
+ if(techTab)techTab.textContent="Tech V"+(data.revision_num||1);
  e("intake-status").textContent=readableStatus[data.status]||data.status||"Неизвестно";
  e("intake-stage").textContent=data.stage||"—";
  const bar=e("intake-progress");
