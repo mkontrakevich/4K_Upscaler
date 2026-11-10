@@ -65,6 +65,15 @@ jobs:
           print('Cloudflare Workflow JSON string API input accepted')
           PY
           node --experimental-default-type=module --test tests/editorial-jobs.test.mjs
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          html=Path('site/editorial-photo.html').read_text(encoding='utf-8')
+          blocks=re.findall(r'<script(?:\\s[^>]*)?>(.*?)</script>',html,re.S|re.I)
+          assert blocks, 'No inline editorial UI script found'
+          Path('/tmp/editorial-photo-inline.js').write_text('\\n'.join(blocks),encoding='utf-8')
+          PY
+          node --check /tmp/editorial-photo-inline.js
           node --check site/editorial-compare.js
           node --check site/editorial-import.js
           python -m py_compile editorial_tech_service.py cloud_processor_service.py scripts/editorial_raster_technical_master.py
