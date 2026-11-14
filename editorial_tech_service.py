@@ -70,7 +70,10 @@ def _start_worker(job_id: str,filename: str,expected_sha: str)->None:
                    proof.get("parent_master_sha256")!=p.get("parent_master_sha256") or
                    proof.get("remarks_sha256")!=p.get("remarks_sha256") or
                    proof.get("HDR_applied") is not False or
-                   proof.get("geometry_transform")!="IDENTITY"):
+                   proof.get("geometry_transform")!=p.get("geometry_transform") or
+                   proof.get("generative_processing") is not False or
+                   not isinstance(proof.get("operations"),list) or
+                   not proof["operations"]):
                     raise RuntimeError("corrected_master_provenance_HOLD")
             _set(job_id,status="READY",stage="technical_qa_ready",progress=100,
                  master_sha256=qa["master_sha256"],master_bytes=qa["master_bytes"])
@@ -138,9 +141,10 @@ def route(handler,method:str)->bool:
         _json(handler,400,{"error":"invalid_correction_plan_json"})
         return True
     if plan is not None and (not isinstance(plan,dict) or
-        plan.get("type")!="DETERMINISTIC_TECH_REWORK" or
+        plan.get("type") not in ("DETERMINISTIC_TECH_REWORK","GEOMETRY_FACADE_QUAD_V1") or
         plan.get("HDR_allowed") is not False or
-        plan.get("geometry_transform")!="IDENTITY"):
+        plan.get("geometry_transform")!=(
+            "CONTROLLED_PROJECTIVE_WARP" if plan.get("type")=="GEOMETRY_FACADE_QUAD_V1" else "IDENTITY")):
         _json(handler,400,{"error":"unapproved_correction_profile"})
         return True
     length=int(handler.headers.get("content-length") or handler.headers.get("x-mg4k-source-size") or 0)

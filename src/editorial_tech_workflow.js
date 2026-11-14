@@ -57,10 +57,20 @@ async function proof(env,id,job){
   const r=await c.fetch(new Request(endpoint(id,"qa")));
   if(!r.ok)throw Error("technical_QA_missing_"+r.status);
   const qa=await r.json();
+  const geometryPlan=job.correction_plan?.type==="GEOMETRY_FACADE_QUAD_V1";
   if(qa.job_id!==id||qa.source_sha256!==job.source_sha256||
      qa.technical_status!=="TECHNICAL_QA_PASS"||qa.master_bit_depth!==16||
      qa.HDR_applied!==false||qa.virtual_exposures!==false||qa.local_HDR!==false||
-     qa.qa_checks?.HDR_ABSENT!=="PASS"||!SHA.test(qa.master_sha256||"")||
+     qa.qa_checks?.HDR_ABSENT!=="PASS"||
+     qa.qa_checks?.SOURCE_SHA256!=="PASS"||
+     qa.qa_checks?.TIFF_READBACK!=="PASS"||
+     (geometryPlan?
+       (qa.qa_checks?.GEOMETRY_TRANSFORM_EVIDENCED!=="PASS"||
+        qa.qa_checks?.GEOMETRY_UNCHANGED!=="NOT_APPLICABLE"||
+        qa.geometry!=="CONTROLLED_PROJECTIVE_WARP"):
+       (qa.qa_checks?.GEOMETRY_UNCHANGED!=="PASS"||
+        qa.geometry!=="IDENTITY_NO_CORRECTION"))||
+     !SHA.test(qa.master_sha256||"")||
      !Number.isInteger(qa.master_bytes)||qa.master_bytes<200000||
      (job.correction_plan&&(
        qa.correction_status!=="APPLIED"||
@@ -74,7 +84,14 @@ async function proof(env,id,job){
        !Array.isArray(qa.correction?.operations)||
        qa.correction.operations.length<1||
        qa.correction?.correction_status!=="APPLIED"||
-       qa.correction?.geometry_transform!=="IDENTITY"||
+       qa.correction?.geometry_transform!==(geometryPlan?
+         "CONTROLLED_PROJECTIVE_WARP":"IDENTITY")||
+       (geometryPlan&&(qa.correction?.perspective_corrected!==true||
+         qa.correction?.off_plane_geometry_review_required!==true||
+         qa.correction?.source_quad_norm?.length!==4||
+         qa.correction?.invalid_border_fraction>.001||
+         !Number.isFinite(qa.correction?.max_normalized_displacement)||
+         qa.correction.max_normalized_displacement>.18))||
        qa.correction?.HDR_applied!==false||
        qa.correction?.generative_processing!==false
      )))
@@ -187,7 +204,9 @@ export class EditorialTechWorkflow extends WorkflowEntrypoint{
       const qa=await step.do("validate-technical-QA",()=>proof(env,id,job));
       const saved=await step.do("persist-verified-technical-master",()=>persist(env,id,job,qa));
       await update(env,id,{status:"AWAITING_HUMAN_QA",stage:"technical_qa_ready",progress:100,
-        message:job.correction_plan?
+        message:job.correction_plan?.type==="GEOMETRY_FACADE_QUAD_V1"?
+          "Перспектива фасада скорректирована по четырём точкам. Проверьте здание и объекты вне фасада перед утверждением.":
+          job.correction_plan?
           "Исправленная V2 готова: "+job.correction_plan.categories.join(", ")+
           ". Проверьте изменения визуально, автоматически не утверждается.":
           "Технический 16-битный TIFF готов. Проверьте полный размер и утвердите QA.",
