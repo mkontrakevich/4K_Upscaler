@@ -474,3 +474,84 @@ test("auto correction HOLD permits controlled corrected-source V3 without overwr
  const old=await (await h.r2.get("tropicana-park/editorial-jobs/"+v1.job_id+"/technical/decision.json")).json();
  assert.equal(old.decision,"REWORK_REQUESTED");
 });
+
+test("guided facade geometry rejects missing points, validates ownership, creates real V2 with human QA",async()=>{
+ const h=harness(),v1=await intake(h),sha=await tech(h,v1);
+ await h.call("/api/editorial/job/decision?job="+v1.job_id,"POST",{
+  decision:"REWORK_REQUESTED",master_sha256:sha,
+  categories:["geometry"],note:"Straighten facade verticals and perspective using verified four corners"
+ });
+ const st=await (await h.call("/api/editorial/job/status?job="+v1.job_id)).json();
+ assert.equal(st.can_geometry_rework,true);
+ const path="/api/editorial/job/rework/geometry?job="+v1.job_id;
+ const source_quad_norm=[[0.18,0.23],[0.82,0.225],[0.825,0.77],[0.175,0.775]];
+ const plan={source_quad_norm,facade_assumption_confirmed:true};
+ let r=await h.call(path,"POST",plan,false);
+ assert.equal(r.status,404,"session and capability required");
+ r=await h.call(path,"POST",{source_quad_norm:source_quad_norm.slice(0,3),facade_assumption_confirmed:true});
+ assert.equal(r.status,422,"four anchors are mandatory");
+ r=await h.call(path,"POST",{source_quad_norm,facade_assumption_confirmed:false});
+ assert.equal(r.status,422,"human rectangular-plane confirmation is mandatory");
+ const invalid=[source_quad_norm[0],source_quad_norm[2],source_quad_norm[1],source_quad_norm[3]];
+ r=await h.call(path,"POST",{source_quad_norm:invalid,facade_assumption_confirmed:true});
+ assert.equal(r.status,422,"invalid order must HOLD without job creation");
+ const launched=[];
+ h.env.TROPICANA_TECH_WORKFLOW={async create(x){launched.push(x.id);return {id:x.id}}};
+ r=await h.call(path,"POST",plan);
+ assert.equal(r.status,201);
+ const data=await r.json();
+ assert.equal(data.revision_num,2);
+ assert.equal(data.source_unchanged,true);
+ assert.equal(data.generation_started,false);
+ assert.equal(launched.length,1);
+ assert.equal(launched[0],data.job_id);
+ const k="tropicana-park/editorial-jobs/";
+ const a=await (await h.r2.get(k+v1.job_id+"/job.json")).json();
+ const child=await (await h.r2.get(k+data.job_id+"/job.json")).json();
+ assert.equal(child.parent_job_id,v1.job_id);
+ assert.equal(child.root_job_id,v1.job_id);
+ assert.equal(child.source_key,a.source_key);
+ assert.equal(child.source_sha256,a.source_sha256);
+ assert.equal(child.access_hash,a.access_hash);
+ assert.equal(child.correction_plan.geometry_transform,"CONTROLLED_PROJECTIVE_WARP");
+ assert.deepEqual(child.correction_plan.source_quad_norm,source_quad_norm);
+ assert.equal(child.correction_plan.HDR_allowed,false);
+ const before=await (await h.call("/api/editorial/job/status?job="+data.job_id,"GET",null,false,v1.job_token)).json();
+ assert.equal(before.can_approve,false);
+ assert.equal(before.can_handoff,false);
+ const master=await tech(h,child);
+ assert.notEqual(master,sha);
+ const after=await (await h.call("/api/editorial/job/status?job="+data.job_id,"GET",null,false,v1.job_token)).json();
+ assert.equal(after.technical_master_ready,true);
+ assert.equal(after.source_verification.geometry_preservation,"CORRECTED_PENDING_HUMAN_QA");
+ assert.equal(after.technical_correction.geometry_correction,"CONTROLLED_PENDING_VISUAL_QA");
+ assert.equal(after.technical_correction.evidence.perspective_corrected,true);
+ assert.equal(after.can_handoff,false);
+ const blocked=await h.call("/api/editorial/job/handoff?job="+data.job_id,"POST",null,false,v1.job_token);
+ assert.equal(blocked.status,409);
+ r=await h.call(path,"POST",plan);
+ assert.equal(r.status,409,"second geometry V2 must not overwrite first");
+ const saved=await (await h.r2.get(k+v1.job_id+"/technical/decision.json")).json();
+ assert.equal(saved.decision,"REWORK_REQUESTED");
+});
+test("geometry QA fails closed if provenance claims unchanged or lacks controlled projective evidence",async()=>{
+ const h=harness(),v1=await intake(h),sha=await tech(h,v1);
+ await h.call("/api/editorial/job/decision?job="+v1.job_id,"POST",{
+  decision:"REWORK_REQUESTED",master_sha256:sha,categories:["geometry"],
+  note:"Correct four-corner planar facade, preserve off-plane objects"
+ });
+ h.env.TROPICANA_TECH_WORKFLOW={async create(x){return x}};
+ const plan={source_quad_norm:[[0.18,0.23],[0.82,0.225],[0.825,0.77],[0.175,0.775]],facade_assumption_confirmed:true};
+ const created=await (await h.call("/api/editorial/job/rework/geometry?job="+v1.job_id,"POST",plan)).json();
+ const k="tropicana-park/editorial-jobs/";
+ const child=await (await h.r2.get(k+created.job_id+"/job.json")).json();
+ await tech(h,child);
+ const path=k+created.job_id+"/technical/qa.json";
+ const qa=await (await h.r2.get(path)).json();
+ qa.qa_checks.GEOMETRY_TRANSFORM_EVIDENCED="PENDING";
+ await h.r2.put(path,JSON.stringify(qa),{httpMetadata:{contentType:"application/json"}});
+ const status=await (await h.call("/api/editorial/job/status?job="+created.job_id,"GET",null,false,v1.job_token)).json();
+ assert.equal(status.technical_master_ready,false);
+ assert.equal(status.can_approve,false);
+ assert.equal(status.can_handoff,false);
+});
