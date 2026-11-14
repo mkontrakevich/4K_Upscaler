@@ -36,7 +36,7 @@ def hold(p, tag):
 
 hold({**PLAN,"source_quad_norm":QUAD[:3]},"four_fa")
 hold({**PLAN,"source_quad_norm":[QUAD[0],QUAD[2],QUAD[1],QUAD[3]]},"corner_order")
-hold({**PLAN,"source_quad_norm":[[.4,.4],[.45,.4],[.45,.45],[.4,.45]]},"facade_area")
+hold({**PLAN,"source_quad_norm":[[.4,.4],[.45,.4],[.45,.45],[.4,.45]]},"degenerate_facade")
 hold({**PLAN,"facade_assumption_confirmed":False},"human_must_confirm")
 hold({**PLAN,"HDR_allowed":True},"unapproved_geometry")
 
