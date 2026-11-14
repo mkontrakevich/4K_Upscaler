@@ -451,7 +451,10 @@ function updateSourceVerification(data){
  e("intake-source-raster").textContent=result(v.raster_status)+(v.raster_status==="PASS"?" · "+String(v.mime||"").replace("image/","").toUpperCase():"");
  e("intake-source-dimensions").textContent=Number.isInteger(v.width)&&Number.isInteger(v.height)?
     v.width+"×"+v.height+" px · "+v.signal_bits+" бит входного сигнала":"Данные ещё не подтверждены";
- e("intake-source-geometry").textContent=v.geometry_preservation==="PASS"?
+ e("intake-source-geometry").textContent=
+   v.geometry_preservation==="CORRECTED_PENDING_HUMAN_QA"?
+   "Исправлена по 4 точкам · требуется визуальная проверка":
+   v.geometry_preservation==="PASS"?
    "PASS · пиксельная геометрия сохранена":result(v.geometry_preservation);
  const visual=e("intake-source-visual-status");
  visual.textContent=v.visual_review==="INCLUDED_IN_APPROVED_TECH_QA"?
@@ -459,7 +462,9 @@ function updateSourceVerification(data){
    v.visual_review==="REWORK_REQUESTED"?"Визуальная QA: возвращено на доработку":
    "Визуальная QA: ожидает вашего решения";
  e("intake-source-visual-note").textContent=
-   "Автоматическая коррекция объектива, вертикалей и перспективы не выполнялась. "+
+   (v.perspective_correction==="CONTROLLED_PROJECTIVE_PENDING_VISUAL_QA"?
+   "Плоскость фасада выпрямлена по указанным углам. Проверка всех внеплоскостных объектов обязательна. ":
+   "Автоматическая коррекция объектива, вертикалей и перспективы не выполнялась. ")+
    "Проверка сохранности пикселей не означает проверку правильности архитектурной геометрии. "+
    "Выполните оценку исходника и Tech Master через «Сплит» при 100% масштабе.";
 }
@@ -509,6 +514,11 @@ function setIntake(data){
  }
  e("intake-geometry-submit").disabled=intakeBusy||!data.can_geometry_rework||
    geometryPoints.length!==4||!e("intake-geometry-facade-check").checked;
+ if(data.can_geometry_rework&&geometryAnchorJob!==data.job_id&&!geometryLoadingJob){
+   showGeometryEditor().catch(err=>{
+     e("intake-geometry-warning").textContent="Невозможно открыть исходник: "+String(err.message||err);
+   });
+ }
  const correction=data.technical_correction;
  const proofText=e("intake-correction-report");
  proofText.hidden=!correction;
@@ -552,7 +562,7 @@ function activateIntake(id){
  if(jobToken(id))try{localStorage.setItem(lastJobStore,id)}catch{}
 
  intakePreviewFor="";intakePreviewReady=false;intakeState=null;
- geometryPoints=[];geometryAnchorJob="";
+ geometryPoints=[];geometryAnchorJob="";geometryLoadingJob="";
  e("intake-geometry-facade-check").checked=false;
  intakeSplitFor="";intakeSplitRequest="";
  if(intakeSplitViewer)intakeSplitViewer.reset();
@@ -584,7 +594,7 @@ async function submitRework(){
  }catch(err){e("intake-message").textContent=String(err)}
  finally{intakeBusy=false;e("intake-rework-submit").disabled=false;updateIntakeActions()}
 }
-let geometryPoints=[],geometryAnchorJob="";
+let geometryPoints=[],geometryAnchorJob="",geometryLoadingJob="";
 const geometryLabels=["верхний левый","верхний правый","нижний правый","нижний левый"];
 function paintGeometry(){
  const canvas=e("intake-geometry-guide"),img=e("intake-geometry-image");
@@ -620,15 +630,17 @@ function paintGeometry(){
 }
 async function showGeometryEditor(){
  if(!intakeId||!intakeState?.can_geometry_rework)return;
- const id=intakeId;
- const url=await ensureIntakeSource(id);
- if(!url||intakeId!==id)return;
- if(geometryAnchorJob!==id){geometryAnchorJob=id;geometryPoints=[];}
- const img=e("intake-geometry-image");
- img.onload=paintGeometry;
- img.src=url;
- e("intake-geometry-panel").hidden=false;
- if(img.complete&&img.naturalWidth)paintGeometry();
+ const id=intakeId;geometryLoadingJob=id;
+ try{
+   const url=await ensureIntakeSource(id);
+   if(!url||intakeId!==id)return;
+   if(geometryAnchorJob!==id){geometryAnchorJob=id;geometryPoints=[];}
+   const img=e("intake-geometry-image");
+   img.onload=paintGeometry;
+   img.src=url;
+   e("intake-geometry-panel").hidden=false;
+   if(img.complete&&img.naturalWidth)paintGeometry();
+ }finally{if(geometryLoadingJob===id)geometryLoadingJob=""}
 }
 async function submitGeometryCorrection(){
  if(!intakeId||!intakeState?.can_geometry_rework||geometryPoints.length!==4||
