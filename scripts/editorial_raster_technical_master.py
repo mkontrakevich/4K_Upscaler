@@ -63,15 +63,18 @@ def prepare(source: Path, out: Path, job_id: str, expected_sha: str, correction_
     rgb16 = rgb if signal_bits == 16 else rgb.astype(np.uint16) * np.uint16(257)
     correction = None
     if correction_plan is not None:
-        from editorial_deterministic_correction import correct
         payload = json.loads(correction_plan.read_text(encoding="utf-8"))
+        if payload.get("type") == "GEOMETRY_FACADE_QUAD_V1":
+            from editorial_facade_geometry import correct
+        else:
+            from editorial_deterministic_correction import correct
         rgb16, correction = correct(rgb16, payload)
     out.mkdir(parents=True, exist_ok=True)
     master = out / "master16.tif"
     preview = out / "fullres-preview.jpg"
     qa = out / "qa.json"
     tifffile.imwrite(master, rgb16, photometric="rgb", bigtiff=True,
-        metadata={"description": "Neutral raster technical master, HDR ABSENT, no generative processing"})
+        metadata={"description": "Technical master, HDR ABSENT, no generative processing; geometry correction only when anchored and documented"})
     # Browser preview is 8-bit and full-pixel; never pretend it is the 16-bit TIFF.
     view = np.uint8(np.rint(rgb16.astype(np.float32) / 257))
     ok, compressed = cv2.imencode(".jpg", view[:, :, ::-1], [cv2.IMWRITE_JPEG_QUALITY, 94])
@@ -98,7 +101,9 @@ def prepare(source: Path, out: Path, job_id: str, expected_sha: str, correction_
         "master_bytes": master.stat().st_size,
         "preview_sha256": sha(preview),
         "preview_bytes": preview.stat().st_size,
-        "technical_version": "DETERMINISTIC_PHOTOMETRIC_REWORK_V1" if correction else "GENERIC_RASTER_NEUTRAL_NO_HDR_V1",
+        "technical_version": ("CONTROLLED_GEOMETRY_RECTIFICATION_V1" if correction and
+            correction["geometry_transform"] == "CONTROLLED_PROJECTIVE_WARP"
+            else "DETERMINISTIC_PHOTOMETRIC_REWORK_V1") if correction else "GENERIC_RASTER_NEUTRAL_NO_HDR_V1",
         "correction": correction,
         "correction_status": correction["correction_status"] if correction else "NOT_REQUESTED",
         "technical_status": "TECHNICAL_QA_PASS",
@@ -106,7 +111,8 @@ def prepare(source: Path, out: Path, job_id: str, expected_sha: str, correction_
         "virtual_exposures": False,
         "local_HDR": False,
         "generative_processing": False,
-        "geometry": "IDENTITY_NO_CORRECTION",
+        "geometry": (correction["geometry_transform"] if correction and
+             correction["geometry_transform"] == "CONTROLLED_PROJECTIVE_WARP" else "IDENTITY_NO_CORRECTION"),
         "geometry_visual_review": "PENDING",
         "human_visual_QA": "PENDING",
         "opaque_alpha_verified": bool(raw.ndim==3 and raw.shape[2]==4),
@@ -116,7 +122,10 @@ def prepare(source: Path, out: Path, job_id: str, expected_sha: str, correction_
             "SOURCE_SHA256": "PASS",
             "BIT_DEPTH_16": "PASS",
             "HDR_ABSENT": "PASS",
-            "GEOMETRY_UNCHANGED": "PASS",
+            "GEOMETRY_UNCHANGED": "NOT_APPLICABLE" if correction and
+               correction["geometry_transform"] == "CONTROLLED_PROJECTIVE_WARP" else "PASS",
+            "GEOMETRY_TRANSFORM_EVIDENCED": "PASS" if correction and
+               correction["geometry_transform"] == "CONTROLLED_PROJECTIVE_WARP" else "NOT_APPLICABLE",
             "TIFF_READBACK": "PASS",
             "NO_GENERATIVE_PROCESSING": "PASS",
         },
