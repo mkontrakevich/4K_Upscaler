@@ -46,7 +46,9 @@ def validate(plan):
     cross = []
     for i in range(4):
         a, b, c = q[i], q[(i+1) % 4], q[(i+2) % 4]
-        cross.append(float(np.cross(b-a, c-b)))
+        ab=b-a
+        bc=c-b
+        cross.append(float(ab[0]*bc[1]-ab[1]*bc[0]))
     if min(cross) <= .0025:
         _hold("nonconvex_or_degenerate_facade")
     area = abs(float(cv2.contourArea(q.astype(np.float32))))
