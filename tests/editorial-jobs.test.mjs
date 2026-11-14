@@ -59,6 +59,7 @@ async function intake(h){
  return createEditorialIntakeJob(h.env,h.session,{filename:"New_photo.jpg",mime:"image/jpeg",source_key:"tropicana-park/DSC09818/uploads/session-allow/test.jpg",source_sha256:"a".repeat(64),bytes:22000});
 }
 async function tech(h,job){
+ const geom=job.correction_plan?.type==="GEOMETRY_FACADE_QUAD_V1";
  const masterKey="tropicana-park/editorial-jobs/"+job.job_id+"/technical/master16.tif";
  const bytes=new Uint8Array(1100000);bytes.set([73,73,43,0]); // Genuine BigTIFF magic for negative file-type gate.
  if(job.correction_plan)bytes[256]=23;
@@ -78,16 +79,25 @@ async function tech(h,job){
    master_key:masterKey,master_sha256:sha,master_bytes:1100000,
    preview_sha256:proxySHA,preview_bytes:proxyBytes.byteLength,
    master_bit_depth:16,technical_status:"TECHNICAL_QA_PASS",
-   width:640,height:480,source_signal_bits:8,geometry:"IDENTITY_NO_CORRECTION",
+   width:640,height:480,source_signal_bits:8,
+   geometry:geom?"CONTROLLED_PROJECTIVE_WARP":"IDENTITY_NO_CORRECTION",
    HDR_applied:false,virtual_exposures:false,local_HDR:false,
-   qa_checks:{HDR_ABSENT:"PASS",SOURCE_SHA256:"PASS",GEOMETRY_UNCHANGED:"PASS",TIFF_READBACK:"PASS"},
+   qa_checks:{HDR_ABSENT:"PASS",SOURCE_SHA256:"PASS",
+     GEOMETRY_UNCHANGED:geom?"NOT_APPLICABLE":"PASS",
+     GEOMETRY_TRANSFORM_EVIDENCED:geom?"PASS":"NOT_APPLICABLE",
+     TIFF_READBACK:"PASS"},
    correction_status:job.correction_plan?"APPLIED":"NOT_REQUESTED",
    correction:job.correction_plan?{correction_status:"APPLIED",
      parent_job_id:job.correction_plan.parent_job_id,
      parent_master_sha256:job.correction_plan.parent_master_sha256,
      remarks_sha256:job.correction_plan.remarks_sha256,
-     changed_mean_absolute_fraction:.02,geometry_transform:"IDENTITY",
-     operations:[{op:"GLOBAL_EXPOSURE",ev:.25}],
+     changed_mean_absolute_fraction:.02,
+     geometry_transform:geom?"CONTROLLED_PROJECTIVE_WARP":"IDENTITY",
+     operations:geom?[{op:"PROJECTIVE_RECTIFY_MARKED_FACADE",point_count:4}]:
+       [{op:"GLOBAL_EXPOSURE",ev:.25}],
+     ...(geom?{perspective_corrected:true,off_plane_geometry_review_required:true,
+       source_quad_norm:job.correction_plan.source_quad_norm,
+       invalid_border_fraction:0,max_normalized_displacement:.035}:{}),
      HDR_applied:false,generative_processing:false}:null
  }),{httpMetadata:{contentType:"application/json"}});
  return sha;
