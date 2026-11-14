@@ -55,12 +55,15 @@ async function verifiedTech(env,job) {
   if(!proof)return null;
   let q;try{q=await proof.json()}catch{return null}
   const expected=key(job.job_id,"technical/master16.tif");
+  const geom=job.correction_plan?.type==="GEOMETRY_FACADE_QUAD_V1";
   if(q.job_id!==job.job_id||q.source_sha256!==job.source_sha256||
      q.technical_status!=="TECHNICAL_QA_PASS"||q.HDR_applied!==false||
      q.virtual_exposures!==false||q.local_HDR!==false||
      q.qa_checks?.HDR_ABSENT!=="PASS"||
      q.qa_checks?.SOURCE_SHA256!=="PASS"||
-     q.qa_checks?.GEOMETRY_UNCHANGED!=="PASS"||
+     (geom?(q.qa_checks?.GEOMETRY_TRANSFORM_EVIDENCED!=="PASS"||
+             q.qa_checks?.GEOMETRY_UNCHANGED!=="NOT_APPLICABLE"):
+            q.qa_checks?.GEOMETRY_UNCHANGED!=="PASS")||
      q.qa_checks?.TIFF_READBACK!=="PASS"||
      (job.correction_plan&&(
        q.correction_status!=="APPLIED"||
@@ -74,10 +77,15 @@ async function verifiedTech(env,job) {
        !Array.isArray(q.correction?.operations)||
        q.correction.operations.length<1||
        q.correction?.correction_status!=="APPLIED"||
-       q.correction?.geometry_transform!=="IDENTITY"||
+       q.correction?.geometry_transform!==(geom?"CONTROLLED_PROJECTIVE_WARP":"IDENTITY")||
+       (geom&&(q.correction?.perspective_corrected!==true||
+               q.correction?.off_plane_geometry_review_required!==true||
+               q.correction?.invalid_border_fraction>.001||
+               !Number.isFinite(q.correction?.max_normalized_displacement)||
+               q.correction.max_normalized_displacement>.18))||
        q.correction?.generative_processing!==false
      ))||
-     q.geometry!=="IDENTITY_NO_CORRECTION"||
+     q.geometry!==(geom?"CONTROLLED_PROJECTIVE_WARP":"IDENTITY_NO_CORRECTION")||
      ![8,16].includes(q.source_signal_bits)||
      !Number.isInteger(q.width)||q.width<320||
      !Number.isInteger(q.height)||q.height<320||
@@ -135,20 +143,23 @@ function sourceVerification(job,a){
   const rasterOK=shaOK&&[8,16].includes(q?.source_signal_bits)&&
     Number.isInteger(q?.width)&&Number.isInteger(q?.height)&&
     q.width>=320&&q.height>=320;
+  const geometryModified=rasterOK&&checks.GEOMETRY_TRANSFORM_EVIDENCED==="PASS"&&
+    q.geometry==="CONTROLLED_PROJECTIVE_WARP";
   const geometryUnchanged=rasterOK&&checks.GEOMETRY_UNCHANGED==="PASS"&&
     q.geometry==="IDENTITY_NO_CORRECTION";
   return {
     status:shaOK&&rasterOK?"TECHNICAL_PASS":q?"INCOMPLETE_EVIDENCE":"PENDING",
     sha256_status:shaOK?"PASS":q?"NOT_CONFIRMED":"PENDING",
     raster_status:rasterOK?"PASS":q?"NOT_CONFIRMED":"PENDING",
-    geometry_preservation:geometryUnchanged?"PASS":q?"NOT_CONFIRMED":"PENDING",
+    geometry_preservation:geometryModified?"CORRECTED_PENDING_HUMAN_QA":
+      geometryUnchanged?"PASS":q?"NOT_CONFIRMED":"PENDING",
     mime:job.mime,source_bytes:job.source_bytes,
     source_sha256:job.source_sha256,
     width:rasterOK?q.width:null,height:rasterOK?q.height:null,
     signal_bits:rasterOK?q.source_signal_bits:null,
     alpha_handling:rasterOK?(q.alpha_handling||"none"):null,
     optical_correction:"NOT_PERFORMED",
-    perspective_correction:"NOT_PERFORMED",
+    perspective_correction:geometryModified?"CONTROLLED_PROJECTIVE_PENDING_VISUAL_QA":"NOT_PERFORMED",
     visual_review:a.d?.decision==="APPROVED"?"INCLUDED_IN_APPROVED_TECH_QA":
       a.d?.decision==="REWORK_REQUESTED"?"REWORK_REQUESTED":"PENDING_HUMAN_QA",
     verified_proof_sha:q?.master_sha256||null
@@ -167,7 +178,8 @@ function state(job,a) {
       requested:true,categories:job.correction_plan.categories,
       status:a.q?.correction_status||a.processing?.status||"QUEUED",
       evidence:a.q?.correction||null,
-      geometry_correction:"NOT_PERFORMED",
+      geometry_correction:job.correction_plan.type==="GEOMETRY_FACADE_QUAD_V1"?
+        (a.q?.correction_status==="APPLIED"?"CONTROLLED_PENDING_VISUAL_QA":"PENDING"):"NOT_PERFORMED",
       source_sha256:job.source_sha256,
       parent_master_sha256:job.correction_plan.parent_master_sha256
     }:null,
@@ -175,7 +187,7 @@ function state(job,a) {
     progress:a.q?100:typeof a.processing?.progress==="number"?a.processing.progress:null,
     progress_kind:a.q?"TECHNICAL_STAGE_COMPLETE":a.processing?.status==="PROCESSING"?"TECHNICAL_STAGE_MEASURED":"NOT_MEASURED",
     message:a.d?.decision==="REWORK_REQUESTED"?
-      "Мастер возвращён на доработку. Для света/цвета доступна измеримая автоматическая коррекция; геометрия без опорных точек — HOLD.":
+      "Мастер возвращён на доработку. Для геометрии укажите 4 угла фасада; для света и цвета доступен ограниченный корректор.":
       a.q?"Технический мастер готов; требуется визуальное утверждение QA.":a.processing?.message||job.message,
     error:a.processing?.error||null,
     technical_master_ready:!!a.q,technical_qa:a.q?{master_sha256:a.q.master_sha256,master_bytes:a.q.master_bytes,bit_depth:16,HDR_applied:false}:null,
@@ -183,6 +195,9 @@ function state(job,a) {
     can_approve:!!a.q&&!a.d,can_reject:!!a.q&&!a.d,
     can_rework:!!a.q&&!a.d,
     can_upload_revision:(a.d?.decision==="REWORK_REQUESTED"||a.autoHold)&&!a.revision,
+    can_geometry_rework:a.d?.decision==="REWORK_REQUESTED"&&!a.revision&&
+      Array.isArray(a.d.categories)&&a.d.categories.length===1&&
+      a.d.categories[0]==="geometry",
     can_auto_rework:a.d?.decision==="REWORK_REQUESTED"&&!a.revision&&
       Array.isArray(a.d.categories)&&a.d.categories.length>0&&
       a.d.categories.every(c=>c==="exposure"||c==="color"),
@@ -272,6 +287,75 @@ export async function editorialJobApi(request,env,url,authorizeSession) {
     return new Response(src.body,{headers:{"content-type":job.mime,"cache-control":"private,no-store",
        "x-content-type-options":"nosniff"}});
   }
+  if(path==="/api/editorial/job/rework/geometry"&&method==="POST"){
+    if(a.d?.decision!=="REWORK_REQUESTED"||!a.q||
+       a.d.categories?.length!==1||a.d.categories[0]!=="geometry")
+      return json({error:"structured_geometry_rework_decision_required"},409);
+    if(a.revision)return json({error:"revision_already_created",job_id:a.revision.job_id},409);
+    if(!env.TROPICANA_TECH_WORKFLOW)return json({error:"technical_workflow_missing"},503);
+    let input;try{input=await request.json()}catch{return json({error:"invalid_geometry_input"},400)}
+    if(input?.facade_assumption_confirmed!==true)
+      return json({error:"rectangular_planar_facade_confirmation_required"},422);
+    const pts=input?.source_quad_norm;
+    if(!Array.isArray(pts)||pts.length!==4||
+       !pts.every(p=>Array.isArray(p)&&p.length===2&&p.every(n=>
+         typeof n==="number"&&Number.isFinite(n)&&n>=.015&&n<=.985)))
+      return json({error:"four_valid_normalized_facade_corners_required"},422);
+    const [tl,tr,br,bl]=pts;
+    const cross=(a,b,c)=>(b[0]-a[0])*(c[1]-b[1])-(b[1]-a[1])*(c[0]-b[0]);
+    if(!(tl[0]<tr[0]&&bl[0]<br[0]&&tl[1]<bl[1]&&tr[1]<br[1])||
+       pts.some((p,i)=>cross(p,pts[(i+1)%4],pts[(i+2)%4])<=.0025))
+      return json({error:"invalid_quad_order_or_nonconvex_geometry"},422);
+    const v=(job.revision_num||1)+1;
+    if(v>12)return json({error:"revision_limit_reached"},409);
+    const noteHash=await hash(new TextEncoder().encode(a.d.note));
+    const plan={schema:1,type:"GEOMETRY_FACADE_QUAD_V1",parent_job_id:id,
+      parent_master_sha256:a.d.master_sha256,remarks_sha256:noteHash,
+      categories:["geometry"],HDR_allowed:false,
+      geometry_transform:"CONTROLLED_PROJECTIVE_WARP",
+      allowed_algorithm:"HUMAN_ANCHORED_FACADE_HOMOGRAPHY",
+      source_quad_norm:pts.map(p=>p.map(x=>Math.round(x*1e7)/1e7)),
+      facade_assumption_confirmed:true,
+      no_outpainting:true,human_approval_required:true,
+      source_dimensions:[a.q.width,a.q.height]};
+    const child=await createEditorialIntakeJob(env,{id:job.owner_session_id},{
+      filename:job.filename,mime:job.mime,source_key:job.source_key,
+      source_sha256:job.source_sha256,bytes:job.source_bytes,
+      parent_job_id:id,root_job_id:job.root_job_id||id,revision_num:v,
+      inherit_access_hash:job.access_hash,correction_plan:plan
+    });
+    const link={schema:2,job_id:child.job_id,revision_num:v,
+      source_sha256:job.source_sha256,source_unchanged:true,
+      correction_type:plan.type,source_quad_norm:plan.source_quad_norm,
+      parent_master_sha256:a.d.master_sha256,remarks_sha256:noteHash,
+      rework_decision_at:a.d.at,created_at:new Date().toISOString()};
+    const written=await env.TROPICANA_EDITORIAL_R2.put(
+      key(id,"rework/revision.json"),JSON.stringify(link),{
+        onlyIf:new Headers({"If-None-Match":"*"}),
+        httpMetadata:{contentType:"application/json"}
+      });
+    if(!written){
+      await env.TROPICANA_EDITORIAL_R2.delete(key(child.job_id,"job.json"));
+      const existing=await revisionLink(env,id);
+      return json({error:"revision_race_conflict",job_id:existing?.job_id||null},409);
+    }
+    let started=false,error=null;
+    try{
+      await env.TROPICANA_TECH_WORKFLOW.create({id:child.job_id,params:{job_id:child.job_id}});
+      started=true;
+    }catch(err){
+      error=String(err?.message||err).slice(0,250);
+      await env.TROPICANA_EDITORIAL_R2.put(key(child.job_id,"processing-state.json"),
+        JSON.stringify({job_id:child.job_id,status:"HOLD",stage:"geometry_dispatch_hold",
+          progress:null,error,message:"Коррекция геометрии не запущена. Исходник сохранён."}),
+        {httpMetadata:{contentType:"application/json"}});
+    }
+    return json({ok:true,job_id:child.job_id,parent_job_id:id,revision_num:v,
+      status:started?"QUEUED":"HOLD",workflow_started:started,
+      correction_type:plan.type,source_unchanged:true,
+      corrected_master_ready:false,generation_started:false,error},201);
+  }
+
   if(path==="/api/editorial/job/rework/auto"&&method==="POST"){
     if(a.d?.decision!=="REWORK_REQUESTED"||!a.q)
       return json({error:"rework_decision_and_verified_master_required"},409);
