@@ -292,7 +292,6 @@ export async function editorialJobApi(request,env,url,authorizeSession) {
        a.d.categories?.length!==1||a.d.categories[0]!=="geometry")
       return json({error:"structured_geometry_rework_decision_required"},409);
     if(a.revision)return json({error:"revision_already_created",job_id:a.revision.job_id},409);
-    if(!env.TROPICANA_TECH_WORKFLOW)return json({error:"technical_workflow_missing"},503);
     let input;try{input=await request.json()}catch{return json({error:"invalid_geometry_input"},400)}
     if(input?.facade_assumption_confirmed!==true)
       return json({error:"rectangular_planar_facade_confirmation_required"},422);
@@ -306,6 +305,7 @@ export async function editorialJobApi(request,env,url,authorizeSession) {
     if(!(tl[0]<tr[0]&&bl[0]<br[0]&&tl[1]<bl[1]&&tr[1]<br[1])||
        pts.some((p,i)=>cross(p,pts[(i+1)%4],pts[(i+2)%4])<=.0025))
       return json({error:"invalid_quad_order_or_nonconvex_geometry"},422);
+    if(!env.TROPICANA_TECH_WORKFLOW)return json({error:"technical_workflow_missing"},503);
     const v=(job.revision_num||1)+1;
     if(v>12)return json({error:"revision_limit_reached"},409);
     const noteHash=await hash(new TextEncoder().encode(a.d.note));
