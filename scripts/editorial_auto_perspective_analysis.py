@@ -131,7 +131,9 @@ def analyze(rgb16):
     tilt = _weighted_median([v["vertical_tilt_deg"] for v in verts], vertical_len) if verts else None
     mad = _weighted_median([abs(v["vertical_tilt_deg"]-tilt) for v in verts], vertical_len) if verts else None
     xspan = _span([v["mid_x"] for v in verts])
-    yspan = _span([v["mid_y"] for v in verts])
+    # Full-length architectural columns share the same midpoint: use vertical
+    # endpoint *coverage*, not midpoint spread, to avoid a false HOLD.
+    yspan = _span([y for v in verts for y in (v["p"][1],v["p"][3])])
 
     # Plausible global roll (not camera pitch or per-facade projective warp).
     reliable = bool(len(verts) >= 6 and mad <= 1.1 and xspan >= .22 and yspan >= .13)
