@@ -21,6 +21,25 @@
 .qa-checklist input[type=checkbox]{width:18px;height:18px;min-width:18px;accent-color:#20bade}
 .qa-panel .metric{grid-template-columns:minmax(100px,auto) minmax(0,1fr)}
 .qa-panel .metric strong{min-width:0;overflow-wrap:anywhere;text-align:right}
+.geometry-first{display:flex;justify-content:space-between;gap:18px;align-items:center;border:1px solid #54849b;background:linear-gradient(110deg,#173449,#102534);padding:20px;margin:16px 0 20px}
+.geometry-first h3{font-size:23px;margin:5px 0;font-weight:600}
+.geometry-first p{font-size:14px;line-height:1.5;color:#bed0db;max-width:520px;margin:7px 0 0}
+.geometry-first .eyebrow{color:#9cdeea}
+.geometry-first-btn{font-size:15px;font-weight:600;white-space:nowrap;padding:13px 18px}
+.qa-tech-details{margin:10px 0;border:1px solid #2b4659;background:#0b1a28;border-radius:4px}
+.qa-tech-details>summary{padding:12px 16px;cursor:pointer;color:#c3dbe9;font-weight:600}
+.qa-tech-details>summary span{font-size:12px;font-weight:400;color:#839cad;margin-left:9px}
+.qa-tech-details .qa-source-review{margin:8px 12px 12px}
+.geometry-preview{margin:15px 0;border:1px solid #31556a;padding:13px;background:#071723}
+.geometry-preview-top{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:10px}
+.geometry-preview-top span{font-size:12px;color:#96b8cb}
+.geometry-preview-wrap{position:relative;width:100%;background:#040f17;line-height:0;overflow:hidden}
+.geometry-preview-wrap canvas{display:block;width:100%;height:auto}
+.geometry-preview-wrap #intake-geometry-after{position:absolute;inset:0;clip-path:inset(0 0 0 50%);pointer-events:none}
+.geometry-preview-cut{position:absolute;left:50%;top:0;bottom:0;width:2px;background:#edf9ff;transform:translateX(-1px);pointer-events:none}
+.geometry-preview-range{display:flex;gap:12px;align-items:center;margin:10px 0 0;font-size:12px}
+.geometry-preview-range input{flex:1;min-width:65px;accent-color:#45c8e3}
+@media(max-width:700px){.geometry-first{display:block;padding:15px}.geometry-first-btn{margin-top:14px;width:100%}.geometry-preview-top{align-items:flex-start}.qa-tech-details>summary span{display:block;margin-left:0}.geometry-editor{padding:10px}}
 .geometry-editor{margin:12px 0;padding:13px;border:1px solid #315b74;background:#0b2333}
 .geometry-canvas-wrap{position:relative;max-width:100%;background:#06131d;display:block;min-height:110px}
 .geometry-canvas-wrap img{display:block;width:100%;height:auto;max-height:65vh;object-fit:contain}
@@ -90,7 +109,7 @@
 <header><div class="brand">MG <span>4K</span> / EDITORIAL PHOTO</div><nav><a href="/">4K Upscaler</a></nav></header>
 <main>
 <div class="eyebrow">MARINS OS / Architectural Editorial / Perspective Lock</div><h1>Editorial Photo</h1>
-<p class="lead">Рабочая приёмка текущего Tech Master: проверка источника, архитектурной геометрии и деталей в полном разрешении. Архив RAW/TECH DSC09818 доступен отдельно; художественная генерация — только после вашего утверждения.</p>
+<p class="lead">Откройте фотографию, исправьте перспективу и сравните результат. До вашего подтверждения исходник не изменяется.</p>
 <div class="grid editorial-layout">
   <aside class="stack workspace-rail">
     <section class="panel">
@@ -123,7 +142,7 @@
     <section class="panel qa-panel" aria-label="Текущий Tech Master и визуальное QA">
       <div class="qa-head">
         <div><div class="eyebrow qa-eyebrow">Текущая фотография / Шаг 02 · Визуальная приёмка</div>
-        <h2>Tech Master → QA → MG 4K</h2></div>
+        <h2>Фотография · обработка и проверка</h2></div>
         <span class="muted">Без HDR · Perspective Lock · исходник неизменен</span>
       </div>
       <div class="metric"><span class="muted">Задание</span><strong id="intake-id" class="key">Не создано</strong></div>
@@ -131,8 +150,48 @@
       <div class="metric"><span class="muted">Этап</span><strong id="intake-stage">—</strong></div>
       <progress id="intake-progress" max="100" value="0" hidden class="qa-progress" style="width:100%;height:12px"></progress>
       <p id="intake-empty" class="note">Нет открытого задания в этом браузере. Для уже обработанной фотографии используйте персональную ссылку на QA — повторно загружать исходник не требуется.</p>
-      <p id="intake-message" class="muted" role="status">Прогресс отображается только из серверных состояний, без искусственного таймера.</p>
+      <p id="intake-message" class="muted" role="status"></p>
+      <section id="intake-geometry-first" class="geometry-first" hidden aria-label="Исправление перспективы">
+        <div>
+          <div class="eyebrow">01 / ГЕОМЕТРИЯ КАДРА</div>
+          <h3>Исправить перспективу</h3>
+          <p>Отметьте четыре угла фасада. Сначала увидите предварительное исправление — исходная фотография останется неизменной.</p>
+        </div>
+        <button class="btn geometry-first-btn" id="intake-geometry-start" type="button">Начать исправление</button>
+      </section>
 
+        <section class="geometry-editor" id="intake-geometry-panel" hidden aria-label="Управляемое исправление перспективы фасада">
+          <h3>Укажите углы фасада</h3>
+          <p class="muted">Нажмите на фотографии: 1 — верхний левый, 2 — верхний правый, 3 — нижний правый, 4 — нижний левый угол одной плоскости.</p>
+          <div class="geometry-canvas-wrap" id="intake-geometry-image-wrap">
+            <img id="intake-geometry-image" alt="Исходник для выбора четырёх контрольных точек">
+            <canvas id="intake-geometry-guide" role="img" aria-label="Контрольные точки главной плоскости фасада"></canvas>
+          </div>
+          <div class="geometry-guide-state" id="intake-geometry-state" role="status">Выберите первый угол: верхний левый</div>
+          <div class="geometry-guide-action">
+            <button class="btn mutebtn" type="button" id="intake-geometry-reset">Очистить точки</button>
+            <button class="btn mutebtn" type="button" id="intake-geometry-fullscreen">На весь экран</button>
+          </div>
+          <div class="geometry-guide-action">
+            <button class="btn" type="button" id="intake-geometry-render" disabled>Посмотреть исправление</button>
+            <button class="btn mutebtn" type="button" id="intake-geometry-close">Закрыть без изменений</button>
+          </div>
+          <section id="intake-geometry-preview" class="geometry-preview" hidden>
+            <div class="geometry-preview-top"><strong>Предпросмотр · До / После</strong><span>Оригинал не изменён</span></div>
+            <div id="intake-geometry-preview-wrap" class="geometry-preview-wrap">
+              <canvas id="intake-geometry-before" aria-label="Фотография до исправления"></canvas>
+              <canvas id="intake-geometry-after" aria-label="Предпросмотр выпрямленного фасада"></canvas>
+              <span class="geometry-preview-cut" id="intake-geometry-preview-cut"></span>
+            </div>
+            <div class="geometry-preview-range"><span>До</span><input id="intake-geometry-preview-range" type="range" min="0" max="100" value="50" aria-label="Положение границы сравнения до и после"><span>После</span></div>
+            <p id="intake-geometry-preview-metrics" class="muted"></p>
+            <p class="muted">Предпросмотр уменьшен для скорости. Финальный TIFF будет рассчитан сервером. Проверьте автомобили, соседние здания и границы кадра.</p>
+          </section>
+          <label class="geometry-facade-check"><input type="checkbox" id="intake-geometry-facade-check"> Подтверждаю: отмечена одна плоская прямоугольная часть фасада. Искажения других плоскостей проверю отдельно.</label>
+          <button class="btn" type="button" id="intake-geometry-submit" disabled>Создать исправленную V2 и вернуть V1 на доработку</button>
+          <p class="muted" id="intake-geometry-warning" role="status">Разметку и предпросмотр можно отменить без изменения задания.</p>
+        </section>
+      <details class="qa-tech-details" id="intake-tech-details"><summary>Технический протокол <span>Проверки исходника, SHA-256 и битности</span></summary>
       <section id="intake-source-verification" class="qa-source-review" aria-label="Протокол проверки исходного изображения" hidden>
         <div class="qa-source-review-head">
           <h3>01 / Проверка исходника</h3>
@@ -149,6 +208,7 @@
           <div id="intake-source-visual-note">Автоматическая коррекция объектива, вертикалей и перспективы не выполнялась. Сохранение геометрии исходника не подтверждает правильность съёмки. Оцените композицию, фактуры и перспективу через Сплит и 100% масштаб.</div>
         </div>
       </section>
+      </details>
       <section id="intake-split-viewer" class="qa-split-viewer" hidden aria-label="Сравнение исходника и Tech Master в одной геометрии">
         <div class="qa-split-toolbar">
           <div class="qa-split-modes" role="group" aria-label="Режим просмотра">
@@ -230,22 +290,7 @@
           <p class="muted" id="intake-auto-eligibility">Условия коррекции проверяются после регистрации замечаний.</p>
           <button class="btn" id="intake-auto-rework" type="button" disabled>Запустить безопасную коррекцию</button>
         </section>
-        <section class="geometry-editor" id="intake-geometry-panel" hidden aria-label="Управляемое исправление перспективы фасада">
-          <strong>Исправить перспективу по 4 точкам</strong>
-          <p class="muted">Отметьте по порядку углы одной прямоугольной плоскости фасада: верхний левый → верхний правый → нижний правый → нижний левый. Исходник остаётся неизменным.</p>
-          <div class="geometry-canvas-wrap" id="intake-geometry-image-wrap">
-            <img id="intake-geometry-image" alt="Исходник для выбора четырёх контрольных точек">
-            <canvas id="intake-geometry-guide" role="img" aria-label="Контрольные точки главной плоскости фасада"></canvas>
-          </div>
-          <div class="geometry-guide-state" id="intake-geometry-state" role="status">Выберите первый угол: верхний левый</div>
-          <div class="geometry-guide-action">
-            <button class="btn mutebtn" type="button" id="intake-geometry-reset">Очистить точки</button>
-            <button class="btn mutebtn" type="button" id="intake-geometry-fullscreen">На весь экран</button>
-          </div>
-          <label class="geometry-facade-check"><input type="checkbox" id="intake-geometry-facade-check"> Подтверждаю: отмечена одна плоская прямоугольная часть фасада. Искажения других плоскостей проверю отдельно.</label>
-          <button class="btn" type="button" id="intake-geometry-submit" disabled>Сформировать исправленный Tech Master</button>
-          <p class="muted" id="intake-geometry-warning" role="status">Если преобразование потребует чрезмерной обрезки или деформации, система остановит обработку с состоянием HOLD.</p>
-        </section>
+
         <p class="muted" id="intake-rework-remarks"></p>
         <p class="muted">Если коррекция по точкам недоступна или остановлена, можно загрузить исправленный исходник JPG/PNG/WebP (до 8 МБ). Предыдущие версии остаются в архиве.</p>
         <input id="intake-revision-file" type="file" accept="image/jpeg,image/png,image/webp">
@@ -295,7 +340,7 @@
     </details>
   </section>
 </div></main>
-<script src="/editorial-split.js"></script>
+<script src="/editorial-split.js"></script><script src="/editorial-geometry-preview.js"></script>
 <script>
 const base="/api/editorial";let session=null,sourceURL=null;
 let intakeId="",intakeProof=null,intakePoll=null,intakeBusy=false,intakeState=null;
