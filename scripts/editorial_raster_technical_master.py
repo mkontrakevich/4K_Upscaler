@@ -75,6 +75,10 @@ def prepare(source: Path, out: Path, job_id: str, expected_sha: str, correction_
             "next_stage":"MANUAL_DIAGNOSTIC_ONLY"
         }
     correction = None
+    auto_geometry = None
+    if correction_plan is None:
+        from editorial_auto_roll_correction import apply as auto_roll
+        rgb16, auto_geometry = auto_roll(rgb16, scene_analysis)
     if correction_plan is not None:
         payload = json.loads(correction_plan.read_text(encoding="utf-8"))
         if payload.get("type") == "GEOMETRY_FACADE_QUAD_V1":
@@ -87,7 +91,7 @@ def prepare(source: Path, out: Path, job_id: str, expected_sha: str, correction_
     preview = out / "fullres-preview.jpg"
     qa = out / "qa.json"
     tifffile.imwrite(master, rgb16, photometric="rgb", bigtiff=True,
-        metadata={"description": "Technical master, HDR ABSENT, no generative processing; geometry correction only when anchored and documented"})
+        metadata={"description": "Technical master; no HDR or generated details; geometry correction only if independently measured and proven"})
     # Browser preview is 8-bit and full-pixel; never pretend it is the 16-bit TIFF.
     view = np.uint8(np.rint(rgb16.astype(np.float32) / 257))
     ok, compressed = cv2.imencode(".jpg", view[:, :, ::-1], [cv2.IMWRITE_JPEG_QUALITY, 94])
@@ -116,18 +120,23 @@ def prepare(source: Path, out: Path, job_id: str, expected_sha: str, correction_
         "preview_bytes": preview.stat().st_size,
         "technical_version": ("CONTROLLED_GEOMETRY_RECTIFICATION_V1" if correction and
             correction["geometry_transform"] == "CONTROLLED_PROJECTIVE_WARP"
-            else "DETERMINISTIC_PHOTOMETRIC_REWORK_V1") if correction else "GENERIC_RASTER_NEUTRAL_NO_HDR_V1",
+            else "DETERMINISTIC_PHOTOMETRIC_REWORK_V1") if correction else (
+            "AUTO_CAMERA_ROLL_SAFE_CROP_V1" if auto_geometry and auto_geometry["status"]=="APPLIED"
+            else "GENERIC_RASTER_NEUTRAL_NO_HDR_V1"),
         "correction": correction,
         "correction_status": correction["correction_status"] if correction else "NOT_REQUESTED",
         "auto_geometry_analysis": scene_analysis,
         "auto_geometry_analysis_status": scene_analysis["status"],
+        "auto_geometry_correction": auto_geometry,
         "technical_status": "TECHNICAL_QA_PASS",
         "HDR_applied": False,
         "virtual_exposures": False,
         "local_HDR": False,
         "generative_processing": False,
         "geometry": (correction["geometry_transform"] if correction and
-             correction["geometry_transform"] == "CONTROLLED_PROJECTIVE_WARP" else "IDENTITY_NO_CORRECTION"),
+             correction["geometry_transform"] == "CONTROLLED_PROJECTIVE_WARP" else
+             "AUTO_CAMERA_ROLL_CORRECTION" if auto_geometry and auto_geometry["status"]=="APPLIED"
+             else "IDENTITY_NO_CORRECTION"),
         "geometry_visual_review": "PENDING",
         "human_visual_QA": "PENDING",
         "opaque_alpha_verified": bool(raw.ndim==3 and raw.shape[2]==4),
@@ -137,14 +146,19 @@ def prepare(source: Path, out: Path, job_id: str, expected_sha: str, correction_
             "SOURCE_SHA256": "PASS",
             "BIT_DEPTH_16": "PASS",
             "HDR_ABSENT": "PASS",
-            "GEOMETRY_UNCHANGED": "NOT_APPLICABLE" if correction and
-               correction["geometry_transform"] == "CONTROLLED_PROJECTIVE_WARP" else "PASS",
-            "GEOMETRY_TRANSFORM_EVIDENCED": "PASS" if correction and
-               correction["geometry_transform"] == "CONTROLLED_PROJECTIVE_WARP" else "NOT_APPLICABLE",
+            "GEOMETRY_UNCHANGED": "NOT_APPLICABLE" if
+               (correction and correction["geometry_transform"]=="CONTROLLED_PROJECTIVE_WARP") or
+               (auto_geometry and auto_geometry["status"]=="APPLIED") else "PASS",
+            "GEOMETRY_TRANSFORM_EVIDENCED": "PASS" if
+               (correction and correction["geometry_transform"]=="CONTROLLED_PROJECTIVE_WARP") or
+               (auto_geometry and auto_geometry["status"]=="APPLIED") else "NOT_APPLICABLE",
             "TIFF_READBACK": "PASS",
             "NO_GENERATIVE_PROCESSING": "PASS",
             "AUTO_GEOMETRY_ANALYZED": "PASS" if scene_analysis["status"]=="OBSERVATION_ONLY" else "HOLD",
-            "AUTO_GEOMETRY_CORRECTED": "NOT_APPLICABLE",
+            "AUTO_GEOMETRY_CORRECTED":
+                "PASS" if auto_geometry and auto_geometry["status"]=="APPLIED" else
+                "NO_CHANGE_NEEDED" if auto_geometry and auto_geometry["status"]=="NO_CHANGE_NEEDED" else
+                "HOLD" if auto_geometry and auto_geometry["status"]=="HOLD" else "NOT_APPLICABLE",
         },
     }
     qa.write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")
