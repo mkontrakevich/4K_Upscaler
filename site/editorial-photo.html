@@ -151,6 +151,7 @@
       <progress id="intake-progress" max="100" value="0" hidden class="qa-progress" style="width:100%;height:12px"></progress>
       <p id="intake-empty" class="note">Нет открытого задания в этом браузере. Для уже обработанной фотографии используйте персональную ссылку на QA — повторно загружать исходник не требуется.</p>
       <p id="intake-message" class="muted" role="status"></p>
+      <p id="intake-auto-geometry-status" class="muted" aria-live="polite">Автоматический анализ геометрии: данные ещё не получены.</p>
       <section id="intake-geometry-first" class="geometry-first" hidden aria-label="Исправление перспективы">
         <div>
           <div class="eyebrow">01 / ГЕОМЕТРИЯ КАДРА</div>
@@ -559,6 +560,20 @@ function setIntake(data){
  }
  e("intake-geometry-submit").disabled=intakeBusy||!data.can_geometry_rework||
    !geometryPreviewReady||!e("intake-geometry-facade-check").checked;
+ const a=data.automatic_geometry_analysis;
+ const view=e("intake-auto-geometry-status");
+ if(a?.status==="OBSERVATION_ONLY"){
+   const tilt=typeof a.vertical_tilt_deg==="number"?Math.abs(a.vertical_tilt_deg).toFixed(2)+"°":"не определён";
+   const type={FRONT_CANDIDATE:"близкий к фронтальному",ANGLE:"угловой",UNKNOWN:"не определён"}[a.intent]||"не определён";
+   const count=Number(a.vertical_lines)||0;
+   view.textContent="Автоанализ: найдено вертикалей "+count+
+      " · отклонение "+tilt+" · ракурс: "+type+
+      ". Перспектива пока не исправлялась.";
+ }else if(a?.status==="HOLD"){
+   view.textContent="Автоанализ геометрии: недостаточно надёжных линий. Исправление не выполнялось.";
+ }else{
+   view.textContent="Автоанализ геометрии ещё не выполнялся для этой версии фотографии.";
+ }
  const correction=data.technical_correction;
  const proofText=e("intake-correction-report");
  proofText.hidden=!correction;
