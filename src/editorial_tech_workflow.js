@@ -58,6 +58,8 @@ async function proof(env,id,job){
   if(!r.ok)throw Error("technical_QA_missing_"+r.status);
   const qa=await r.json();
   const geometryPlan=job.correction_plan?.type==="GEOMETRY_FACADE_QUAD_V1";
+  const autoRoll=!job.correction_plan&&qa.auto_geometry_correction?.status==="APPLIED";
+  const ag=qa.auto_geometry_correction;
   if(qa.job_id!==id||qa.source_sha256!==job.source_sha256||
      qa.technical_status!=="TECHNICAL_QA_PASS"||qa.master_bit_depth!==16||
      qa.HDR_applied!==false||qa.virtual_exposures!==false||qa.local_HDR!==false||
@@ -68,8 +70,28 @@ async function proof(env,id,job){
        (qa.qa_checks?.GEOMETRY_TRANSFORM_EVIDENCED!=="PASS"||
         qa.qa_checks?.GEOMETRY_UNCHANGED!=="NOT_APPLICABLE"||
         qa.geometry!=="CONTROLLED_PROJECTIVE_WARP"):
+       autoRoll?
+       (qa.qa_checks?.GEOMETRY_TRANSFORM_EVIDENCED!=="PASS"||
+        qa.qa_checks?.GEOMETRY_UNCHANGED!=="NOT_APPLICABLE"||
+        qa.qa_checks?.AUTO_GEOMETRY_CORRECTED!=="PASS"||
+        qa.geometry!=="AUTO_CAMERA_ROLL_CORRECTION"):
        (qa.qa_checks?.GEOMETRY_UNCHANGED!=="PASS"||
         qa.geometry!=="IDENTITY_NO_CORRECTION"))||
+     (autoRoll&&(
+       ag?.engine!=="AUTO_CAMERA_ROLL_SAFE_CROP_V1"||
+       ag?.geometry_transform!=="AUTO_CAMERA_ROLL_CORRECTION"||
+       ag?.HDR_applied!==false||ag?.generative_processing!==false||
+       !Number.isFinite(ag?.vertical_residual_before_deg)||
+       !Number.isFinite(ag?.vertical_residual_after_deg)||
+       Math.abs(ag.vertical_residual_after_deg)>.40||
+       Math.abs(ag.vertical_residual_after_deg)>=Math.abs(ag.vertical_residual_before_deg)*.40||
+       !Number.isFinite(ag?.crop_area_fraction)||ag.crop_area_fraction<0||ag.crop_area_fraction>.15||
+       !Number.isFinite(ag?.lost_salient_edge_fraction)||ag.lost_salient_edge_fraction>.055||
+       ag?.invalid_border_fraction!==0||
+       !Number.isFinite(ag?.changed_mean_absolute_fraction)||
+       ag.changed_mean_absolute_fraction<.003||
+       !Array.isArray(ag?.operations)||ag.operations.length===0
+     ))||
      !SHA.test(qa.master_sha256||"")||
      !Number.isInteger(qa.master_bytes)||qa.master_bytes<200000||
      (job.correction_plan&&(
@@ -209,7 +231,9 @@ export class EditorialTechWorkflow extends WorkflowEntrypoint{
           job.correction_plan?
           "Исправленная V2 готова: "+job.correction_plan.categories.join(", ")+
           ". Проверьте изменения визуально, автоматически не утверждается.":
-          "Технический 16-битный TIFF готов. Проверьте полный размер и утвердите QA.",
+          qa.auto_geometry_correction?.status==="APPLIED"?
+          "Камера выровнена автоматически, границы безопасно обрезаны. Проверьте сплит, архитектуру и композицию перед утверждением.":
+          "Технический 16-битный TIFF готов. Проверка Auto Perspective не означает выполненную коррекцию.",
         technical_master_sha256:saved.master_sha256});
       return {job_id:id,status:"AWAITING_HUMAN_QA",...saved};
     }catch(error){
