@@ -61,6 +61,19 @@ def prepare(source: Path, out: Path, job_id: str, expected_sha: str, correction_
     signal_bits = 16 if rgb.dtype == np.uint16 else 8
     # No HDR, virtual exposures, tone recovery, resampling or new details.
     rgb16 = rgb if signal_bits == 16 else rgb.astype(np.uint16) * np.uint16(257)
+    # Observe original pixels before any warp; this is NOT permission to apply
+    # automatic scene correction or to claim auto-rectification completed.
+    try:
+        from editorial_auto_perspective_analysis import analyze
+        scene_analysis = analyze(rgb16)
+    except Exception as error:
+        scene_analysis = {
+            "schema":1, "engine":"AUTO_SCENE_GEOMETRY_ANALYSIS_V1",
+            "status":"HOLD", "pixels_corrected":False,
+            "automatic_correction_applied":False,
+            "hold_reason":"ANALYSIS_FAILED_" + type(error).__name__,
+            "next_stage":"MANUAL_DIAGNOSTIC_ONLY"
+        }
     correction = None
     if correction_plan is not None:
         payload = json.loads(correction_plan.read_text(encoding="utf-8"))
@@ -106,6 +119,8 @@ def prepare(source: Path, out: Path, job_id: str, expected_sha: str, correction_
             else "DETERMINISTIC_PHOTOMETRIC_REWORK_V1") if correction else "GENERIC_RASTER_NEUTRAL_NO_HDR_V1",
         "correction": correction,
         "correction_status": correction["correction_status"] if correction else "NOT_REQUESTED",
+        "auto_geometry_analysis": scene_analysis,
+        "auto_geometry_analysis_status": scene_analysis["status"],
         "technical_status": "TECHNICAL_QA_PASS",
         "HDR_applied": False,
         "virtual_exposures": False,
@@ -128,6 +143,8 @@ def prepare(source: Path, out: Path, job_id: str, expected_sha: str, correction_
                correction["geometry_transform"] == "CONTROLLED_PROJECTIVE_WARP" else "NOT_APPLICABLE",
             "TIFF_READBACK": "PASS",
             "NO_GENERATIVE_PROCESSING": "PASS",
+            "AUTO_GEOMETRY_ANALYZED": "PASS" if scene_analysis["status"]=="OBSERVATION_ONLY" else "HOLD",
+            "AUTO_GEOMETRY_CORRECTED": "NOT_APPLICABLE",
         },
     }
     qa.write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")
