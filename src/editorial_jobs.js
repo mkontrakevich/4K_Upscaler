@@ -152,8 +152,7 @@ async function availability(env,job) {
   let processing=null;
   if(processObject){try{processing=await processObject.json()}catch{}}
   const autoHold=!!(job.correction_plan&&processing?.status==="HOLD");
-  const revision=d?.decision==="REWORK_REQUESTED"||autoHold?
-    await revisionLink(env,job.job_id):null;
+  const revision=q?await revisionLink(env,job.job_id):null;
   return {q,d,approved,imported,processing,revision,autoHold};
 }
 function sourceVerification(job,a){
@@ -234,6 +233,8 @@ function state(job,a) {
     can_approve:!!a.q&&!a.d,can_reject:!!a.q&&!a.d,
     can_rework:!!a.q&&!a.d,
     can_upload_revision:(a.d?.decision==="REWORK_REQUESTED"||a.autoHold)&&!a.revision,
+    can_auto_geometry_reprocess:!!a.q&&!a.d&&!a.revision&&
+      (job.revision_num||1)<12,
     can_geometry_rework:!!a.q&&!a.revision&&(
       !a.d||(a.d.decision==="REWORK_REQUESTED"&&
       a.d.categories?.length===1&&a.d.categories[0]==="geometry")),
@@ -326,6 +327,54 @@ export async function editorialJobApi(request,env,url,authorizeSession) {
     return new Response(src.body,{headers:{"content-type":job.mime,"cache-control":"private,no-store",
        "x-content-type-options":"nosniff"}});
   }
+  if(path==="/api/editorial/job/auto-geometry"&&method==="POST"){
+    // Non-destructive, no control points or rejection of the existing V1.
+    // Create one independently reviewed child from the immutable source.
+    if(!a.q||a.d||a.revision)return json({error:"auto_geometry_requires_unmodified_pending_QA"},409);
+    if((job.revision_num||1)>=12)return json({error:"revision_limit_reached"},409);
+    if(!env.TROPICANA_TECH_WORKFLOW)return json({error:"technical_workflow_missing"},503);
+    const version=(job.revision_num||1)+1;
+    const child=await createEditorialIntakeJob(env,{id:job.owner_session_id},{
+      filename:job.filename,mime:job.mime,source_key:job.source_key,
+      source_sha256:job.source_sha256,bytes:job.source_bytes,
+      parent_job_id:id,root_job_id:job.root_job_id||id,revision_num:version,
+      inherit_access_hash:job.access_hash,correction_plan:null
+    });
+    const link={
+      schema:2,type:"AUTO_GEOMETRY_REPROCESS_V1",
+      job_id:child.job_id,revision_num:version,
+      source_sha256:job.source_sha256,source_unchanged:true,
+      original_master_sha256:a.q.master_sha256,
+      parent_decision_mutated:false,
+      created_at:new Date().toISOString()
+    };
+    const result=await env.TROPICANA_EDITORIAL_R2.put(
+      key(id,"rework/revision.json"),JSON.stringify(link),{
+        onlyIf:new Headers({"If-None-Match":"*"}),
+        httpMetadata:{contentType:"application/json"}
+      });
+    if(!result){
+      await env.TROPICANA_EDITORIAL_R2.delete(key(child.job_id,"job.json"));
+      const existing=await revisionLink(env,id);
+      return json({error:"auto_geometry_revision_conflict",job_id:existing?.job_id||null},409);
+    }
+    let started=false,error=null;
+    try{
+      await env.TROPICANA_TECH_WORKFLOW.create({id:child.job_id,params:{job_id:child.job_id}});
+      started=true;
+    }catch(err){
+      error=String(err?.message||err).slice(0,250);
+      await env.TROPICANA_EDITORIAL_R2.put(key(child.job_id,"processing-state.json"),
+        JSON.stringify({job_id:child.job_id,status:"HOLD",stage:"auto_geometry_dispatch_hold",
+          progress:null,error,message:"Автокоррекция не запущена. Исходник и V1 сохранены."}),
+        {httpMetadata:{contentType:"application/json"}});
+    }
+    return json({ok:true,job_id:child.job_id,parent_job_id:id,
+      revision_num:version,source_unchanged:true,
+      parent_decision_mutated:false,status:started?"QUEUED":"HOLD",
+      workflow_started:started,generation_started:false,error},201);
+  }
+
   if(path==="/api/editorial/job/rework/geometry"&&method==="POST"){
     const firstGeometryReturn=!a.d&&!!a.q;
     const previouslyReturned=a.d?.decision==="REWORK_REQUESTED"&&
