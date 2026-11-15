@@ -34,6 +34,7 @@ test("browser canvas genuinely renders different corrected pixels without touchi
  function originalCanvas(){
   const canvas={width:0,height:0};
   canvas.getContext=()=>({
+   clearRect:()=>{},
    drawImage:()=>{},
    getImageData:()=>{
     const data=new Uint8ClampedArray(canvas.width*canvas.height*4);
