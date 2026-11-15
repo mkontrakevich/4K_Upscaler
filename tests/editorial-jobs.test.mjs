@@ -555,3 +555,58 @@ test("geometry QA fails closed if provenance claims unchanged or lacks controlle
  assert.equal(status.can_approve,false);
  assert.equal(status.can_handoff,false);
 });
+
+
+test("geometry may be previewed without deciding V1, then one deliberate commit creates V2",async()=>{
+ const h=harness(),v1=await intake(h),sha=await tech(h,v1);
+ const quad=[[.18,.23],[.82,.225],[.825,.77],[.175,.775]];
+ const uri="/api/editorial/job/rework/geometry?job="+v1.job_id;
+ let state=await (await h.call("/api/editorial/job/status?job="+v1.job_id)).json();
+ assert.equal(state.can_geometry_rework,true,"geometry action must be exposed before rework");
+ assert.equal(state.can_rework,true);
+ assert.equal(state.approval,null,"source V1 still awaits a human decision");
+ const k="tropicana-park/editorial-jobs/"+v1.job_id+"/";
+ const reason="Исправить перспективу по 4 точкам без изменения архитектурных деталей";
+ const plan={source_quad_norm:quad,facade_assumption_confirmed:true,
+   master_sha256:sha,note:reason,commit_parent_return:true};
+ let req=await h.call(uri,"POST",plan,false);
+ assert.equal(req.status,404,"anonymous caller must never modify V1");
+ req=await h.call(uri,"POST",{...plan,source_quad_norm:quad.slice(0,3)});
+ assert.equal(req.status,422,"missing controls rejected");
+ req=await h.call(uri,"POST",{...plan,commit_parent_return:false});
+ assert.equal(req.status,422,"no implied irreversible return");
+ req=await h.call(uri,"POST",{...plan,master_sha256:"f".repeat(64)});
+ assert.equal(req.status,422,"stale master rejected");
+ assert.equal(await h.r2.get(k+"technical/decision.json"),null);
+ assert.equal(await h.r2.get(k+"rework/revision.json"),null);
+ const started=[];
+ h.env.TROPICANA_TECH_WORKFLOW={async create(x){started.push(x);return {id:x.id}}};
+ req=await h.call(uri,"POST",plan);
+ assert.equal(req.status,201);
+ const result=await req.json();
+ assert.equal(result.revision_num,2);
+ assert.equal(result.source_unchanged,true);
+ assert.equal(result.generation_started,false);
+ assert.equal(started.length,1);
+ const decision=await (await h.r2.get(k+"technical/decision.json")).json();
+ assert.equal(decision.decision,"REWORK_REQUESTED");
+ assert.deepEqual(decision.categories,["geometry"]);
+ assert.equal(decision.master_sha256,sha);
+ assert.equal(decision.note,reason);
+ const parent=await (await h.r2.get(k+"job.json")).json();
+ const child=await (await h.r2.get("tropicana-park/editorial-jobs/"+result.job_id+"/job.json")).json();
+ assert.equal(child.source_key,parent.source_key);
+ assert.equal(child.source_sha256,parent.source_sha256);
+ assert.equal(child.parent_job_id,v1.job_id);
+ assert.equal(child.correction_plan.geometry_transform,"CONTROLLED_PROJECTIVE_WARP");
+ state=await (await h.call("/api/editorial/job/status?job="+result.job_id,"GET",null,false,v1.job_token)).json();
+ assert.equal(state.can_handoff,false);
+ assert.equal(state.can_approve,false);
+ const master=await tech(h,child);
+ assert.notEqual(master,sha);
+ state=await (await h.call("/api/editorial/job/status?job="+result.job_id,"GET",null,false,v1.job_token)).json();
+ assert.equal(state.technical_master_ready,true);
+ assert.equal(state.can_handoff,false);
+ req=await h.call(uri,"POST",plan);
+ assert.equal(req.status,409,"one parent source cannot silently spawn duplicate V2s");
+});
