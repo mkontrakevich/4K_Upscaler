@@ -195,9 +195,9 @@ function state(job,a) {
     can_approve:!!a.q&&!a.d,can_reject:!!a.q&&!a.d,
     can_rework:!!a.q&&!a.d,
     can_upload_revision:(a.d?.decision==="REWORK_REQUESTED"||a.autoHold)&&!a.revision,
-    can_geometry_rework:a.d?.decision==="REWORK_REQUESTED"&&!a.revision&&
-      Array.isArray(a.d.categories)&&a.d.categories.length===1&&
-      a.d.categories[0]==="geometry",
+    can_geometry_rework:!!a.q&&!a.revision&&(
+      !a.d||(a.d.decision==="REWORK_REQUESTED"&&
+      a.d.categories?.length===1&&a.d.categories[0]==="geometry")),
     can_auto_rework:a.d?.decision==="REWORK_REQUESTED"&&!a.revision&&
       Array.isArray(a.d.categories)&&a.d.categories.length>0&&
       a.d.categories.every(c=>c==="exposure"||c==="color"),
@@ -288,13 +288,21 @@ export async function editorialJobApi(request,env,url,authorizeSession) {
        "x-content-type-options":"nosniff"}});
   }
   if(path==="/api/editorial/job/rework/geometry"&&method==="POST"){
-    if(a.d?.decision!=="REWORK_REQUESTED"||!a.q||
-       a.d.categories?.length!==1||a.d.categories[0]!=="geometry")
-      return json({error:"structured_geometry_rework_decision_required"},409);
+    const firstGeometryReturn=!a.d&&!!a.q;
+    const previouslyReturned=a.d?.decision==="REWORK_REQUESTED"&&
+      a.d.categories?.length===1&&a.d.categories[0]==="geometry";
+    if(!a.q||(!firstGeometryReturn&&!previouslyReturned))
+      return json({error:"geometry_master_not_ready_or_already_decided"},409);
     if(a.revision)return json({error:"revision_already_created",job_id:a.revision.job_id},409);
     let input;try{input=await request.json()}catch{return json({error:"invalid_geometry_input"},400)}
     if(input?.facade_assumption_confirmed!==true)
       return json({error:"rectangular_planar_facade_confirmation_required"},422);
+    if(firstGeometryReturn&&(
+      input.commit_parent_return!==true||
+      input.master_sha256!==a.q.master_sha256||
+      typeof input.note!=="string"||
+      input.note.trim().length<12||input.note.trim().length>2000))
+      return json({error:"explicit_geometry_return_confirmation_and_master_hash_required"},422);
     const pts=input?.source_quad_norm;
     if(!Array.isArray(pts)||pts.length!==4||
        !pts.every(p=>Array.isArray(p)&&p.length===2&&p.every(n=>
@@ -305,12 +313,37 @@ export async function editorialJobApi(request,env,url,authorizeSession) {
     if(!(tl[0]<tr[0]&&bl[0]<br[0]&&tl[1]<bl[1]&&tr[1]<br[1])||
        pts.some((p,i)=>cross(p,pts[(i+1)%4],pts[(i+2)%4])<=.0025))
       return json({error:"invalid_quad_order_or_nonconvex_geometry"},422);
+    const lx=(tl[0]+bl[0])/2,rx=(tr[0]+br[0])/2;
+    const ty=(tl[1]+tr[1])/2,by=(bl[1]+br[1])/2;
+    const area=Math.abs(pts.reduce((z,p,i)=>z+
+      p[0]*pts[(i+1)%4][1]-p[1]*pts[(i+1)%4][0],0)/2);
+    if(area<.035||area>.78||rx-lx<.22||by-ty<.18||
+       Math.max(Math.abs(tl[0]-bl[0]),Math.abs(tr[0]-br[0]),
+        Math.abs(tl[1]-tr[1]),Math.abs(bl[1]-br[1]))>.17)
+      return json({error:"facade_quad_outside_safe_limits"},422);
     if(!env.TROPICANA_TECH_WORKFLOW)return json({error:"technical_workflow_missing"},503);
     const v=(job.revision_num||1)+1;
     if(v>12)return json({error:"revision_limit_reached"},409);
-    const noteHash=await hash(new TextEncoder().encode(a.d.note));
+    const note=firstGeometryReturn?input.note.trim():a.d.note;
+    const noteHash=await hash(new TextEncoder().encode(note));
+    let returnRecord=a.d;
+    if(firstGeometryReturn){
+      returnRecord={
+        schema:1,job_id:id,decision:"REWORK_REQUESTED",
+        source_sha256:job.source_sha256,master_sha256:a.q.master_sha256,
+        at:new Date().toISOString(),owner_session_id:owner.session.id,
+        visual_qa_checks:null,categories:["geometry"],note,
+        revision_num:job.revision_num||1
+      };
+      const saved=await env.TROPICANA_EDITORIAL_R2.put(
+        key(id,"technical/decision.json"),JSON.stringify(returnRecord),{
+          onlyIf:new Headers({"If-None-Match":"*"}),
+          httpMetadata:{contentType:"application/json"}
+        });
+      if(!saved)return json({error:"geometry_return_conflict_retry"},409);
+    }
     const plan={schema:1,type:"GEOMETRY_FACADE_QUAD_V1",parent_job_id:id,
-      parent_master_sha256:a.d.master_sha256,remarks_sha256:noteHash,
+      parent_master_sha256:returnRecord.master_sha256,remarks_sha256:noteHash,
       categories:["geometry"],HDR_allowed:false,
       geometry_transform:"CONTROLLED_PROJECTIVE_WARP",
       allowed_algorithm:"HUMAN_ANCHORED_FACADE_HOMOGRAPHY",
@@ -327,8 +360,8 @@ export async function editorialJobApi(request,env,url,authorizeSession) {
     const link={schema:2,job_id:child.job_id,revision_num:v,
       source_sha256:job.source_sha256,source_unchanged:true,
       correction_type:plan.type,source_quad_norm:plan.source_quad_norm,
-      parent_master_sha256:a.d.master_sha256,remarks_sha256:noteHash,
-      rework_decision_at:a.d.at,created_at:new Date().toISOString()};
+      parent_master_sha256:returnRecord.master_sha256,remarks_sha256:noteHash,
+      rework_decision_at:returnRecord.at,created_at:new Date().toISOString()};
     const written=await env.TROPICANA_EDITORIAL_R2.put(
       key(id,"rework/revision.json"),JSON.stringify(link),{
         onlyIf:new Headers({"If-None-Match":"*"}),
