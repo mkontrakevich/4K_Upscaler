@@ -174,6 +174,15 @@ function state(job,a) {
     root_job_id:job.root_job_id||job.job_id,
     source_sha256:job.source_sha256,source_bytes:job.source_bytes,
     source_verification:sourceVerification(job,a),
+    automatic_geometry_analysis:a.q?.auto_geometry_analysis?{
+      status:a.q.auto_geometry_analysis.status,
+      intent:a.q.auto_geometry_analysis.scene?.intent||"UNKNOWN",
+      confidence:a.q.auto_geometry_analysis.scene?.confidence??null,
+      vertical_lines:a.q.auto_geometry_analysis.vertical_inlier_count||0,
+      vertical_tilt_deg:a.q.auto_geometry_analysis.verticals?.median_tilt_deg??null,
+      tilt_status:a.q.auto_geometry_analysis.verticals?.status||"HOLD",
+      correction_applied:false
+    }:null,
     technical_correction:job.correction_plan?{
       requested:true,categories:job.correction_plan.categories,
       status:a.q?.correction_status||a.processing?.status||"QUEUED",
