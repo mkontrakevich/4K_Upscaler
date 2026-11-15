@@ -4,6 +4,7 @@ import importlib.util
 import json
 import hashlib
 import tempfile
+import sys
 from pathlib import Path
 
 import cv2
@@ -11,6 +12,7 @@ import numpy as np
 import tifffile
 
 HERE = Path(__file__).resolve().parents[1]
+sys.path.insert(0,str(HERE/"scripts"))
 SPEC = importlib.util.spec_from_file_location("tech", HERE / "scripts" / "editorial_raster_technical_master.py")
 tech = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(tech)

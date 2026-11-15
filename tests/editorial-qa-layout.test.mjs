@@ -62,7 +62,9 @@ test("inline page script compiles without requiring browser side effects",()=>{
 test("auto geometry summary is compact, truthful, and old jobs are not silently marked corrected",()=>{
   assert.ok(html.includes('id="intake-auto-geometry-status"'));
   assert.ok(html.includes('data.automatic_geometry_analysis'));
-  assert.ok(html.includes('Перспектива пока не исправлялась'));
+  assert.ok(html.includes('Исправление не выполнялось'),"explicit no-correction status required");
+  assert.ok(html.includes('Автовыравнивание выполнено'),"real correction status required");
+  assert.ok(html.includes('Создать Auto Tech Master'),"one-click auto correction must be discoverable");
   assert.ok(html.includes('Автоанализ геометрии ещё не выполнялся'));
   assert.ok(html.indexOf('id="intake-auto-geometry-status"')<html.indexOf('id="intake-source-verification"'));
 });

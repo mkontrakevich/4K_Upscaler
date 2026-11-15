@@ -636,3 +636,98 @@ test("auto geometry observations are shown separately from actual correction",as
  st=await (await h.call("/api/editorial/job/status?job="+job.job_id)).json();
  assert.equal(st.automatic_geometry_analysis,null,"old jobs must not receive fake analysis");
 });
+
+
+test("legacy QA can spawn one auto geometry V2 from original without manual points or mutating V1",async()=>{
+ const h=harness(),job=await intake(h),parentSha=await tech(h,job);
+ const legacy=await (await h.call("/api/editorial/job/status?job="+job.job_id)).json();
+ assert.equal(legacy.can_auto_geometry_reprocess,true);
+ assert.equal(legacy.can_geometry_rework,true,"historic guided route retained only for fallback");
+ const uri="/api/editorial/job/auto-geometry?job="+job.job_id;
+ const unauth=await h.call(uri,"POST",{},false);
+ assert.equal(unauth.status,404,"credentials are required");
+ const launched=[];
+ h.env.TROPICANA_TECH_WORKFLOW={async create(v){launched.push(v);return {id:v.id}}};
+ const reply=await h.call(uri,"POST",{});
+ assert.equal(reply.status,201);
+ const result=await reply.json();
+ assert.equal(result.revision_num,2);
+ assert.equal(result.source_unchanged,true);
+ assert.equal(result.parent_decision_mutated,false);
+ assert.equal(result.generation_started,false);
+ assert.equal(result.workflow_started,true);
+ assert.equal(launched.length,1);
+ assert.equal(launched[0].id,result.job_id);
+ const base="tropicana-park/editorial-jobs/";
+ const old=await (await h.r2.get(base+job.job_id+"/job.json")).json();
+ const v2=await (await h.r2.get(base+result.job_id+"/job.json")).json();
+ assert.equal(v2.parent_job_id,job.job_id);
+ assert.equal(v2.root_job_id,job.job_id);
+ assert.equal(v2.source_key,old.source_key);
+ assert.equal(v2.source_sha256,old.source_sha256);
+ assert.equal(v2.access_hash,old.access_hash);
+ assert.equal(v2.correction_plan,null);
+ assert.equal(await h.r2.get(base+job.job_id+"/technical/decision.json"),null);
+ const link=await (await h.r2.get(base+job.job_id+"/rework/revision.json")).json();
+ assert.equal(link.type,"AUTO_GEOMETRY_REPROCESS_V1");
+ assert.equal(link.parent_decision_mutated,false);
+ assert.equal(link.original_master_sha256,parentSha);
+ const repeat=await h.call(uri,"POST",{});
+ assert.equal(repeat.status,409,"never create uncontrolled repeat V2");
+ const unready=await (await h.call("/api/editorial/job/status?job="+result.job_id,"GET",null,false,job.job_token)).json();
+ assert.equal(unready.can_approve,false);
+ assert.equal(unready.can_handoff,false);
+ const corrected=await tech(h,v2);
+ const ready=await (await h.call("/api/editorial/job/status?job="+result.job_id,"GET",null,false,job.job_token)).json();
+ assert.equal(ready.can_auto_geometry_reprocess,false,"no indefinite chains of uncorrected synthetic V2s");
+ assert.equal(ready.can_handoff,false);
+ assert.equal(ready.can_approve,true);
+ assert.equal(corrected,parentSha,"test fixture source remains identical until actual processor runs");
+});
+test("automatic camera levelling evidence must pass independent QA checks",async()=>{
+ const h=harness(),job=await intake(h);
+ await tech(h,job);
+ const p="tropicana-park/editorial-jobs/"+job.job_id+"/technical/qa.json";
+ const original=await (await h.r2.get(p)).json();
+ const base={
+   schema:1,engine:"AUTO_CAMERA_ROLL_SAFE_CROP_V1",status:"APPLIED",
+   geometry_transform:"AUTO_CAMERA_ROLL_CORRECTION",
+   HDR_applied:false,generative_processing:false,
+   vertical_residual_before_deg:2.35,vertical_residual_after_deg:.19,
+   crop_area_fraction:.074,lost_salient_edge_fraction:.015,
+   invalid_border_fraction:0,changed_mean_absolute_fraction:.038,
+   camera_roll_correction_deg:-2.35,
+   operations:[{op:"AUTOMATIC_CAMERA_ROLL_LEVEL",angle_deg:-2.35}]
+ };
+ const variant=(correction,qaChecks={})=>({
+   ...original,geometry:"AUTO_CAMERA_ROLL_CORRECTION",
+   auto_geometry_correction:correction,
+   qa_checks:{...original.qa_checks,GEOMETRY_UNCHANGED:"NOT_APPLICABLE",
+     GEOMETRY_TRANSFORM_EVIDENCED:"PASS",AUTO_GEOMETRY_CORRECTED:"PASS",...qaChecks}
+ });
+ const check=async qa=>{
+   await h.r2.put(p,JSON.stringify(qa),{httpMetadata:{contentType:"application/json"}});
+   return (await (await h.call("/api/editorial/job/status?job="+job.job_id)).json());
+ };
+ let result=await check(variant(base));
+ assert.equal(result.technical_master_ready,true);
+ assert.equal(result.source_verification.geometry_preservation,"AUTO_LEVELLED_PENDING_HUMAN_QA");
+ assert.equal(result.automatic_geometry_analysis,null,"no fabricated B1 evidence");
+ assert.equal(result.can_handoff,false);
+ const invalids=[
+   variant({...base,vertical_residual_after_deg:1.2}),
+   variant({...base,invalid_border_fraction:.01}),
+   variant({...base,crop_area_fraction:.2}),
+   variant({...base,operations:[]}),
+   variant({...base,changed_mean_absolute_fraction:0}),
+   variant({...base,geometry_transform:"IDENTITY"}),
+   variant({...base,HDR_applied:true}),
+   variant(base,{AUTO_GEOMETRY_CORRECTED:"NOT_APPLICABLE"})
+ ];
+ for(const invalid of invalids){
+   result=await check(invalid);
+   assert.equal(result.technical_master_ready,false,"tampered automatic evidence accepted");
+   assert.equal(result.can_approve,false);
+   assert.equal(result.can_handoff,false);
+ }
+});

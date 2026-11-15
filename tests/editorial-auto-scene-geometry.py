@@ -66,15 +66,18 @@ with tempfile.TemporaryDirectory() as directory:
     assert qa["auto_geometry_analysis_status"]=="OBSERVATION_ONLY"
     assert qa["auto_geometry_analysis"]["verticals"]["candidate_roll_correction_deg"] is not None
     assert qa["qa_checks"]["AUTO_GEOMETRY_ANALYZED"]=="PASS"
-    assert qa["qa_checks"]["AUTO_GEOMETRY_CORRECTED"]=="NOT_APPLICABLE"
-    assert qa["geometry"]=="IDENTITY_NO_CORRECTION"
+    assert qa["auto_geometry_correction"]["status"]=="APPLIED"
+    assert qa["qa_checks"]["AUTO_GEOMETRY_CORRECTED"]=="PASS"
+    assert qa["geometry"]=="AUTO_CAMERA_ROLL_CORRECTION"
     assert qa["technical_status"]=="TECHNICAL_QA_PASS"
     assert qa["human_visual_QA"]=="PENDING"
     assert qa["HDR_applied"] is False
     assert qa["generative_processing"] is False
     tiff=tifffile.imread(out/"master16.tif")
     assert tiff.shape==(h,w,3) and tiff.dtype==np.uint16
-    assert np.array_equal(tiff,np.uint16(tilted)*257),"observational analysis must not modify pixels"
+    assert not np.array_equal(tiff,np.uint16(tilted)*257)
+    assert qa["auto_geometry_analysis"]["automatic_correction_applied"] is False
+    assert qa["auto_geometry_correction"]["camera_roll_correction_deg"] is not None
     parsed=json.loads((out/"qa.json").read_text())
     assert parsed["auto_geometry_analysis"]==qa["auto_geometry_analysis"]
 

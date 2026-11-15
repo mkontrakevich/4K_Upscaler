@@ -152,13 +152,13 @@
       <p id="intake-empty" class="note">Нет открытого задания в этом браузере. Для уже обработанной фотографии используйте персональную ссылку на QA — повторно загружать исходник не требуется.</p>
       <p id="intake-message" class="muted" role="status"></p>
       <p id="intake-auto-geometry-status" class="muted" aria-live="polite">Автоматический анализ геометрии: данные ещё не получены.</p>
-      <section id="intake-geometry-first" class="geometry-first" hidden aria-label="Исправление перспективы">
+      <section id="intake-geometry-first" class="geometry-first" hidden aria-label="Автоматическая техническая коррекция">
         <div>
-          <div class="eyebrow">01 / ГЕОМЕТРИЯ КАДРА</div>
-          <h3>Исправить перспективу</h3>
-          <p>Отметьте четыре угла фасада. Сначала увидите предварительное исправление — исходная фотография останется неизменной.</p>
+          <div class="eyebrow">01 / АВТОМАТИЧЕСКАЯ ГЕОМЕТРИЯ</div>
+          <h3>Исправить кадр автоматически</h3>
+          <p>Повторный технический анализ исходника: поиск направляющих, выравнивание достоверного наклона камеры и безопасное кадрирование. Без разметки точек и генерации новых деталей.</p>
         </div>
-        <button class="btn geometry-first-btn" id="intake-geometry-start" type="button">Начать исправление</button>
+        <button class="btn geometry-first-btn" id="intake-geometry-start" type="button">Создать Auto Tech Master</button>
       </section>
 
         <section class="geometry-editor" id="intake-geometry-panel" hidden aria-label="Управляемое исправление перспективы фасада">
@@ -500,6 +500,8 @@ function updateSourceVerification(data){
  e("intake-source-geometry").textContent=
    v.geometry_preservation==="CORRECTED_PENDING_HUMAN_QA"?
    "Исправлена по 4 точкам · требуется визуальная проверка":
+   v.geometry_preservation==="AUTO_LEVELLED_PENDING_HUMAN_QA"?
+   "Автоматически выровнен наклон камеры · проверить композицию":
    v.geometry_preservation==="PASS"?
    "PASS · пиксельная геометрия сохранена":result(v.geometry_preservation);
  const visual=e("intake-source-visual-status");
@@ -510,6 +512,8 @@ function updateSourceVerification(data){
  e("intake-source-visual-note").textContent=
    (v.perspective_correction==="CONTROLLED_PROJECTIVE_PENDING_VISUAL_QA"?
    "Плоскость фасада выпрямлена по указанным углам. Проверка всех внеплоскостных объектов обязательна. ":
+   v.perspective_correction==="AUTO_CAMERA_ROLL_PENDING_VISUAL_QA"?
+   "Автоматически выровнен общий наклон камеры. Полная коррекция перспективы фасада и объектива ещё не выполнялась. ":
    "Автоматическая коррекция объектива, вертикалей и перспективы не выполнялась. ")+
    "Проверка сохранности пикселей не означает проверку правильности архитектурной геометрии. "+
    "Выполните оценку исходника и Tech Master через «Сплит» при 100% масштабе.";
@@ -521,6 +525,8 @@ function setIntake(data){
  updateSourceVerification(data);
  e("intake-id").textContent=(data.job_id||"—")+" · V"+(data.revision_num||1);
  e("intake-geometry-check-label").textContent=
+   data.source_verification?.geometry_preservation==="AUTO_LEVELLED_PENDING_HUMAN_QA"?
+   "Автоматическое выравнивание проверено: вертикали, обрезка, архитектура и окружение сохранены":
    data.technical_correction?.geometry_correction==="CONTROLLED_PENDING_VISUAL_QA"?
    "Выпрямленная плоскость фасада проверена; объекты вне плоскости, детали и композиция не искажены":
    "Геометрия, перспектива и архитектура соответствуют исходнику";
@@ -545,8 +551,9 @@ function setIntake(data){
  if(!data.can_rework)form.hidden=true;
  const revisionPanel=e("intake-revision-panel");
  revisionPanel.hidden=!data.rework;
- e("intake-geometry-first").hidden=!data.can_geometry_rework;
- if(!data.can_geometry_rework)e("intake-geometry-panel").hidden=true;
+ e("intake-geometry-first").hidden=!data.can_auto_geometry_reprocess;
+ e("intake-geometry-start").disabled=intakeBusy||!data.can_auto_geometry_reprocess;
+ e("intake-geometry-panel").hidden=true; // legacy four-corner tool is not in standard user flow
  const autoButton=e("intake-auto-rework");
  autoButton.disabled=intakeBusy||!data.can_auto_rework;
  e("intake-auto-eligibility").textContent=data.rework?
@@ -566,9 +573,19 @@ function setIntake(data){
    const tilt=typeof a.vertical_tilt_deg==="number"?Math.abs(a.vertical_tilt_deg).toFixed(2)+"°":"не определён";
    const type={FRONT_CANDIDATE:"близкий к фронтальному",ANGLE:"угловой",UNKNOWN:"не определён"}[a.intent]||"не определён";
    const count=Number(a.vertical_lines)||0;
-   view.textContent="Автоанализ: найдено вертикалей "+count+
-      " · отклонение "+tilt+" · ракурс: "+type+
-      ". Перспектива пока не исправлялась.";
+   if(a.correction_applied){
+     view.textContent="Автовыравнивание выполнено · вертикали: "+count+
+       " · исправлен наклон "+Math.abs(a.roll_correction_deg).toFixed(2)+"°"+
+       " · остаток "+Math.abs(a.residual_after_deg).toFixed(2)+"°"+
+       " · геометрическая обрезка "+(a.crop_fraction*100).toFixed(1)+
+       "%. Проверьте результат в сплите.";
+   }else{
+     view.textContent="Автоанализ: вертикалей "+count+
+       " · отклонение "+tilt+" · ракурс: "+type+
+       ". Исправление не выполнялось ("+
+       (a.correction_status==="NO_CHANGE_NEEDED"?"наклон не выявлен":"недостаточно подтверждений")+
+       ").";
+   }
  }else if(a?.status==="HOLD"){
    view.textContent="Автоанализ геометрии: недостаточно надёжных линий. Исправление не выполнялось.";
  }else{
@@ -878,9 +895,25 @@ e("intake-rework-submit").addEventListener("click",submitRework);
 e("intake-rework-cancel").addEventListener("click",()=>e("intake-rework-form").hidden=true);
 e("intake-revision-submit").addEventListener("click",uploadRevision);
 e("intake-auto-rework").addEventListener("click",automaticRework);
-e("intake-geometry-start").addEventListener("click",()=>showGeometryEditor().catch(err=>{
- e("intake-geometry-warning").textContent="Не удалось открыть фотографию: "+String(err?.message||err);
-}));
+async function startAutoGeometryVersion(){
+ if(!intakeId||!intakeState?.can_auto_geometry_reprocess||intakeBusy)return;
+ const current=intakeId,token=jobToken(current);
+ intakeBusy=true;e("intake-geometry-start").disabled=true;
+ e("intake-message").textContent="Автоматический анализ исходника: создание отдельного Tech Master без ручных точек…";
+ try{
+   const res=await fetch(base+"/job/auto-geometry?job="+encodeURIComponent(current),{
+     method:"POST",headers:sessionHeaders({"content-type":"application/json"}),body:"{}"
+   });
+   const data=await res.json().catch(()=>({}));
+   if(!res.ok)throw Error(data.error||"Автоанализ не удалось запустить");
+   if(!data.job_id)throw Error("Не создано новое задание");
+   if(token)persistJobToken(data.job_id,token);
+   activateIntake(data.job_id);
+ }catch(err){
+   e("intake-message").textContent="HOLD: "+String(err.message||err);
+ }finally{intakeBusy=false;updateIntakeActions()}
+}
+e("intake-geometry-start").addEventListener("click",startAutoGeometryVersion);
 e("intake-geometry-close").addEventListener("click",()=>{
  e("intake-geometry-panel").hidden=true;
 });
