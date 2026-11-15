@@ -1,0 +1,34 @@
+{
+  "schema": 1,
+  "registry_id": "MARINS_VISUAL_STANDARDS",
+  "owner": "Marins Group / Brand and Visual Communications",
+  "updated_at": "2026-11-15",
+  "standards": [
+    {
+      "id": "MARINS-VISUAL-AUTO-PERSPECTIVE-LOCK-001",
+      "version": "1.0",
+      "title": "AUTO PERSPECTIVE LOCK — Architectural Photo Technical Master",
+      "status": "NORMATIVE_REQUIREMENTS",
+      "implemented_in_production": false,
+      "current_implementation": "GUIDED_4_POINTS_AND_LIMITED_PHOTOMETRY",
+      "projects": [
+        "MG4K",
+        "Architectural Photo Editorial",
+        "Tropicana Park",
+        "Marins Hotels"
+      ],
+      "specification_path": "docs/standards/MARINS_AUTO_PERSPECTIVE_LOCK_V1.md",
+      "acceptance_required": [
+        "automatic_scene_intent",
+        "automatic_line_vanishing_point_analysis",
+        "verified_lens_calibration",
+        "safe_camera_geometry_correction",
+        "protected_auto_crop",
+        "neutral_exposure_white_balance",
+        "human_QA_no_HDR"
+      ],
+      "source_integrity": "SHA256_IMMUTABLE",
+      "manual_geometry_in_main_flow": false
+    }
+  ]
+}
