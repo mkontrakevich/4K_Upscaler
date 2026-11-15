@@ -2,7 +2,7 @@
   "schema": 1,
   "registry_id": "MARINS_VISUAL_STANDARDS",
   "owner": "Marins Group / Brand and Visual Communications",
-  "updated_at": "2026-11-15",
+  "updated_at": "2026-11-16",
   "standards": [
     {
       "id": "MARINS-VISUAL-AUTO-PERSPECTIVE-LOCK-001",
@@ -28,7 +28,24 @@
         "human_QA_no_HDR"
       ],
       "source_integrity": "SHA256_IMMUTABLE",
-      "manual_geometry_in_main_flow": false
+      "manual_geometry_in_main_flow": false,
+      "implementation_stage": "B1_AUTO_LINE_AND_VANISHING_OBSERVATION",
+      "auto_line_analysis_deployed": true,
+      "auto_geometry_correction_deployed": false,
+      "implementation_PRs": [
+        58,
+        59
+      ],
+      "evidence_report_path": "docs/tropicana-park/MG4K_AUTO_GEOMETRY_STAGE_B1_20261116.md",
+      "production_smoke": {
+        "job_id": "1c86bc9d-a390-48e5-83dd-1d8696b2b28b",
+        "status": "COMPLETE",
+        "geometry_analysis": "OBSERVATION_ONLY",
+        "scene": "UNKNOWN",
+        "corrected": false,
+        "human_qa": "PENDING"
+      },
+      "next_required_stage": "B2_AUTO_CAMERA_RECTIFICATION_AND_PROTECTED_CROP"
     }
   ]
 }
