@@ -233,8 +233,8 @@ function state(job,a) {
     can_approve:!!a.q&&!a.d,can_reject:!!a.q&&!a.d,
     can_rework:!!a.q&&!a.d,
     can_upload_revision:(a.d?.decision==="REWORK_REQUESTED"||a.autoHold)&&!a.revision,
-    can_auto_geometry_reprocess:!!a.q&&!a.d&&!a.revision&&
-      (job.revision_num||1)<12,
+    can_auto_geometry_reprocess:!!a.q&&!a.q.auto_geometry_correction&&
+      !a.d&&!a.revision&&(job.revision_num||1)<12,
     can_geometry_rework:!!a.q&&!a.revision&&(
       !a.d||(a.d.decision==="REWORK_REQUESTED"&&
       a.d.categories?.length===1&&a.d.categories[0]==="geometry")),
@@ -330,7 +330,8 @@ export async function editorialJobApi(request,env,url,authorizeSession) {
   if(path==="/api/editorial/job/auto-geometry"&&method==="POST"){
     // Non-destructive, no control points or rejection of the existing V1.
     // Create one independently reviewed child from the immutable source.
-    if(!a.q||a.d||a.revision)return json({error:"auto_geometry_requires_unmodified_pending_QA"},409);
+    if(!a.q||a.q.auto_geometry_correction||a.d||a.revision)
+      return json({error:"auto_geometry_requires_legacy_pending_QA"},409);
     if((job.revision_num||1)>=12)return json({error:"revision_limit_reached"},409);
     if(!env.TROPICANA_TECH_WORKFLOW)return json({error:"technical_workflow_missing"},503);
     const version=(job.revision_num||1)+1;
