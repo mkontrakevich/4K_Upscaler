@@ -56,14 +56,33 @@ async function verifiedTech(env,job) {
   let q;try{q=await proof.json()}catch{return null}
   const expected=key(job.job_id,"technical/master16.tif");
   const geom=job.correction_plan?.type==="GEOMETRY_FACADE_QUAD_V1";
+  const autoRoll=!job.correction_plan&&q.auto_geometry_correction?.status==="APPLIED";
+  const ag=q.auto_geometry_correction;
   if(q.job_id!==job.job_id||q.source_sha256!==job.source_sha256||
      q.technical_status!=="TECHNICAL_QA_PASS"||q.HDR_applied!==false||
      q.virtual_exposures!==false||q.local_HDR!==false||
      q.qa_checks?.HDR_ABSENT!=="PASS"||
      q.qa_checks?.SOURCE_SHA256!=="PASS"||
-     (geom?(q.qa_checks?.GEOMETRY_TRANSFORM_EVIDENCED!=="PASS"||
-             q.qa_checks?.GEOMETRY_UNCHANGED!=="NOT_APPLICABLE"):
-            q.qa_checks?.GEOMETRY_UNCHANGED!=="PASS")||
+     (geom||autoRoll?
+       (q.qa_checks?.GEOMETRY_TRANSFORM_EVIDENCED!=="PASS"||
+        q.qa_checks?.GEOMETRY_UNCHANGED!=="NOT_APPLICABLE"||
+        (autoRoll&&q.qa_checks?.AUTO_GEOMETRY_CORRECTED!=="PASS")):
+       q.qa_checks?.GEOMETRY_UNCHANGED!=="PASS")||
+     (autoRoll&&(
+       ag?.engine!=="AUTO_CAMERA_ROLL_SAFE_CROP_V1"||
+       ag?.geometry_transform!=="AUTO_CAMERA_ROLL_CORRECTION"||
+       ag?.HDR_applied!==false||ag?.generative_processing!==false||
+       !Number.isFinite(ag?.vertical_residual_before_deg)||
+       !Number.isFinite(ag?.vertical_residual_after_deg)||
+       Math.abs(ag.vertical_residual_after_deg)>.40||
+       Math.abs(ag.vertical_residual_after_deg)>=Math.abs(ag.vertical_residual_before_deg)*.40||
+       !Number.isFinite(ag?.crop_area_fraction)||ag.crop_area_fraction<0||ag.crop_area_fraction>.15||
+       !Number.isFinite(ag?.lost_salient_edge_fraction)||ag.lost_salient_edge_fraction>.055||
+       ag?.invalid_border_fraction!==0||
+       !Number.isFinite(ag?.changed_mean_absolute_fraction)||
+       ag.changed_mean_absolute_fraction<.003||
+       !Array.isArray(ag?.operations)||ag.operations.length===0
+     ))||
      q.qa_checks?.TIFF_READBACK!=="PASS"||
      (job.correction_plan&&(
        q.correction_status!=="APPLIED"||
@@ -85,7 +104,8 @@ async function verifiedTech(env,job) {
                q.correction.max_normalized_displacement>.18))||
        q.correction?.generative_processing!==false
      ))||
-     q.geometry!==(geom?"CONTROLLED_PROJECTIVE_WARP":"IDENTITY_NO_CORRECTION")||
+     q.geometry!==(geom?"CONTROLLED_PROJECTIVE_WARP":
+        autoRoll?"AUTO_CAMERA_ROLL_CORRECTION":"IDENTITY_NO_CORRECTION")||
      ![8,16].includes(q.source_signal_bits)||
      !Number.isInteger(q.width)||q.width<320||
      !Number.isInteger(q.height)||q.height<320||
@@ -143,6 +163,8 @@ function sourceVerification(job,a){
   const rasterOK=shaOK&&[8,16].includes(q?.source_signal_bits)&&
     Number.isInteger(q?.width)&&Number.isInteger(q?.height)&&
     q.width>=320&&q.height>=320;
+  const autoLevelled=rasterOK&&checks.AUTO_GEOMETRY_CORRECTED==="PASS"&&
+    q.geometry==="AUTO_CAMERA_ROLL_CORRECTION";
   const geometryModified=rasterOK&&checks.GEOMETRY_TRANSFORM_EVIDENCED==="PASS"&&
     q.geometry==="CONTROLLED_PROJECTIVE_WARP";
   const geometryUnchanged=rasterOK&&checks.GEOMETRY_UNCHANGED==="PASS"&&
@@ -152,6 +174,7 @@ function sourceVerification(job,a){
     sha256_status:shaOK?"PASS":q?"NOT_CONFIRMED":"PENDING",
     raster_status:rasterOK?"PASS":q?"NOT_CONFIRMED":"PENDING",
     geometry_preservation:geometryModified?"CORRECTED_PENDING_HUMAN_QA":
+      autoLevelled?"AUTO_LEVELLED_PENDING_HUMAN_QA":
       geometryUnchanged?"PASS":q?"NOT_CONFIRMED":"PENDING",
     mime:job.mime,source_bytes:job.source_bytes,
     source_sha256:job.source_sha256,
@@ -159,7 +182,8 @@ function sourceVerification(job,a){
     signal_bits:rasterOK?q.source_signal_bits:null,
     alpha_handling:rasterOK?(q.alpha_handling||"none"):null,
     optical_correction:"NOT_PERFORMED",
-    perspective_correction:geometryModified?"CONTROLLED_PROJECTIVE_PENDING_VISUAL_QA":"NOT_PERFORMED",
+    perspective_correction:geometryModified?"CONTROLLED_PROJECTIVE_PENDING_VISUAL_QA":
+      autoLevelled?"AUTO_CAMERA_ROLL_PENDING_VISUAL_QA":"NOT_PERFORMED",
     visual_review:a.d?.decision==="APPROVED"?"INCLUDED_IN_APPROVED_TECH_QA":
       a.d?.decision==="REWORK_REQUESTED"?"REWORK_REQUESTED":"PENDING_HUMAN_QA",
     verified_proof_sha:q?.master_sha256||null
@@ -181,7 +205,13 @@ function state(job,a) {
       vertical_lines:a.q.auto_geometry_analysis.vertical_inlier_count||0,
       vertical_tilt_deg:a.q.auto_geometry_analysis.verticals?.median_tilt_deg??null,
       tilt_status:a.q.auto_geometry_analysis.verticals?.status||"HOLD",
-      correction_applied:false
+      correction_applied:a.q?.auto_geometry_correction?.status==="APPLIED",
+      correction_status:a.q?.auto_geometry_correction?.status||"NOT_PERFORMED",
+      roll_correction_deg:a.q?.auto_geometry_correction?.camera_roll_correction_deg??null,
+      residual_after_deg:a.q?.auto_geometry_correction?.vertical_residual_after_deg??null,
+      crop_fraction:a.q?.auto_geometry_correction?.crop_area_fraction??null,
+      crop_quality:"GEOMETRIC_ONLY_NOT_SEMANTIC",
+      hold_reason:a.q?.auto_geometry_correction?.reason||null
     }:null,
     technical_correction:job.correction_plan?{
       requested:true,categories:job.correction_plan.categories,
