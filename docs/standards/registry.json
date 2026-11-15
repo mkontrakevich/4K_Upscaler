@@ -29,23 +29,30 @@
       ],
       "source_integrity": "SHA256_IMMUTABLE",
       "manual_geometry_in_main_flow": false,
-      "implementation_stage": "B1_AUTO_LINE_AND_VANISHING_OBSERVATION",
+      "implementation_stage": "B2_AUTO_CAMERA_ROLL_AND_SAFE_GEOMETRIC_CROP",
       "auto_line_analysis_deployed": true,
-      "auto_geometry_correction_deployed": false,
+      "auto_geometry_correction_deployed": true,
       "implementation_PRs": [
         58,
-        59
+        59,
+        60
       ],
-      "evidence_report_path": "docs/tropicana-park/MG4K_AUTO_GEOMETRY_STAGE_B1_20261116.md",
+      "evidence_report_path": "docs/tropicana-park/MG4K_AUTO_ROLL_CROP_B2_20261116.md",
       "production_smoke": {
-        "job_id": "1c86bc9d-a390-48e5-83dd-1d8696b2b28b",
-        "status": "COMPLETE",
-        "geometry_analysis": "OBSERVATION_ONLY",
-        "scene": "UNKNOWN",
-        "corrected": false,
-        "human_qa": "PENDING"
+        "synthetic_job_id": "a01c1281-12e8-4d5b-97f3-2aff28133be9",
+        "synthetic_angle_before_deg": 2.3961,
+        "synthetic_angle_after_deg": -0.0096,
+        "real_photo_shadow_job_id": "4e09cf6c-6077-4b9d-ae3c-1eff5b632716",
+        "real_photo_angle_before_deg": -0.6869,
+        "real_photo_angle_after_deg": 0.2305,
+        "manual_source_mutation": false,
+        "human_QA": "PENDING"
       },
-      "next_required_stage": "B2_AUTO_CAMERA_RECTIFICATION_AND_PROTECTED_CROP"
+      "next_required_stage": "B3_MULTI_VANISHING_POINT_CAMERA_PITCH_YAW",
+      "auto_camera_roll_deployed": true,
+      "auto_geometry_correction_scope": "CAMERA_ROLL_ONLY_CONFIDENCE_GATED",
+      "optical_and_multi_plane_perspective_deployed": false,
+      "semantic_auto_crop_deployed": false
     }
   ]
 }
