@@ -610,3 +610,29 @@ test("geometry may be previewed without deciding V1, then one deliberate commit 
  req=await h.call(uri,"POST",plan);
  assert.equal(req.status,409,"one parent source cannot silently spawn duplicate V2s");
 });
+
+
+test("auto geometry observations are shown separately from actual correction",async()=>{
+ const h=harness(),job=await intake(h);
+ await tech(h,job);
+ const p="tropicana-park/editorial-jobs/"+job.job_id+"/technical/qa.json";
+ const qa=await (await h.r2.get(p)).json();
+ qa.auto_geometry_analysis={
+   status:"OBSERVATION_ONLY",pixels_corrected:false,automatic_correction_applied:false,
+   vertical_inlier_count:12,verticals:{median_tilt_deg:2.35,status:"CANDIDATE_FOR_VALIDATION"},
+   scene:{intent:"FRONT_CANDIDATE",confidence:.93}
+ };
+ await h.r2.put(p,JSON.stringify(qa),{httpMetadata:{contentType:"application/json"}});
+ let st=await (await h.call("/api/editorial/job/status?job="+job.job_id)).json();
+ assert.equal(st.automatic_geometry_analysis.status,"OBSERVATION_ONLY");
+ assert.equal(st.automatic_geometry_analysis.vertical_lines,12);
+ assert.equal(st.automatic_geometry_analysis.vertical_tilt_deg,2.35);
+ assert.equal(st.automatic_geometry_analysis.correction_applied,false);
+ assert.equal(st.automatic_geometry_analysis.intent,"FRONT_CANDIDATE");
+ assert.equal(st.source_verification.perspective_correction,"NOT_PERFORMED");
+ assert.equal(st.can_handoff,false);
+ delete qa.auto_geometry_analysis;
+ await h.r2.put(p,JSON.stringify(qa),{httpMetadata:{contentType:"application/json"}});
+ st=await (await h.call("/api/editorial/job/status?job="+job.job_id)).json();
+ assert.equal(st.automatic_geometry_analysis,null,"old jobs must not receive fake analysis");
+});
