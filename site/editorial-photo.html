@@ -544,6 +544,8 @@ function setIntake(data){
  if(!data.can_rework)form.hidden=true;
  const revisionPanel=e("intake-revision-panel");
  revisionPanel.hidden=!data.rework;
+ e("intake-geometry-first").hidden=!data.can_geometry_rework;
+ if(!data.can_geometry_rework)e("intake-geometry-panel").hidden=true;
  const autoButton=e("intake-auto-rework");
  autoButton.disabled=intakeBusy||!data.can_auto_rework;
  e("intake-auto-eligibility").textContent=data.rework?
@@ -552,18 +554,11 @@ function setIntake(data){
      " с отдельным TIFF и повторным QA, исходник останется неизменным.":
      data.auto_rework_hold_reason||"Коррекция не поддерживается автоматически; требуется исправленный исходник."):
    "Сначала укажите конкретные замечания при возврате мастера.";
- const geometryPanel=e("intake-geometry-panel");
- geometryPanel.hidden=!data.can_geometry_rework;
  if(!data.can_geometry_rework&&geometryAnchorJob!==data.job_id){
-   geometryPoints=[];geometryAnchorJob="";
+   geometryPoints=[];geometryAnchorJob="";geometryPreviewReady=false;
  }
  e("intake-geometry-submit").disabled=intakeBusy||!data.can_geometry_rework||
-   geometryPoints.length!==4||!e("intake-geometry-facade-check").checked;
- if(data.can_geometry_rework&&geometryAnchorJob!==data.job_id&&!geometryLoadingJob){
-   showGeometryEditor().catch(err=>{
-     e("intake-geometry-warning").textContent="Невозможно открыть исходник: "+String(err.message||err);
-   });
- }
+   !geometryPreviewReady||!e("intake-geometry-facade-check").checked;
  const correction=data.technical_correction;
  const proofText=e("intake-correction-report");
  proofText.hidden=!correction;
@@ -608,6 +603,8 @@ function activateIntake(id){
 
  intakePreviewFor="";intakePreviewReady=false;intakeState=null;
  geometryPoints=[];geometryAnchorJob="";geometryLoadingJob="";
+ geometryPreviewReady=false;
+ e("intake-geometry-preview").hidden=true;
  e("intake-geometry-facade-check").checked=false;
  intakeSplitFor="";intakeSplitRequest="";
  if(intakeSplitViewer)intakeSplitViewer.reset();
@@ -639,7 +636,7 @@ async function submitRework(){
  }catch(err){e("intake-message").textContent=String(err)}
  finally{intakeBusy=false;e("intake-rework-submit").disabled=false;updateIntakeActions()}
 }
-let geometryPoints=[],geometryAnchorJob="",geometryLoadingJob="";
+let geometryPoints=[],geometryAnchorJob="",geometryLoadingJob="",geometryPreviewReady=false;
 const geometryLabels=["верхний левый","верхний правый","нижний правый","нижний левый"];
 function paintGeometry(){
  const canvas=e("intake-geometry-guide"),img=e("intake-geometry-image");
@@ -670,12 +667,15 @@ function paintGeometry(){
  e("intake-geometry-state").textContent=geometryPoints.length<4?
    (geometryPoints.length+1)+"/4 · "+geometryLabels[geometryPoints.length]:
    "4 точки заданы. Проверьте порядок и подтвердите плоскость.";
- e("intake-geometry-submit").disabled=intakeBusy||geometryPoints.length!==4||
+ e("intake-geometry-render").disabled=intakeBusy||geometryPoints.length!==4;
+ e("intake-geometry-submit").disabled=intakeBusy||!geometryPreviewReady||
    !e("intake-geometry-facade-check").checked||!intakeState?.can_geometry_rework;
 }
 async function showGeometryEditor(){
  if(!intakeId||!intakeState?.can_geometry_rework)return;
  const id=intakeId;geometryLoadingJob=id;
+ e("intake-geometry-panel").hidden=false;
+ e("intake-geometry-panel").scrollIntoView({block:"start",behavior:"smooth"});
  try{
    const url=await ensureIntakeSource(id);
    if(!url||intakeId!==id)return;
@@ -687,16 +687,51 @@ async function showGeometryEditor(){
    if(img.complete&&img.naturalWidth)paintGeometry();
  }finally{if(geometryLoadingJob===id)geometryLoadingJob=""}
 }
+async function renderGeometryPreview(){
+ if(!intakeState?.can_geometry_rework||geometryPoints.length!==4||intakeBusy)return;
+ const jobId=intakeId;
+ const button=e("intake-geometry-render");button.disabled=true;
+ e("intake-geometry-warning").textContent="Готовим локальный предпросмотр — исходник не изменяем.";
+ await new Promise(resolve=>requestAnimationFrame(resolve));
+ try{
+   if(intakeId!==jobId)throw Error("Задание изменилось — повторите разметку");
+   const img=e("intake-geometry-image");
+   const p=window.MG4KGeometryPreview.render(img,e("intake-geometry-before"),
+       e("intake-geometry-after"),geometryPoints);
+   if(intakeId!==jobId)throw Error("Задание изменилось — повторите разметку");
+   geometryPreviewReady=true;
+   e("intake-geometry-preview").hidden=false;
+   e("intake-geometry-preview-metrics").textContent=
+     "Выпрямление плоскости · приближение ×"+p.cropZoom.toFixed(3)+
+     " · ориентировочная обрезка "+(p.cropFraction*100).toFixed(1)+"% кадра";
+   e("intake-geometry-warning").textContent=
+     "Предпросмотр готов. Исходная версия не отклонена. Чтобы создать реальный TIFF V2, подтвердите выбор плоскости и нажмите кнопку создания версии.";
+   updateGeometryPreviewCut();
+ }catch(err){
+   geometryPreviewReady=false;e("intake-geometry-preview").hidden=true;
+   e("intake-geometry-warning").textContent="HOLD: "+String(err?.message||err);
+ }finally{paintGeometry()}
+}
+function updateGeometryPreviewCut(){
+ const value=Math.max(0,Math.min(100,Number(e("intake-geometry-preview-range").value)||0));
+ e("intake-geometry-after").style.clipPath="inset(0 0 0 "+value+"%)";
+ e("intake-geometry-preview-cut").style.left=value+"%";
+}
 async function submitGeometryCorrection(){
  if(!intakeId||!intakeState?.can_geometry_rework||geometryPoints.length!==4||
-    !e("intake-geometry-facade-check").checked)return;
+    !geometryPreviewReady||!e("intake-geometry-facade-check").checked)return;
  const id=intakeId,token=jobToken(id);
  const quad=geometryPoints.map(pair=>pair.map(x=>Number(x.toFixed(7))));
  intakeBusy=true;e("intake-geometry-submit").disabled=true;
  try{
   const response=await fetch(base+"/job/rework/geometry?job="+encodeURIComponent(id),{
    method:"POST",headers:sessionHeaders({"content-type":"application/json"}),
-   body:JSON.stringify({source_quad_norm:quad,facade_assumption_confirmed:true})
+   body:JSON.stringify({
+     source_quad_norm:quad,facade_assumption_confirmed:true,
+     commit_parent_return:intakeState?.can_rework===true,
+     master_sha256:intakeProof?.master_sha256,
+     note:"Исправить перспективу и вертикали отмеченной прямоугольной плоскости фасада. Сохранить архитектуру, материалы и окружающие объекты."
+   })
   });
   const data=await response.json().catch(()=>({}));
   if(!response.ok)throw Error(data.reason||data.error||"Геометрическая коррекция: HOLD");
@@ -828,6 +863,14 @@ e("intake-rework-submit").addEventListener("click",submitRework);
 e("intake-rework-cancel").addEventListener("click",()=>e("intake-rework-form").hidden=true);
 e("intake-revision-submit").addEventListener("click",uploadRevision);
 e("intake-auto-rework").addEventListener("click",automaticRework);
+e("intake-geometry-start").addEventListener("click",()=>showGeometryEditor().catch(err=>{
+ e("intake-geometry-warning").textContent="Не удалось открыть фотографию: "+String(err?.message||err);
+}));
+e("intake-geometry-close").addEventListener("click",()=>{
+ e("intake-geometry-panel").hidden=true;
+});
+e("intake-geometry-render").addEventListener("click",renderGeometryPreview);
+e("intake-geometry-preview-range").addEventListener("input",updateGeometryPreviewCut);
 e("intake-geometry-guide").addEventListener("pointerdown",ev=>{
  if(!intakeState?.can_geometry_rework||geometryPoints.length>=4)return;
  const canvas=e("intake-geometry-guide"),img=e("intake-geometry-image");
@@ -840,10 +883,14 @@ e("intake-geometry-guide").addEventListener("pointerdown",ev=>{
   e("intake-geometry-warning").textContent="Отметьте точку внутри фотографии, не у самого края.";
   return;
  }
- geometryPoints.push([x,y]);paintGeometry();ev.preventDefault();
+ geometryPoints.push([x,y]);geometryPreviewReady=false;
+ e("intake-geometry-preview").hidden=true;
+ paintGeometry();ev.preventDefault();
 });
 e("intake-geometry-reset").addEventListener("click",()=>{
- geometryPoints=[];e("intake-geometry-facade-check").checked=false;paintGeometry();
+ geometryPoints=[];geometryPreviewReady=false;
+ e("intake-geometry-preview").hidden=true;
+ e("intake-geometry-facade-check").checked=false;paintGeometry();
 });
 e("intake-geometry-facade-check").addEventListener("change",paintGeometry);
 e("intake-geometry-fullscreen").addEventListener("click",()=>{
