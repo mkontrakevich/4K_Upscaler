@@ -5,6 +5,10 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/raw-generic-smoke.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/raw-generic-smoke.yml'
 
 permissions:
   contents: write
@@ -99,6 +103,7 @@ jobs:
           print(json.dumps(result,ensure_ascii=False,indent=2))
           PY
       - name: Commit immutable smoke evidence
+        if: github.event_name == 'push'
         run: |
           cp /tmp/mg4k-raw-smoke/result.json docs/RAW_GENERIC_SMOKE_RESULT_20261116.json
           git config user.name "mg4k-raw-smoke"
