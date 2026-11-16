@@ -35,7 +35,7 @@ jobs:
           node-version: '22'
       - name: Install verified RAW runtime
         run: |
-          npm ci
+          npm install
           python -m pip install --disable-pip-version-check 'numpy>=2,<3' 'opencv-python-headless>=4.10,<5' 'tifffile>=2025.1,<2028' 'rawpy==0.28.0'
       - name: Read immutable Sony ARW from protected R2
         run: |
