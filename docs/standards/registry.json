@@ -52,7 +52,25 @@
       "auto_camera_roll_deployed": true,
       "auto_geometry_correction_scope": "CAMERA_ROLL_ONLY_CONFIDENCE_GATED",
       "optical_and_multi_plane_perspective_deployed": false,
-      "semantic_auto_crop_deployed": false
+      "semantic_auto_crop_deployed": false,
+      "b3_source_contract": "docs/tropicana-park/MG4K_B3_V10_SOURCE_CONTRACT_20261116.md",
+      "b3_input_mode": "V10_CLEAN16_IMMUTABLE",
+      "b3_input_key": "tropicana-park/DSC09818/technical-v10/DSC09818_TECH_CLEAN16.tif",
+      "b3_expected_sha256": "de64ae82d1ef379698a9b412868e7fb3f3fe4c58c26fa8af9ccb83a17873d689",
+      "b3_source_dimensions": [
+        6536,
+        4360
+      ],
+      "b3_source_state": "VERIFIED_METADATA_AND_R2_OBJECT_EXISTS",
+      "b3_implementation_status": "PENDING",
+      "existing_b2_source_note": "B2 proof ran on 8bit editorial PNG, not on V10. Must not be presented as V10 correction."
     }
-  ]
+  ],
+  "governance": {
+    "rule_id": "MARINS-GOV-CROSS-CHAT-001",
+    "canonical_repository": "mkontrakevich/marins-platform",
+    "path": "docs/standards/MARINS_CROSS_CHAT_VERIFICATION_RULE.md",
+    "required_before_every_project_action": true,
+    "context_limit": "AVAILABLE_HISTORY_ONLY"
+  }
 }
