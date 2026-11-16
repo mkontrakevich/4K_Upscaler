@@ -31,14 +31,16 @@ async function processor(env){
 }
 async function start(env,id,job){
   const input=await env.TROPICANA_EDITORIAL_R2.get(job.source_key);
-  if(!input||input.size!==job.source_bytes)throw Error("source_missing_or_size_changed");
-  const bytes=await input.arrayBuffer();
-  if(hex(await crypto.subtle.digest("SHA-256",bytes))!==job.source_sha256)throw Error("source_SHA_mismatch");
+  if(!input||input.size!==job.source_bytes||!input.body)throw Error("source_missing_or_size_changed");
+  if(input.customMetadata?.sha256!==job.source_sha256)throw Error("source_SHA_metadata_mismatch");
+  if(input.checksums?.sha256&&hex(input.checksums.sha256)!==job.source_sha256)
+    throw Error("source_R2_checksum_mismatch");
   const c=await processor(env);
   const res=await c.fetch(new Request(endpoint(id,"start"),{
-    method:"POST",body:bytes,headers:{
-      "content-type":job.mime,"x-source-sha256":job.source_sha256,
-      "x-source-filename":encodeURIComponent(job.filename),"x-mg4k-source-size":String(bytes.byteLength),
+    method:"POST",body:input.body,headers:{
+      "content-type":job.mime,"content-length":String(input.size),
+      "x-source-sha256":job.source_sha256,
+      "x-source-filename":encodeURIComponent(job.filename),"x-mg4k-source-size":String(input.size),
       ...(job.correction_plan?{"x-mg4k-correction-plan":encodeURIComponent(JSON.stringify(job.correction_plan))}:{})
     }
   }));
