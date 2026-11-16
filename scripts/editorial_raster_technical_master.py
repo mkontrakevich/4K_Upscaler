@@ -100,6 +100,7 @@ def prepare(source: Path, out: Path, job_id: str, expected_sha: str, correction_
     height, width = rgb16.shape[:2]
     if width < 320 or height < 320 or width * height > 80_000_000:
         raise ValueError("invalid_source_dimensions")
+    source_preview_rgb16 = rgb16.copy() if source_kind == "CAMERA_RAW" else None
     # Observe original pixels before any warp; this is NOT permission to apply
     # automatic scene correction or to claim auto-rectification completed.
     try:
@@ -128,6 +129,7 @@ def prepare(source: Path, out: Path, job_id: str, expected_sha: str, correction_
     out.mkdir(parents=True, exist_ok=True)
     master = out / "master16.tif"
     preview = out / "fullres-preview.jpg"
+    source_preview = out / "source-preview.jpg"
     qa = out / "qa.json"
     tifffile.imwrite(master, rgb16, photometric="rgb", bigtiff=True,
         metadata={"description": "Technical master; no HDR or generated details; geometry correction only if independently measured and proven"})
@@ -149,6 +151,19 @@ def prepare(source: Path, out: Path, job_id: str, expected_sha: str, correction_
     if not ok:
         raise ValueError("preview_encode_failed")
     preview.write_bytes(compressed.tobytes())
+
+    if source_preview_rgb16 is not None:
+        source_linear = np.clip(source_preview_rgb16.astype(np.float32) / 65535.0, 0.0, 1.0)
+        source_positive = source_linear[np.any(source_linear > 0, axis=2)]
+        source_white = float(np.percentile(source_positive, 99.5)) if source_positive.size else 1.0
+        source_white = max(source_white, 1.0 / 65535.0)
+        source_display = np.clip(source_linear / source_white * 0.96, 0.0, 1.0)
+        source_display = np.power(source_display, 1.0 / 2.2)
+        source_view = np.uint8(np.rint(source_display * 255.0))
+        ok, source_encoded = cv2.imencode(".jpg", source_view[:, :, ::-1], [cv2.IMWRITE_JPEG_QUALITY, 94])
+        if not ok:
+            raise ValueError("RAW_source_preview_encode_failed")
+        source_preview.write_bytes(source_encoded.tobytes())
     with tifffile.TiffFile(master) as check:
         page = check.pages[0]
         if page.shape != (height, width, 3) or page.dtype != np.uint16:
@@ -178,6 +193,8 @@ def prepare(source: Path, out: Path, job_id: str, expected_sha: str, correction_
         "master_bytes": master.stat().st_size,
         "preview_sha256": sha(preview),
         "preview_bytes": preview.stat().st_size,
+        "source_preview_sha256": sha(source_preview) if source_preview.exists() else None,
+        "source_preview_bytes": source_preview.stat().st_size if source_preview.exists() else None,
         "technical_version": ("CONTROLLED_GEOMETRY_RECTIFICATION_V1" if correction and
             correction["geometry_transform"] == "CONTROLLED_PROJECTIVE_WARP"
             else "DETERMINISTIC_PHOTOMETRIC_REWORK_V1") if correction else (
