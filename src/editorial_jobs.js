@@ -63,6 +63,12 @@ async function verifiedTech(env,job) {
      q.virtual_exposures!==false||q.local_HDR!==false||
      q.qa_checks?.HDR_ABSENT!=="PASS"||
      q.qa_checks?.SOURCE_SHA256!=="PASS"||
+     !["RASTER","CAMERA_RAW"].includes(String(q.source_kind||""))||
+     (q.source_kind==="CAMERA_RAW"&&(
+       q.raw_decoder!=="rawpy-0.28.0/LibRaw"||
+       !SHA.test(String(q.source_preview_sha256||""))||
+       !Number.isInteger(q.source_preview_bytes)||q.source_preview_bytes<10000
+     ))||
      (geom||autoRoll?
        (q.qa_checks?.GEOMETRY_TRANSFORM_EVIDENCED!=="PASS"||
         q.qa_checks?.GEOMETRY_UNCHANGED!=="NOT_APPLICABLE"||
@@ -177,6 +183,8 @@ function sourceVerification(job,a){
       geometryUnchanged?"PASS":q?"NOT_CONFIRMED":"PENDING",
     mime:job.mime,source_bytes:job.source_bytes,
     source_sha256:job.source_sha256,
+    source_kind:q?.source_kind||null,
+    raw_decoder:q?.raw_decoder||null,
     width:rasterOK?q.width:null,height:rasterOK?q.height:null,
     signal_bits:rasterOK?q.source_signal_bits:null,
     alpha_handling:rasterOK?(q.alpha_handling||"none"):null,
@@ -228,7 +236,7 @@ function state(job,a) {
       "Мастер возвращён на доработку. Для геометрии укажите 4 угла фасада; для света и цвета доступен ограниченный корректор.":
       a.q?"Технический мастер готов; требуется визуальное утверждение QA.":a.processing?.message||job.message,
     error:a.processing?.error||null,
-    technical_master_ready:!!a.q,technical_qa:a.q?{master_sha256:a.q.master_sha256,master_bytes:a.q.master_bytes,bit_depth:16,HDR_applied:false}:null,
+    technical_master_ready:!!a.q,technical_qa:a.q?{master_sha256:a.q.master_sha256,master_bytes:a.q.master_bytes,bit_depth:16,HDR_applied:false,source_kind:a.q.source_kind||"RASTER"}:null,
     locks:job.locks,approval:a.d?{decision:a.d.decision,at:a.d.at}:null,
     can_approve:!!a.q&&!a.d,can_reject:!!a.q&&!a.d,
     can_rework:!!a.q&&!a.d,
@@ -320,12 +328,23 @@ export async function editorialJobApi(request,env,url,authorizeSession) {
 
   if(path==="/api/editorial/job/status"&&method==="GET")return json(state(job,a));
   if(path==="/api/editorial/job/source"&&method==="GET"){
+    if(a.q?.source_kind==="CAMERA_RAW"){
+      const preview=await env.TROPICANA_EDITORIAL_R2.get(key(id,"technical/source-preview.jpg"));
+      if(!preview||preview.size!==a.q.source_preview_bytes||
+         preview.httpMetadata?.contentType!=="image/jpeg"||
+         preview.customMetadata?.sha256!==a.q.source_preview_sha256||
+         !preview.checksums?.sha256||hex(preview.checksums.sha256)!==a.q.source_preview_sha256)
+        return json({error:"RAW_source_preview_integrity_HOLD"},409);
+      return new Response(preview.body,{headers:{"content-type":"image/jpeg","cache-control":"private,no-store",
+        "x-content-type-options":"nosniff","x-mg4k-source-representation":"RAW_NEUTRAL_PREVIEW",
+        "x-mg4k-original-source-sha256":job.source_sha256}});
+    }
     const src=await env.TROPICANA_EDITORIAL_R2.get(job.source_key);
     if(!src||src.size!==job.source_bytes||src.customMetadata?.sha256!==job.source_sha256||
        !["image/jpeg","image/png","image/webp"].includes(src.httpMetadata?.contentType))
       return json({error:"source_integrity_HOLD"},409);
     return new Response(src.body,{headers:{"content-type":job.mime,"cache-control":"private,no-store",
-       "x-content-type-options":"nosniff"}});
+       "x-content-type-options":"nosniff","x-mg4k-source-representation":"ORIGINAL_RASTER"}});
   }
   if(path==="/api/editorial/job/auto-geometry"&&method==="POST"){
     // Non-destructive, no control points or rejection of the existing V1.
