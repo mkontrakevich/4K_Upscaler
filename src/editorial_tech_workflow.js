@@ -36,14 +36,18 @@ async function start(env,id,job){
   if(input.checksums?.sha256&&hex(input.checksums.sha256)!==job.source_sha256)
     throw Error("source_R2_checksum_mismatch");
   const c=await processor(env);
-  const res=await c.fetch(new Request(endpoint(id,"start"),{
-    method:"POST",body:input.body,headers:{
-      "content-type":job.mime,"content-length":String(input.size),
+  const {readable,writable}=new FixedLengthStream(input.size);
+  const copy=input.body.pipeTo(writable);
+  const request=new Request(endpoint(id,"start"),{
+    method:"POST",body:readable,headers:{
+      "content-type":job.mime,
       "x-source-sha256":job.source_sha256,
       "x-source-filename":encodeURIComponent(job.filename),"x-mg4k-source-size":String(input.size),
       ...(job.correction_plan?{"x-mg4k-correction-plan":encodeURIComponent(JSON.stringify(job.correction_plan))}:{})
     }
-  }));
+  });
+  const fetchPromise=c.fetch(request);
+  const [res]=await Promise.all([fetchPromise,copy]);
   const data=await res.json().catch(()=>({}));
   if(!res.ok)throw Error("technical_start_"+res.status+":"+String(data.error||"unknown"));
   return {status:String(data.status||"QUEUED")};
