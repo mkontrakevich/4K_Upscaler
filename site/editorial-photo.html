@@ -136,8 +136,8 @@
     </section>
     <section class="panel">
       <h2>Новый SOURCE → TECH MASTER</h2>
-      <p class="muted">JPEG / PNG / WEBP до 8 МБ → технический мастер и визуальный QA. Исторический RAW/TECH V10 остаётся неизменяемым эталоном RAW-процесса.</p>
-      <div class="fields"><input id="file" type="file" accept="image/jpeg,image/png,image/webp"><button id="upload" class="btn" type="button">Загрузить в изолированный контур</button></div>
+      <p class="muted">RAW: ARW / DNG / NEF / CR2 / CR3 / RAF / ORF / RW2 до 90 MiB. JPEG / PNG / WEBP — до 8 МБ. RAW проявляется в 16-bit через LibRaw без HDR и без генерации.</p>
+      <div class="fields"><input id="file" type="file" accept="image/jpeg,image/png,image/webp,.arw,.dng,.nef,.cr2,.cr3,.raf,.orf,.rw2"><button id="upload" class="btn" type="button">Загрузить SOURCE</button></div>
       <p id="upload-result" class="key"></p>
       <p class="muted">Платный запуск OpenRouter управляется отдельно через одноразовую задачу Cloudflare Workflows. Публичных неконтролируемых запусков нет.</p>
     </section>
@@ -358,6 +358,9 @@
 <script src="/editorial-split.js"></script><script src="/editorial-geometry-preview.js"></script>
 <script>
 const base="/api/editorial";let session=null,sourceURL=null;
+const RAW_EXTENSIONS=new Set(["arw","dng","nef","cr2","cr3","raf","orf","rw2"]);
+const hexBytes=buffer=>[...new Uint8Array(buffer)].map(v=>v.toString(16).padStart(2,"0")).join("");
+const fileExt=file=>String(file?.name||"").split(".").pop().toLowerCase();
 let intakeId="",intakeProof=null,intakePoll=null,intakeBusy=false,intakeState=null;
 let comparisonFor="",comparisonUrls=[];
 
@@ -508,7 +511,7 @@ function updateSourceVerification(data){
  const result=x=>x==="PASS"?"PASS":x==="NOT_CONFIRMED"?"Не подтверждено":"Ожидание";
  const short=String(v.source_sha256||data.source_sha256||"");
  e("intake-source-sha").textContent=result(v.sha256_status)+(v.sha256_status==="PASS"?" · "+short.slice(0,16)+"…":"");
- e("intake-source-raster").textContent=result(v.raster_status)+(v.raster_status==="PASS"?" · "+String(v.mime||"").replace("image/","").toUpperCase():"");
+ e("intake-source-raster").textContent=result(v.raster_status)+(v.raster_status==="PASS"?" · "+(v.source_kind==="CAMERA_RAW"?"CAMERA RAW · LibRaw":String(v.mime||"").replace("image/","").toUpperCase()):"");
  e("intake-source-dimensions").textContent=Number.isInteger(v.width)&&Number.isInteger(v.height)?
     v.width+"×"+v.height+" px · "+v.signal_bits+" бит входного сигнала":"Данные ещё не подтверждены";
  e("intake-source-geometry").textContent=
@@ -874,7 +877,46 @@ async function sessionStart(){
  session=await r.json();sessionStorage.setItem(sessionStore,JSON.stringify(session));return session
 }
 async function health(){const r=await fetch(base+"/health");const h=await r.json();e("status").textContent=h.ok&&h.storage_isolated&&h.technical_workflow_configured?"Tech Master доступен":"Технический контур требует настройки";say(h)}
-async function upload(){const file=e("file").files[0];if(!file)throw Error("Выберите JPG/PNG/WebP");if(file.size>8*1024*1024)throw Error("Лимит 8 МБ");const s=await sessionStart();const f=new FormData();f.append("file",file);const r=await fetch(base+"/upload",{method:"POST",headers:{"x-session-id":s.id,"x-session-token":s.token},body:f});const data=await r.json();if(!r.ok)throw Error(JSON.stringify(data));e("upload-result").textContent=data.source_key+" · "+data.sha256.slice(0,16);say(data);if(data.job_id){persistJobToken(data.job_id,data.job_token);activateIntake(data.job_id)}if(sourceURL)URL.revokeObjectURL(sourceURL);sourceURL=URL.createObjectURL(file);e("source").src=sourceURL;e("source").classList.add("ready");e("source-label").hidden=true}
+async function upload(){
+ const file=e("file").files[0];if(!file)throw Error("Выберите RAW, JPG, PNG или WEBP");
+ const ext=fileExt(file),isRaw=RAW_EXTENSIONS.has(ext);
+ if(isRaw&&file.size>90*1024*1024)throw Error("RAW больше 90 MiB");
+ if(!isRaw&&file.size>8*1024*1024)throw Error("Растровый источник больше 8 МБ");
+ const s=await sessionStart();
+ let r;
+ if(isRaw){
+   e("upload-result").textContent="Проверяю SHA-256 RAW перед загрузкой…";
+   const digest=await crypto.subtle.digest("SHA-256",await file.arrayBuffer());
+   const sha=hexBytes(digest);
+   e("upload-result").textContent="RAW проверен · загружаю в защищённый TECH-контур…";
+   r=await fetch(base+"/upload-raw",{
+     method:"POST",
+     headers:{
+       "x-session-id":s.id,"x-session-token":s.token,
+       "content-type":"application/octet-stream",
+       "x-source-size":String(file.size),
+       "x-source-sha256":sha,
+       "x-source-filename":encodeURIComponent(file.name)
+     },
+     body:file
+   });
+ }else{
+   const form=new FormData();form.append("file",file);
+   r=await fetch(base+"/upload",{method:"POST",headers:{"x-session-id":s.id,"x-session-token":s.token},body:form});
+ }
+ const data=await r.json().catch(()=>({error:"invalid_response"}));
+ if(!r.ok)throw Error(data.error||JSON.stringify(data));
+ e("upload-result").textContent=(isRaw?"RAW · ":"")+data.source_key+" · "+String(data.sha256||"").slice(0,16);
+ say(data);
+ if(data.job_id){persistJobToken(data.job_id,data.job_token);activateIntake(data.job_id)}
+ if(sourceURL)URL.revokeObjectURL(sourceURL);
+ if(!isRaw){
+   sourceURL=URL.createObjectURL(file);e("source").src=sourceURL;e("source").classList.add("ready");e("source-label").hidden=true;
+ }else{
+   sourceURL=null;e("source").removeAttribute("src");e("source").classList.remove("ready");e("source-label").hidden=false;
+   e("source-label").textContent="RAW загружен · нейтральный preview появится после LibRaw decode";
+ }
+}
 async function load(){const id=e("job").value.trim();if(!/^[0-9a-f-]{36}$/i.test(id))return say("Укажите UUID задания");const r=await fetch(base+"/view?job="+encodeURIComponent(id)+"&kind=manifest");const data=await r.json();if(!r.ok)return say(data);e("status").textContent=data.status||"REVIEW";say(data);e("source").src=base+"/view?job="+encodeURIComponent(id)+"&kind=source";e("source").classList.add("ready");e("source-label").hidden=true;
 e("optical").src=base+"/view?job="+encodeURIComponent(id)+"&kind=optical";e("optical").classList.add("ready");e("optical-label").hidden=true;
 for(const [kind,element] of [["tech_v10_neutral","tech-neutral"],["tech_v10_clean","tech-clean"]]){
