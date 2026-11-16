@@ -23,7 +23,7 @@ test("MG4K exposes one continuous SOURCE to FINAL workflow",()=>{
 
 test("TECH MASTER remains a non-generative QA-gated stage",()=>{
   for(const token of [
-    "MG 4K / TECH MASTER",
+    'class="brand">MG <span>4K</span> / TECH MASTER',
     "NO HDR",
     "Утвердить Tech Master",
     "Передать утверждённый Tech Master в MG4K",
