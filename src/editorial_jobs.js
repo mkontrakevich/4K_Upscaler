@@ -54,6 +54,7 @@ async function verifiedTech(env,job) {
   const proof=await env.TROPICANA_EDITORIAL_R2.get(key(job.job_id,"technical/qa.json"));
   if(!proof)return null;
   let q;try{q=await proof.json()}catch{return null}
+  const sourceKind=String(q?.source_kind||"RASTER");
   const expected=key(job.job_id,"technical/master16.tif");
   const geom=job.correction_plan?.type==="GEOMETRY_FACADE_QUAD_V1";
   const autoRoll=!job.correction_plan&&q.auto_geometry_correction?.status==="APPLIED";
@@ -63,8 +64,8 @@ async function verifiedTech(env,job) {
      q.virtual_exposures!==false||q.local_HDR!==false||
      q.qa_checks?.HDR_ABSENT!=="PASS"||
      q.qa_checks?.SOURCE_SHA256!=="PASS"||
-     !["RASTER","CAMERA_RAW"].includes(String(q.source_kind||""))||
-     (q.source_kind==="CAMERA_RAW"&&(
+     !["RASTER","CAMERA_RAW"].includes(sourceKind)||
+     (sourceKind==="CAMERA_RAW"&&(
        q.raw_decoder!=="rawpy-0.28.0/LibRaw"||
        !SHA.test(String(q.source_preview_sha256||""))||
        !Number.isInteger(q.source_preview_bytes)||q.source_preview_bytes<10000
@@ -183,7 +184,7 @@ function sourceVerification(job,a){
       geometryUnchanged?"PASS":q?"NOT_CONFIRMED":"PENDING",
     mime:job.mime,source_bytes:job.source_bytes,
     source_sha256:job.source_sha256,
-    source_kind:q?.source_kind||null,
+    source_kind:q?.source_kind||"RASTER",
     raw_decoder:q?.raw_decoder||null,
     width:rasterOK?q.width:null,height:rasterOK?q.height:null,
     signal_bits:rasterOK?q.source_signal_bits:null,
