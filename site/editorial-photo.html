@@ -105,11 +105,25 @@
 @media(min-width:801px) and (max-width:920px){.grid.editorial-layout{grid-template-columns:minmax(0,1fr) 260px}}
 @media(max-width:800px){.grid.editorial-layout{grid-template-columns:minmax(0,1fr);grid-template-areas:"primary" "rail"}}
 
+.workflow-nav{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:1px;background:#20384a;border-bottom:1px solid #294054}
+.workflow-step{min-height:52px;padding:9px 14px;background:#081724;color:#7792a6;text-decoration:none;display:flex;align-items:center;gap:10px;min-width:0}
+.workflow-step b{width:22px;height:22px;border:1px solid #34566f;border-radius:50%;display:grid;place-items:center;font-size:10px;flex:none}
+.workflow-step span{display:block;min-width:0}.workflow-step strong{display:block;color:#a9bfce;font-size:11px;letter-spacing:.05em}.workflow-step small{display:block;font-size:9px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.workflow-step.active{background:#0c2638;color:#c9f2ff}.workflow-step.active b{border-color:#3db9df;color:#d9f8ff}.workflow-step.active strong{color:#e8f9ff}
+.workflow-step.ready:hover{background:#0d2131;color:#d7f2ff}
+@media(max-width:800px){.workflow-nav{grid-template-columns:repeat(5,minmax(92px,1fr));overflow-x:auto}.workflow-step{min-width:112px}.workflow-step small{display:none}}
 </style><link rel="stylesheet" href="/editorial-compare.css"></head><body>
-<header><div class="brand">MG <span>4K</span> / EDITORIAL PHOTO</div><nav><a href="/">4K Upscaler</a></nav></header>
+<header><div class="brand">MG <span>4K</span> / TECH MASTER</div><nav><a href="/">MG4K GENERATIVE</a></nav></header>
+<nav class="workflow-nav" aria-label="MG 4K pipeline">
+  <a class="workflow-step ready" href="/editorial-photo.html"><b>1</b><span><strong>SOURCE</strong><small>исходник / RAW</small></span></a>
+  <a class="workflow-step active" href="/editorial-photo.html"><b>2</b><span><strong>TECH MASTER</strong><small>геометрия · оптика · NO HDR · QA</small></span></a>
+  <a class="workflow-step ready" href="/"><b>3</b><span><strong>MG4K</strong><small>AI SOURCE PROFILE · DONOR</small></span></a>
+  <a class="workflow-step" href="/#analysis-panel"><b>4</b><span><strong>ИНСПЕКЦИЯ</strong><small>SPLIT · DIFF · BLINK</small></span></a>
+  <a class="workflow-step" href="/#actions-panel"><b>5</b><span><strong>FINAL</strong><small>human approval · RESULT</small></span></a>
+</nav>
 <main>
-<div class="eyebrow">MARINS OS / Architectural Editorial / Perspective Lock</div><h1>Editorial Photo</h1>
-<p class="lead">Откройте фотографию, исправьте перспективу и сравните результат. До вашего подтверждения исходник не изменяется.</p>
+<div class="eyebrow">MG 4K / SOURCE PREPARATION / RAW & TECHNICAL MASTER</div><h1>TECH MASTER</h1>
+<p class="lead">Техническая подготовка SOURCE перед генеративным MG4K: геометрия, перспектива, экспозиция, баланс белого, шум и фактуры — без HDR и без изменения содержания. После визуального QA утверждённый мастер передаётся в MG4K как новый SOURCE.</p>
 <div class="grid editorial-layout">
   <aside class="stack workspace-rail">
     <section class="panel">
@@ -121,8 +135,8 @@
       <div class="metric"><span class="muted">Статус</span><strong id="status" class="status">Проверка…</strong></div>
     </section>
     <section class="panel">
-      <h2>Загрузить новое фото</h2>
-      <p class="muted">JPEG / PNG / WEBP до 8 МБ → отдельный Tech Master и QA. Архивный мастер RAW/TECH V10 остаётся неизменным.</p>
+      <h2>Новый SOURCE → TECH MASTER</h2>
+      <p class="muted">JPEG / PNG / WEBP до 8 МБ → технический мастер и визуальный QA. Исторический RAW/TECH V10 остаётся неизменяемым эталоном RAW-процесса.</p>
       <div class="fields"><input id="file" type="file" accept="image/jpeg,image/png,image/webp"><button id="upload" class="btn" type="button">Загрузить в изолированный контур</button></div>
       <p id="upload-result" class="key"></p>
       <p class="muted">Платный запуск OpenRouter управляется отдельно через одноразовую задачу Cloudflare Workflows. Публичных неконтролируемых запусков нет.</p>
@@ -131,10 +145,10 @@
     <section class="panel">
       <h2>Протокол</h2>
       <div class="metric"><span class="muted">1. Верификация источника</span><strong>SHA-256</strong></div>
-      <div class="metric"><span class="muted">2. Scene / Editorial analysis</span><strong>OpenRouter</strong></div>
-      <div class="metric"><span class="muted">3. Image-to-image</span><strong>Reference lock</strong></div>
-      <div class="metric"><span class="muted">4. Fidelity QA</span><strong>HOLD / REVIEW</strong></div>
-      <div class="metric"><span class="muted">5. Финал</span><strong>Только после QA</strong></div>
+      <div class="metric"><span class="muted">2. Техническая коррекция</span><strong>NO HDR / NO GEN</strong></div>
+      <div class="metric"><span class="muted">3. SOURCE ↔ TECH сравнение</span><strong>SPLIT / 1:1</strong></div>
+      <div class="metric"><span class="muted">4. Human QA</span><strong>APPROVE / REWORK</strong></div>
+      <div class="metric"><span class="muted">5. Передача в MG4K</span><strong>Только после QA</strong></div>
       <p><a href="https://github.com/mkontrakevich/marins-platform/blob/main/skills/marins-architectural-raw-photo/SKILL.md" target="_blank" rel="noreferrer">MARINS Architectural RAW Photo Skill</a></p>
     </section>
   </aside>
@@ -262,7 +276,7 @@
         <button class="btn" id="intake-approve" disabled type="button">Утвердить Tech Master</button>
         <button class="btn mutebtn" id="intake-reject" disabled type="button">Вернуть на доработку</button>
         <button class="btn mutebtn" id="intake-download" disabled type="button">Скачать 16-bit TIFF</button>
-        <button class="btn" id="intake-handoff" disabled type="button">Подготовить передачу в MG 4K</button>
+        <button class="btn" id="intake-handoff" disabled type="button">Передать утверждённый Tech Master в MG4K</button>
       </div>
 
       <div id="intake-rework-form" hidden style="margin:14px 0;padding:14px;border:1px solid #4d6070">
@@ -307,7 +321,7 @@
         </div>
       </div>
       <p id="intake-correction-report" class="note" hidden></p>
-      <p><a id="intake-import-link" href="#" hidden>Открыть импортированный мастер в MG 4K</a></p>
+      <p><a id="intake-import-link" href="#" hidden>Открыть Tech Master в MG4K →</a></p>
       <p class="note">Для JPEG/PNG/WebP автоматически формируется нейтральный 16-битный TIFF без HDR. Если источник был 8-битным, дополнительная информация не возникает. Художественная генерация разрешается только отдельно после QA.</p>
     </section>
     <details class="archive-bundle" id="legacy-archive">
