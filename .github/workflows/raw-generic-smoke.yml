@@ -19,90 +19,90 @@ jobs:
       RAW_SHA256: 1b4344f4b8ca629830254850fbcbaf2931c83c00a158ab87d84e5ee7722046d5
       RAW_KEY: originals/DSC09818.ARW
       RAW_BUCKET: marins-tropicana-photo-originals
-  steps:
-    - uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-    - uses: actions/setup-python@v5
-      with:
-        python-version: '3.13'
-    - uses: actions/setup-node@v4
-      with:
-        node-version: '22'
-    - name: Install verified RAW runtime
-      run: |
-        npm ci
-        python -m pip install --disable-pip-version-check 'numpy>=2,<3' 'opencv-python-headless>=4.10,<5' 'tifffile>=2025.1,<2028' 'rawpy==0.28.0'
-    - name: Read immutable Sony ARW from protected R2
-      run: |
-        mkdir -p /tmp/mg4k-raw-smoke
-        npx wrangler r2 object get "$RAW_BUCKET/$RAW_KEY" --file /tmp/mg4k-raw-smoke/DSC09818.ARW --remote
-        python - <<'PY'
-        import hashlib,os
-        from pathlib import Path
-        p=Path('/tmp/mg4k-raw-smoke/DSC09818.ARW')
-        got=hashlib.sha256(p.read_bytes()).hexdigest()
-        assert got==os.environ['RAW_SHA256'], (got,os.environ['RAW_SHA256'])
-        print('RAW_SOURCE_SHA256_PASS',got,p.stat().st_size)
-        PY
-    - name: Run new generic RAW TECH MASTER decoder
-      run: |
-        python scripts/editorial_raster_technical_master.py           --input /tmp/mg4k-raw-smoke/DSC09818.ARW           --out /tmp/mg4k-raw-smoke/out           --job-id 11111111-1111-4111-8111-111111111111           --source-sha256 "$RAW_SHA256"
-    - name: Verify no-HDR 16-bit RAW lineage
-      run: |
-        python - <<'PY'
-        import hashlib,json,os
-        from pathlib import Path
-        root=Path('/tmp/mg4k-raw-smoke/out')
-        q=json.loads((root/'qa.json').read_text())
-        master=root/'master16.tif'
-        preview=root/'fullres-preview.jpg'
-        source_preview=root/'source-preview.jpg'
-        assert q['source_sha256']==os.environ['RAW_SHA256']
-        assert q['source_kind']=='CAMERA_RAW'
-        assert q['raw_decoder']=='rawpy-0.28.0/LibRaw'
-        assert q['source_signal_bits']==16 and q['master_bit_depth']==16
-        assert q['HDR_applied'] is False
-        assert q['virtual_exposures'] is False
-        assert q['local_HDR'] is False
-        assert q['generative_processing'] is False
-        assert q['qa_checks']['SOURCE_SHA256']=='PASS'
-        assert q['qa_checks']['BIT_DEPTH_16']=='PASS'
-        assert q['qa_checks']['HDR_ABSENT']=='PASS'
-        assert q['qa_checks']['NO_GENERATIVE_PROCESSING']=='PASS'
-        assert master.is_file() and preview.is_file() and source_preview.is_file()
-        assert hashlib.sha256(master.read_bytes()).hexdigest()==q['master_sha256']
-        assert hashlib.sha256(source_preview.read_bytes()).hexdigest()==q['source_preview_sha256']
-        result={
-          'schema':1,
-          'test':'UNIVERSAL_CAMERA_RAW_TO_TECH_MASTER',
-          'source':'marins-tropicana-photo-originals/originals/DSC09818.ARW',
-          'source_sha256':q['source_sha256'],
-          'source_bytes':Path('/tmp/mg4k-raw-smoke/DSC09818.ARW').stat().st_size,
-          'source_kind':q['source_kind'],
-          'decoder':q['raw_decoder'],
-          'dimensions':[q['width'],q['height']],
-          'source_signal_bits':q['source_signal_bits'],
-          'master_bit_depth':q['master_bit_depth'],
-          'master_sha256':q['master_sha256'],
-          'master_bytes':q['master_bytes'],
-          'source_preview_sha256':q['source_preview_sha256'],
-          'HDR_applied':q['HDR_applied'],
-          'virtual_exposures':q['virtual_exposures'],
-          'local_HDR':q['local_HDR'],
-          'generative_processing':q['generative_processing'],
-          'technical_status':q['technical_status'],
-          'qa_checks':q['qa_checks'],
-          'result':'PASS'
-        }
-        Path('/tmp/mg4k-raw-smoke/result.json').write_text(json.dumps(result,ensure_ascii=False,indent=2))
-        print(json.dumps(result,ensure_ascii=False,indent=2))
-        PY
-    - name: Commit immutable smoke evidence
-      run: |
-        cp /tmp/mg4k-raw-smoke/result.json docs/RAW_GENERIC_SMOKE_RESULT_20261116.json
-        git config user.name "mg4k-raw-smoke"
-        git config user.email "actions@users.noreply.github.com"
-        git add docs/RAW_GENERIC_SMOKE_RESULT_20261116.json
-        git commit -m "Record universal RAW TECH MASTER smoke PASS [skip ci]"
-        git push
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install verified RAW runtime
+        run: |
+          npm ci
+          python -m pip install --disable-pip-version-check 'numpy>=2,<3' 'opencv-python-headless>=4.10,<5' 'tifffile>=2025.1,<2028' 'rawpy==0.28.0'
+      - name: Read immutable Sony ARW from protected R2
+        run: |
+          mkdir -p /tmp/mg4k-raw-smoke
+          npx wrangler r2 object get "$RAW_BUCKET/$RAW_KEY" --file /tmp/mg4k-raw-smoke/DSC09818.ARW --remote
+          python - <<'PY'
+          import hashlib,os
+          from pathlib import Path
+          p=Path('/tmp/mg4k-raw-smoke/DSC09818.ARW')
+          got=hashlib.sha256(p.read_bytes()).hexdigest()
+          assert got==os.environ['RAW_SHA256'], (got,os.environ['RAW_SHA256'])
+          print('RAW_SOURCE_SHA256_PASS',got,p.stat().st_size)
+          PY
+      - name: Run new generic RAW TECH MASTER decoder
+        run: |
+          python scripts/editorial_raster_technical_master.py           --input /tmp/mg4k-raw-smoke/DSC09818.ARW           --out /tmp/mg4k-raw-smoke/out           --job-id 11111111-1111-4111-8111-111111111111           --source-sha256 "$RAW_SHA256"
+      - name: Verify no-HDR 16-bit RAW lineage
+        run: |
+          python - <<'PY'
+          import hashlib,json,os
+          from pathlib import Path
+          root=Path('/tmp/mg4k-raw-smoke/out')
+          q=json.loads((root/'qa.json').read_text())
+          master=root/'master16.tif'
+          preview=root/'fullres-preview.jpg'
+          source_preview=root/'source-preview.jpg'
+          assert q['source_sha256']==os.environ['RAW_SHA256']
+          assert q['source_kind']=='CAMERA_RAW'
+          assert q['raw_decoder']=='rawpy-0.28.0/LibRaw'
+          assert q['source_signal_bits']==16 and q['master_bit_depth']==16
+          assert q['HDR_applied'] is False
+          assert q['virtual_exposures'] is False
+          assert q['local_HDR'] is False
+          assert q['generative_processing'] is False
+          assert q['qa_checks']['SOURCE_SHA256']=='PASS'
+          assert q['qa_checks']['BIT_DEPTH_16']=='PASS'
+          assert q['qa_checks']['HDR_ABSENT']=='PASS'
+          assert q['qa_checks']['NO_GENERATIVE_PROCESSING']=='PASS'
+          assert master.is_file() and preview.is_file() and source_preview.is_file()
+          assert hashlib.sha256(master.read_bytes()).hexdigest()==q['master_sha256']
+          assert hashlib.sha256(source_preview.read_bytes()).hexdigest()==q['source_preview_sha256']
+          result={
+            'schema':1,
+            'test':'UNIVERSAL_CAMERA_RAW_TO_TECH_MASTER',
+            'source':'marins-tropicana-photo-originals/originals/DSC09818.ARW',
+            'source_sha256':q['source_sha256'],
+            'source_bytes':Path('/tmp/mg4k-raw-smoke/DSC09818.ARW').stat().st_size,
+            'source_kind':q['source_kind'],
+            'decoder':q['raw_decoder'],
+            'dimensions':[q['width'],q['height']],
+            'source_signal_bits':q['source_signal_bits'],
+            'master_bit_depth':q['master_bit_depth'],
+            'master_sha256':q['master_sha256'],
+            'master_bytes':q['master_bytes'],
+            'source_preview_sha256':q['source_preview_sha256'],
+            'HDR_applied':q['HDR_applied'],
+            'virtual_exposures':q['virtual_exposures'],
+            'local_HDR':q['local_HDR'],
+            'generative_processing':q['generative_processing'],
+            'technical_status':q['technical_status'],
+            'qa_checks':q['qa_checks'],
+            'result':'PASS'
+          }
+          Path('/tmp/mg4k-raw-smoke/result.json').write_text(json.dumps(result,ensure_ascii=False,indent=2))
+          print(json.dumps(result,ensure_ascii=False,indent=2))
+          PY
+      - name: Commit immutable smoke evidence
+        run: |
+          cp /tmp/mg4k-raw-smoke/result.json docs/RAW_GENERIC_SMOKE_RESULT_20261116.json
+          git config user.name "mg4k-raw-smoke"
+          git config user.email "actions@users.noreply.github.com"
+          git add docs/RAW_GENERIC_SMOKE_RESULT_20261116.json
+          git commit -m "Record universal RAW TECH MASTER smoke PASS [skip ci]"
+          git push
