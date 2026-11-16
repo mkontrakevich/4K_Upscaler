@@ -96,6 +96,9 @@ jobs:
           print("Generation job archive browser contract: PASSED")
           PY
 
+      - name: Unified TECH MASTER → MG4K workflow contract
+        run: node --test tests/mg4k-tech-master-integration.test.mjs
+
       - name: Legacy local web console self-test
         run: python web_review_server.py --self-test
 
