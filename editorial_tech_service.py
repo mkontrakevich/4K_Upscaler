@@ -22,7 +22,7 @@ SHA=re.compile(r"^[0-9a-f]{64}$",re.I)
 STATES={}
 MUTEX=threading.RLock()
 PROCESS_SLOT=threading.Lock()
-MAX_SOURCE=8*1024*1024
+MAX_SOURCE=90*1024*1024
 
 def _path(job_id: str)->Path:
     return ROOT/job_id
@@ -162,13 +162,22 @@ def route(handler,method:str)->bool:
             return True
         STATES[job_id]={"job_id":job_id,"source_sha256":source_sha,"source_bytes":length,
                         "status":"UPLOADING","stage":"source_receive","progress":0}
-    data=handler.rfile.read(length)
-    if len(data)!=length or hashlib.sha256(data).hexdigest()!=source_sha:
+    folder=_path(job_id);folder.mkdir(parents=True,exist_ok=True)
+    source_path=folder/"source"
+    digest=hashlib.sha256()
+    received=0
+    with source_path.open("wb") as out:
+        while received<length:
+            chunk=handler.rfile.read(min(1024*1024,length-received))
+            if not chunk:
+                break
+            out.write(chunk);digest.update(chunk);received+=len(chunk)
+    if received!=length or digest.hexdigest()!=source_sha:
+        try: source_path.unlink(missing_ok=True)
+        except Exception: pass
         _set(job_id,status="FAILED",error="source_sha256_mismatch")
         _json(handler,409,{"error":"source_sha256_mismatch"})
         return True
-    folder=_path(job_id);folder.mkdir(parents=True,exist_ok=True)
-    (folder/"source").write_bytes(data)
     if plan is not None:
         (folder/"correction-plan.json").write_text(json.dumps(plan,sort_keys=True),encoding="utf-8")
     name=Path(unquote(handler.headers.get("x-source-filename") or "source.jpg")).name
