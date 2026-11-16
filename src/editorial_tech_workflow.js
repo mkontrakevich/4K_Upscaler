@@ -67,6 +67,12 @@ async function proof(env,id,job){
      qa.HDR_applied!==false||qa.virtual_exposures!==false||qa.local_HDR!==false||
      qa.qa_checks?.HDR_ABSENT!=="PASS"||
      qa.qa_checks?.SOURCE_SHA256!=="PASS"||
+     !["RASTER","CAMERA_RAW"].includes(String(qa.source_kind||""))||
+     (qa.source_kind==="CAMERA_RAW"&&(
+       qa.raw_decoder!=="rawpy-0.28.0/LibRaw"||
+       !Number.isInteger(qa.source_preview_bytes)||qa.source_preview_bytes<10000||
+       !SHA.test(String(qa.source_preview_sha256||""))
+     ))||
      qa.qa_checks?.TIFF_READBACK!=="PASS"||
      (geometryPlan?
        (qa.qa_checks?.GEOMETRY_TRANSFORM_EVIDENCED!=="PASS"||
@@ -175,6 +181,21 @@ async function persist(env,id,job,qa){
   });
   const vh=await env.TROPICANA_EDITORIAL_R2.head(ROOT(id)+"technical/fullres-preview.jpg");
   if(!vh||vh.size!==qa.preview_bytes)throw Error("technical_preview_R2_HOLD");
+
+  if(qa.source_kind==="CAMERA_RAW"){
+    if(!Number.isInteger(qa.source_preview_bytes)||qa.source_preview_bytes<10000||
+       !SHA.test(String(qa.source_preview_sha256||"")))
+      throw Error("RAW_source_preview_QA_missing");
+    const sourceView=await c.fetch(new Request(endpoint(id,"source-preview")));
+    if(!sourceView.ok||sourceView.headers.get("content-type")!=="image/jpeg"||
+       Number(sourceView.headers.get("content-length"))!==qa.source_preview_bytes)
+      throw Error("RAW_source_preview_invalid");
+    await persistKnownLength(env,ROOT(id)+"technical/source-preview.jpg",sourceView,qa.source_preview_bytes,{
+      onlyIf:new Headers({"If-None-Match":"*"}),sha256:fromHex(qa.source_preview_sha256),
+      httpMetadata:{contentType:"image/jpeg"},
+      customMetadata:{sha256:qa.source_preview_sha256,source_sha256:job.source_sha256,kind:"raw_neutral_source_preview"}
+    });
+  }
   await env.TROPICANA_EDITORIAL_R2.put(ROOT(id)+"technical/qa.json",JSON.stringify(qa),{
     onlyIf:new Headers({"If-None-Match":"*"}),httpMetadata:{contentType:"application/json"}
   });
@@ -193,7 +214,7 @@ export class EditorialTechWorkflow extends WorkflowEntrypoint{
         const o=await env.TROPICANA_EDITORIAL_R2.get(root+"job.json");
         if(!o)throw Error("technical_job_missing");
         const j=await o.json();
-        if(j.job_id!==id||!SHA.test(j.source_sha256)||j.source_bytes>8*1024*1024)
+        if(j.job_id!==id||!SHA.test(j.source_sha256)||j.source_bytes>90*1024*1024)
           throw Error("technical_job_invalid");
         return {source_key:j.source_key,source_sha256:j.source_sha256,source_bytes:j.source_bytes,
                 filename:j.filename,mime:j.mime,
