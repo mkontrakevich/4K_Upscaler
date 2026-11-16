@@ -1,0 +1,40 @@
+{
+  "schema": 1,
+  "test": "UNIVERSAL_CAMERA_RAW_TO_TECH_MASTER",
+  "verified_at": "2026-11-16T17:40:05Z",
+  "verification_run_id": 43920634009,
+  "verification_job_id": 133486649812,
+  "verification_pr": 61,
+  "source": "marins-tropicana-photo-originals/originals/DSC09818.ARW",
+  "source_sha256": "1b4344f4b8ca629830254850fbcbaf2931c83c00a158ab87d84e5ee7722046d5",
+  "source_bytes": 35155968,
+  "source_kind": "CAMERA_RAW",
+  "decoder": "rawpy-0.28.0/LibRaw",
+  "dimensions": [
+    7028,
+    4688
+  ],
+  "source_signal_bits": 16,
+  "master_bit_depth": 16,
+  "master_sha256": "b91f14e731f1bd1dd1934fe10cbca6e47d592f4a72517d6cd5491985a66864dd",
+  "master_bytes": 197684112,
+  "source_preview_sha256": "ba2e7a11c74fdf94ae546f6caa4a12495a4b0a9f32cec6ab7d3b596d92a959a8",
+  "HDR_applied": false,
+  "virtual_exposures": false,
+  "local_HDR": false,
+  "generative_processing": false,
+  "technical_status": "TECHNICAL_QA_PASS",
+  "qa_checks": {
+    "SOURCE_SHA256": "PASS",
+    "BIT_DEPTH_16": "PASS",
+    "HDR_ABSENT": "PASS",
+    "GEOMETRY_UNCHANGED": "PASS",
+    "GEOMETRY_TRANSFORM_EVIDENCED": "NOT_APPLICABLE",
+    "TIFF_READBACK": "PASS",
+    "NO_GENERATIVE_PROCESSING": "PASS",
+    "AUTO_GEOMETRY_ANALYZED": "PASS",
+    "AUTO_GEOMETRY_CORRECTED": "HOLD"
+  },
+  "interpretation": "PASS: universal RAW decode/lineage/no-HDR technical master. AUTO_GEOMETRY_CORRECTED=HOLD is an intentional safety hold; no unproven geometric correction was applied.",
+  "result": "PASS"
+}
