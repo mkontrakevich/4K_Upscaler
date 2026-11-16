@@ -18,7 +18,14 @@ The engines must not be merged into one opaque operation.
 
 The original upload remains immutable and SHA-256 traceable.
 
-Historical RAW/V10 assets remain immutable evidence. Generic current intake accepts the formats supported by the existing TECH MASTER endpoint; do not silently pretend an 8-bit raster source contains RAW sensor information.
+Historical RAW/V10 assets remain immutable evidence.
+
+Current TECH MASTER intake supports two truthful source classes:
+
+- CAMERA RAW: ARW / DNG / NEF / CR2 / CR3 / RAF / ORF / RW2, up to 90 MiB, SHA-256 verified before processing and developed through rawpy 0.28.0 / LibRaw into a genuine 16-bit RGB technical master;
+- RASTER: JPEG / PNG / WebP up to 8 MiB. An 8-bit raster may be stored in a 16-bit TIFF container, but the system must never claim recovered sensor precision.
+
+Large RAW uploads use a separate binary streaming path into R2 and are streamed from R2 to the isolated TECH container. They must not be buffered as a normal multipart image upload.
 
 ## Stage 2 — TECH MASTER
 
@@ -28,7 +35,8 @@ Required properties:
 - no virtual exposures;
 - no generative image creation;
 - geometry/perspective corrections only where supported by measured evidence;
-- technical exposure / white balance / denoise / optical correction;
+- camera RAW development with camera white balance and no automatic brightness/HDR fusion;
+- technical exposure / white balance / geometry tools already present in the TECH engine;
 - 16-bit TIFF technical master;
 - SOURCE ↔ TECH visual comparison;
 - explicit human QA;
