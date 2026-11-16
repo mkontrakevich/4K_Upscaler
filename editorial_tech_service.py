@@ -121,7 +121,8 @@ def route(handler,method:str)->bool:
             _json(handler,409,{"error":"technical_master_not_ready"})
             return True
         files={"master":("master16.tif","image/tiff"),"qa":("qa.json","application/json"),
-               "preview":("fullres-preview.jpg","image/jpeg")}
+               "preview":("fullres-preview.jpg","image/jpeg"),
+               "source-preview":("source-preview.jpg","image/jpeg")}
         if action not in files:
             _json(handler,404,{"error":"editorial_action_not_found"})
             return True
