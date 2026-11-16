@@ -27,6 +27,7 @@ on:
       - 'tests/editorial-geometry-preview.test.mjs'
       - 'tests/editorial-live-split.test.mjs'
       - 'tests/editorial-qa-layout.test.mjs'
+      - 'tests/mg4k-tech-master-integration.test.mjs'
       - 'site/editorial-import.js'
       - 'site/editorial-compare.js'
       - 'scripts/editorial_dsc09818_technical_master_v10.py'
@@ -88,6 +89,7 @@ jobs:
           PY
           node --check /tmp/editorial-photo-inline.js
           node --test tests/editorial-qa-layout.test.mjs
+          node --test tests/mg4k-tech-master-integration.test.mjs
           node --check site/editorial-split.js
           node --test tests/editorial-live-split.test.mjs
           node --check site/editorial-geometry-preview.js
