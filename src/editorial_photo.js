@@ -5,12 +5,15 @@ import { NonRetryableError } from "cloudflare:workflows";
 const PROJECT="tropicana-park", FRAME="DSC09818";
 const ROOT=PROJECT+"/"+FRAME+"/";
 const MAX_SOURCE=8*1024*1024;
+const MAX_RAW_SOURCE=90*1024*1024;
+const RAW_EXTENSIONS=new Set(["arw","dng","nef","cr2","cr3","raf","orf","rw2"]);
 const MODEL="google/gemini-3.1-flash-image";
 const AUDIT_MODEL="google/gemini-3-flash-preview";
 const j=(x,s=200)=>Response.json(x,{status:s,headers:{"cache-control":"no-store"}});
 const fileKey=(id,kind)=>"runs/"+id+"/"+kind;
 const isId=id=>/^[0-9a-f]{8}-[0-9a-f-]{27,40}$/i.test(String(id||""));
 const sha256=async buffer=>[...new Uint8Array(await crypto.subtle.digest("SHA-256",buffer))].map(x=>x.toString(16).padStart(2,"0")).join("");
+const hex=bytes=>[...new Uint8Array(bytes||new ArrayBuffer(0))].map(x=>x.toString(16).padStart(2,"0")).join("");
 function b64(bytes){let s="";const a=new Uint8Array(bytes);for(let p=0;p<a.length;p+=16384)s+=String.fromCharCode(...a.subarray(p,p+16384));return btoa(s)}
 function binary(base64){const s=atob(base64);const arr=new Uint8Array(s.length);for(let i=0;i<s.length;i++)arr[i]=s.charCodeAt(i);return arr}
 function imageUrl(b,mime="image/jpeg"){return "data:"+mime+";base64,"+b64(b)}
@@ -161,8 +164,87 @@ export async function editorialApi(request,env,url,authorizeSession){
  const path=url.pathname,method=request.method.toUpperCase();
  if(path.startsWith("/api/editorial/job/"))return editorialJobApi(request,env,url,authorizeSession);
  if(path==="/api/editorial/health"&&method==="GET"){
-  return j({ok:true,project:PROJECT,frame:FRAME,module:"Editorial Photo",storage_isolated:!!env.TROPICANA_EDITORIAL_R2,openrouter_configured:!!env.OPENROUTER_API_KEY,job_control:"Cloudflare Workflows API only",skill:"v1.13",technical_master_policy:"V10_NEUTRAL_NO_HDR",generation_guard:"HUMAN_QA_APPROVAL_REQUIRED",image_model:env.EDITORIAL_IMAGE_MODEL||MODEL,workflow:"mg4k-tropicana-editorial",technical_workflow_configured:!!env.TROPICANA_TECH_WORKFLOW});
+  return j({ok:true,project:PROJECT,frame:FRAME,module:"TECH MASTER / RAW",storage_isolated:!!env.TROPICANA_EDITORIAL_R2,openrouter_configured:!!env.OPENROUTER_API_KEY,job_control:"Cloudflare Workflows API only",skill:"v1.13",technical_master_policy:"V10_NEUTRAL_NO_HDR",generation_guard:"HUMAN_QA_APPROVAL_REQUIRED",image_model:env.EDITORIAL_IMAGE_MODEL||MODEL,workflow:"mg4k-tropicana-editorial",technical_workflow_configured:!!env.TROPICANA_TECH_WORKFLOW});
  }
+ if(path==="/api/editorial/upload-raw"&&method==="POST"){
+  const session=await authorizeSession(request,url,env);
+  if(!session)return j({error:"session_required"},403);
+  if(!env.TROPICANA_EDITORIAL_R2)return j({error:"r2_missing"},503);
+  if(!request.body)return j({error:"RAW_body_required"},400);
+
+  const expectedSize=Number(request.headers.get("content-length")||request.headers.get("x-source-size")||0);
+  const expectedSha=String(request.headers.get("x-source-sha256")||"").toLowerCase();
+  let filename="";
+  try{filename=decodeURIComponent(String(request.headers.get("x-source-filename")||""))}catch{}
+  filename=filename.split(/[\\/]/).pop()||"source.raw";
+  const ext=(filename.match(/\.([a-z0-9]+)$/i)?.[1]||"").toLowerCase();
+
+  if(!RAW_EXTENSIONS.has(ext))return j({error:"unsupported_RAW_extension",supported:[...RAW_EXTENSIONS]},415);
+  if(!/^[a-f0-9]{64}$/.test(expectedSha))return j({error:"RAW_sha256_required"},400);
+  if(!Number.isSafeInteger(expectedSize)||expectedSize<10000||expectedSize>MAX_RAW_SOURCE)
+    return j({error:"RAW_size_invalid",max_bytes:MAX_RAW_SOURCE},413);
+
+  const limitKey="editorial:upload:"+session.id;
+  const usage=Number(await env.SESSION_STATE_R7.get(limitKey)||0);
+  if(usage>=2)return j({error:"upload_session_limit"},429);
+  const ip=String(request.headers.get("CF-Connecting-IP")||"unknown");
+  const hour=new Date().toISOString().slice(0,13);
+  const hashedIp=(await sha256(new TextEncoder().encode(ip))).slice(0,20);
+  const ipKey="editorial:upload:ip:"+hour+":"+hashedIp;
+  const globalKey="editorial:upload:global:"+hour;
+  const [ipCount,globalCount]=await Promise.all([env.SESSION_STATE_R7.get(ipKey),env.SESSION_STATE_R7.get(globalKey)]);
+  if(Number(ipCount||0)>=5||Number(globalCount||0)>=30)return j({error:"editorial_upload_hourly_limit"},429);
+
+  const key=PROJECT+"/editorial-inbox/"+session.id+"/"+crypto.randomUUID()+"."+ext;
+  const {readable,writable}=new FixedLengthStream(expectedSize);
+  const copy=request.body.pipeTo(writable);
+  const save=env.TROPICANA_EDITORIAL_R2.put(key,readable,{
+    sha256:expectedSha,
+    httpMetadata:{contentType:"application/octet-stream"},
+    customMetadata:{sha256:expectedSha,project:PROJECT,frame:FRAME,source_kind:"CAMERA_RAW",original_name:filename}
+  });
+  let stored;
+  try{[,stored]=await Promise.all([copy,save])}
+  catch(error){return j({error:"RAW_upload_integrity_failed",reason:String(error?.message||error).slice(0,180)},409)}
+  if(!stored||stored.size!==expectedSize||!stored.checksums?.sha256||hex(stored.checksums.sha256)!==expectedSha){
+    try{await env.TROPICANA_EDITORIAL_R2.delete(key)}catch{}
+    return j({error:"RAW_R2_checksum_HOLD"},409);
+  }
+
+  await env.SESSION_STATE_R7.put(limitKey,String(usage+1),{expirationTtl:3600});
+  await Promise.all([
+    env.SESSION_STATE_R7.put(ipKey,String(Number(ipCount||0)+1),{expirationTtl:7200}),
+    env.SESSION_STATE_R7.put(globalKey,String(Number(globalCount||0)+1),{expirationTtl:7200})
+  ]);
+  const intake=await createEditorialIntakeJob(env,session,{
+    filename,mime:"application/x-camera-raw",source_key:key,source_sha256:expectedSha,bytes:expectedSize
+  });
+
+  let started=false,workflow_error=null;
+  if(env.TROPICANA_TECH_WORKFLOW){
+    try{
+      await env.TROPICANA_TECH_WORKFLOW.create({id:intake.job_id,params:{job_id:intake.job_id}});
+      started=true;
+    }catch(err){
+      workflow_error=String(err?.message||err).slice(0,250);
+      console.error("EDITORIAL_RAW_TECH_WORKFLOW_DISPATCH",intake.job_id,workflow_error);
+      await env.TROPICANA_EDITORIAL_R2.put("tropicana-park/editorial-jobs/"+intake.job_id+"/processing-state.json",
+        JSON.stringify({job_id:intake.job_id,status:"FAILED",stage:"workflow_dispatch_failed",
+          progress:null,message:"RAW сохранён, но технический процессор не запущен.",error:workflow_error}),
+        {httpMetadata:{contentType:"application/json"}});
+    }
+  }else workflow_error="technical_workflow_not_configured";
+
+  return j({ok:true,project:PROJECT,frame:"NEW_RAW_UPLOAD",source_kind:"CAMERA_RAW",
+    job_id:intake.job_id,job_token:intake.job_token,
+    status:started?"QUEUED":workflow_error?"FAILED":intake.status,
+    stage:started?"raw_decode_queued":intake.stage,progress:null,
+    source_key:key,sha256:expectedSha,bytes:expectedSize,filename,
+    raw_decoder:"rawpy-0.28.0/LibRaw",workflow_control:"automatic_free_technical_only",
+    message:started?"RAW сохранён по SHA-256; запущена 16-битная техническая проявка без HDR и генерации.":"Технический процессор недоступен.",
+    workflow_error},201);
+ }
+
  if(path==="/api/editorial/upload"&&method==="POST"){
   const session=await authorizeSession(request,url,env);
   if(!session)return j({error:"session_required"},403);
