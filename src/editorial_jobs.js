@@ -160,7 +160,19 @@ async function availability(env,job) {
   if(processObject){try{processing=await processObject.json()}catch{}}
   const autoHold=!!(job.correction_plan&&processing?.status==="HOLD");
   const revision=q?await revisionLink(env,job.job_id):null;
-  return {q,d,approved,imported,processing,revision,autoHold};
+  const isRaw=job.mime==="application/x-camera-raw";
+  const previewStateObject=isRaw?await env.TROPICANA_EDITORIAL_R2.get(key(job.job_id,"preview-state.json")):null;
+  let previewState=null;
+  if(previewStateObject){try{previewState=await previewStateObject.json()}catch{}}
+  const previewHead=isRaw?await env.TROPICANA_EDITORIAL_R2.head(key(job.job_id,"preview/source-preview.jpg")):null;
+  const previewReady=!isRaw||!!(previewState?.status==="READY"&&
+    previewState.source_sha256===job.source_sha256&&
+    previewHead&&previewHead.size===previewState.preview_bytes&&
+    previewHead.httpMetadata?.contentType==="image/jpeg"&&
+    previewHead.customMetadata?.sha256===previewState.preview_sha256&&
+    previewHead.customMetadata?.source_sha256===job.source_sha256&&
+    previewHead.checksums?.sha256&&hex(previewHead.checksums.sha256)===previewState.preview_sha256);
+  return {q,d,approved,imported,processing,revision,autoHold,previewReady,previewState};
 }
 function sourceVerification(job,a){
   const q=a.q,checks=q?.qa_checks||{};
@@ -231,6 +243,17 @@ function state(job,a) {
       parent_master_sha256:job.correction_plan.parent_master_sha256
     }:null,
     status,stage:a.q?"technical_qa_ready":a.processing?.stage||job.stage,
+    source_preview_ready:a.previewReady||!!(a.q&&a.q.source_kind==="CAMERA_RAW"),
+    source_preview_status:job.mime==="application/x-camera-raw"?
+      (a.previewState?.status||"PREPARING"):"READY",
+    can_start_processing:!a.q&&!a.d&&!a.processing&&
+      job.status==="AWAITING_TECH_PROCESSING"&&a.previewReady,
+    destination_choices:[
+      {id:"marins-mg4k",name:"MG4K — улучшение",enabled:true},
+      {id:"marins-welcome-studio",name:"Студия приветствий",enabled:false,reason:"Приём TIFF не подключён"},
+      {id:"marins-dynamo",name:"Динамо",enabled:false,reason:"Приём TIFF не подключён"},
+      {id:"marins-photo-studio",name:"Подбор фотографий",enabled:false,reason:"Контур не опубликован"}
+    ],
     progress:a.q?100:typeof a.processing?.progress==="number"?a.processing.progress:null,
     progress_kind:a.q?"TECHNICAL_STAGE_COMPLETE":a.processing?.status==="PROCESSING"?"TECHNICAL_STAGE_MEASURED":"NOT_MEASURED",
     message:a.d?.decision==="REWORK_REQUESTED"?
@@ -328,13 +351,45 @@ export async function editorialJobApi(request,env,url,authorizeSession) {
   const a=await availability(env,job);
 
   if(path==="/api/editorial/job/status"&&method==="GET")return json(state(job,a));
+  if(path==="/api/editorial/job/process"&&method==="POST"){
+    // Explicit user action only. Historical rework jobs have their own guarded entrypoints.
+    if(job.status!=="AWAITING_TECH_PROCESSING"||a.processing||a.q||a.d)
+      return json({error:"technical_processing_already_started_or_not_allowed"},409);
+    if(!a.previewReady)return json({error:"source_preview_must_be_visible_before_processing"},409);
+    if(!env.TROPICANA_TECH_WORKFLOW)return json({error:"technical_workflow_not_configured"},503);
+    const mark=await env.TROPICANA_EDITORIAL_R2.put(key(id,"processing-state.json"),JSON.stringify({
+      job_id:id,status:"QUEUED",stage:"operator_requested_technical_analysis",
+      progress:0,message:"Автоанализ и безопасная коррекция запущены по нажатию оператора.",
+      started_by_operator:true,generation_started:false,at:new Date().toISOString()
+    }),{onlyIf:new Headers({"If-None-Match":"*"}),httpMetadata:{contentType:"application/json"}});
+    if(!mark)return json({error:"technical_start_race_or_already_queued"},409);
+    try{
+      await env.TROPICANA_TECH_WORKFLOW.create({id,params:{job_id:id}});
+    }catch(error){
+      await env.TROPICANA_EDITORIAL_R2.put(key(id,"processing-state.json"),JSON.stringify({
+        job_id:id,status:"FAILED",stage:"operator_start_failed",
+        error:String(error?.message||error).slice(0,200),
+        message:"Запуск обработчика не подтверждён. Исходник сохранён.",generation_started:false
+      }),{httpMetadata:{contentType:"application/json"}});
+      return json({error:"technical_workflow_dispatch_failed",source_preserved:true},503);
+    }
+    return json({ok:true,job_id:id,status:"QUEUED",stage:"technical_analysis_queued",
+      generation_started:false,source_preserved:true},202);
+  }
   if(path==="/api/editorial/job/source"&&method==="GET"){
-    if(a.q?.source_kind==="CAMERA_RAW"){
-      const preview=await env.TROPICANA_EDITORIAL_R2.get(key(id,"technical/source-preview.jpg"));
-      if(!preview||preview.size!==a.q.source_preview_bytes||
+    if(job.mime==="application/x-camera-raw" || a.q?.source_kind==="CAMERA_RAW"){
+      // Preview-only extraction is available BEFORE technical master and QA.
+      const completed=!!a.q?.source_preview_sha256;
+      const path=completed?"technical/source-preview.jpg":"preview/source-preview.jpg";
+      const expectedSha=completed?a.q.source_preview_sha256:a.previewState?.preview_sha256;
+      const expectedSize=completed?a.q.source_preview_bytes:a.previewState?.preview_bytes;
+      if(!completed&&!a.previewReady)
+        return json({error:"RAW_source_preview_not_ready",status:a.previewState?.status||"PREPARING"},409);
+      const preview=await env.TROPICANA_EDITORIAL_R2.get(key(id,path));
+      if(!preview||preview.size!==expectedSize||
          preview.httpMetadata?.contentType!=="image/jpeg"||
-         preview.customMetadata?.sha256!==a.q.source_preview_sha256||
-         !preview.checksums?.sha256||hex(preview.checksums.sha256)!==a.q.source_preview_sha256)
+         preview.customMetadata?.sha256!==expectedSha||
+         !preview.checksums?.sha256||hex(preview.checksums.sha256)!==expectedSha)
         return json({error:"RAW_source_preview_integrity_HOLD"},409);
       return new Response(preview.body,{headers:{"content-type":"image/jpeg","cache-control":"private,no-store",
         "x-content-type-options":"nosniff","x-mg4k-source-representation":"RAW_NEUTRAL_PREVIEW",
@@ -679,6 +734,14 @@ export async function editorialJobApi(request,env,url,authorizeSession) {
   }
 
   if(path==="/api/editorial/job/handoff"&&method==="POST") {
+    let handoffInput={};
+    if(request.body){
+      try{handoffInput=await request.json()}catch{return json({error:"invalid_handoff_json"},400)}
+    }
+    const target=String(handoffInput?.target_id||"marins-mg4k");
+    if(target!=="marins-mg4k")
+      return json({error:"receiver_not_integrated_for_16bit_TIFF",
+        requested_target:target,available_target:"marins-mg4k"},409);
     if(!a.approved)return json({error:"human_QA_approval_required"},409);
     const transfer=await importIntoMg4k(env,job,a.q);
     if(transfer.error)return json({error:transfer.error},transfer.code);
