@@ -77,9 +77,12 @@ try:
         digest = hashlib.sha256(source).hexdigest()
         job = "123e4567-e89b-42d3-a456-426614174008"
 
-        bad = api("POST", job, "preview-start", source, "f"*64)
+        bad_job = "123e4567-e89b-42d3-a456-426614174009"
+        bad = api("POST", bad_job, "preview-start", source, "f"*64)
         assert bad.code == 409
-        assert not (Path(temp)/job/"preview-source").exists()
+        assert not (Path(temp)/bad_job/"preview-source").exists()
+        # A rejected upload is terminal for that job ID; use an independent
+        # immutable job for the successful preview instead of reviving it.
 
         ready_call = api("POST", job, "preview-start", source, digest)
         assert ready_call.code == 202
