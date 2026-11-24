@@ -1,6 +1,6 @@
 name: TECH MASTER V2 real RAW smoke
 # Final unoriented vertical-VP homography validation
-# One measured post-QA residual correction pass
+# One measured post-QA residual shear correction pass
 
 on:
   pull_request:
