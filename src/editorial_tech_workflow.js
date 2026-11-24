@@ -64,8 +64,12 @@ async function proof(env,id,job){
   if(!r.ok)throw Error("technical_QA_missing_"+r.status);
   const qa=await r.json();
   const geometryPlan=job.correction_plan?.type==="GEOMETRY_FACADE_QUAD_V1";
-  const autoRoll=!job.correction_plan&&qa.auto_geometry_correction?.status==="APPLIED";
-  const ag=qa.auto_geometry_correction;
+  const ao=qa.auto_optics_correction,ag=qa.auto_geometry_correction;
+  const ap=qa.auto_vertical_perspective_correction,ph=qa.auto_photometric_correction;
+  const autoOptics=!job.correction_plan&&ao?.status==="APPLIED";
+  const autoRoll=!job.correction_plan&&ag?.status==="APPLIED";
+  const autoPerspective=!job.correction_plan&&ap?.status==="APPLIED";
+  const autoSpatial=autoOptics||autoRoll||autoPerspective;
   if(qa.job_id!==id||qa.source_sha256!==job.source_sha256||
      qa.technical_status!=="TECHNICAL_QA_PASS"||qa.master_bit_depth!==16||
      qa.HDR_applied!==false||qa.virtual_exposures!==false||qa.local_HDR!==false||
@@ -82,13 +86,21 @@ async function proof(env,id,job){
        (qa.qa_checks?.GEOMETRY_TRANSFORM_EVIDENCED!=="PASS"||
         qa.qa_checks?.GEOMETRY_UNCHANGED!=="NOT_APPLICABLE"||
         qa.geometry!=="CONTROLLED_PROJECTIVE_WARP"):
-       autoRoll?
+       autoSpatial?
        (qa.qa_checks?.GEOMETRY_TRANSFORM_EVIDENCED!=="PASS"||
         qa.qa_checks?.GEOMETRY_UNCHANGED!=="NOT_APPLICABLE"||
-        qa.qa_checks?.AUTO_GEOMETRY_CORRECTED!=="PASS"||
-        qa.geometry!=="AUTO_CAMERA_ROLL_CORRECTION"):
+        !["AUTO_LENS_PROFILE_CORRECTION","AUTO_CAMERA_ROLL_CORRECTION","AUTO_VERTICAL_PERSPECTIVE_CORRECTION"].includes(qa.geometry)):
        (qa.qa_checks?.GEOMETRY_UNCHANGED!=="PASS"||
         qa.geometry!=="IDENTITY_NO_CORRECTION"))||
+     (!job.correction_plan&&qa.technical_version!=="AUTO_TECH_MASTER_V2")||
+     (!job.correction_plan&&(!ao||!ag||!ap||!ph))||
+     (autoOptics&&(
+       ao?.engine!=="AUTO_PROFILED_OPTICS_V1"||ao?.HDR_applied!==false||
+       ao?.generative_processing!==false||!ao?.profile_id||
+       !Number.isFinite(ao?.crop_area_fraction)||ao.crop_area_fraction<0||ao.crop_area_fraction>.14||
+       !Number.isFinite(ao?.invalid_source_fraction)||ao.invalid_source_fraction>.00002||
+       !Number.isFinite(ao?.changed_mean_absolute_fraction)||ao.changed_mean_absolute_fraction<.0005
+     ))||
      (autoRoll&&(
        ag?.engine!=="AUTO_CAMERA_ROLL_SAFE_CROP_V1"||
        ag?.geometry_transform!=="AUTO_CAMERA_ROLL_CORRECTION"||
@@ -103,6 +115,31 @@ async function proof(env,id,job){
        !Number.isFinite(ag?.changed_mean_absolute_fraction)||
        ag.changed_mean_absolute_fraction<.003||
        !Array.isArray(ag?.operations)||ag.operations.length===0
+     ))||
+     (autoPerspective&&(
+       ap?.engine!=="AUTO_VERTICAL_PERSPECTIVE_V1"||
+       ap?.geometry_transform!=="AUTO_VERTICAL_PERSPECTIVE_CORRECTION"||
+       ap?.HDR_applied!==false||ap?.generative_processing!==false||
+       !Number.isFinite(ap?.crop_area_fraction)||ap.crop_area_fraction<0||ap.crop_area_fraction>.17||
+       !Number.isFinite(ap?.invalid_border_fraction)||ap.invalid_border_fraction>.00002||
+       !Number.isFinite(ap?.max_corner_drift_fraction)||ap.max_corner_drift_fraction>.16||
+       !Number.isFinite(ap?.vertical_residual_after_deg)||Math.abs(ap.vertical_residual_after_deg)>.45||
+       !Number.isFinite(ap?.changed_mean_absolute_fraction)||ap.changed_mean_absolute_fraction<.002||
+       !Array.isArray(ap?.operations)||ap.operations.length===0
+     ))||
+     (!job.correction_plan&&(
+       !["APPLIED","NO_CHANGE_NEEDED","HOLD"].includes(String(ao?.status||""))||
+       !["APPLIED","NO_CHANGE_NEEDED","HOLD"].includes(String(ag?.status||""))||
+       !["APPLIED","NO_CHANGE_NEEDED","HOLD"].includes(String(ap?.status||""))||
+       !["APPLIED","NO_CHANGE_NEEDED","HOLD"].includes(String(ph?.status||""))||
+       ph?.engine!=="AUTO_NEUTRAL_PHOTOMETRY_V1"||
+       ph?.HDR_applied!==false||ph?.generative_processing!==false||
+       ph?.local_tone_mapping!==false||
+       (ph?.status==="APPLIED"&&(
+         !Number.isFinite(ph?.changed_mean_absolute_fraction)||ph.changed_mean_absolute_fraction<.0015||
+         !Number.isFinite(ph?.clipped_pixel_fraction)||ph.clipped_pixel_fraction>.006||
+         !Array.isArray(ph?.operations)||ph.operations.length===0
+       ))
      ))||
      !SHA.test(qa.master_sha256||"")||
      !Number.isInteger(qa.master_bytes)||qa.master_bytes<200000||
