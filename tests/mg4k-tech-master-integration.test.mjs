@@ -26,14 +26,14 @@ test("TECH MASTER remains a non-generative QA-gated stage",()=>{
     'class="brand">MG <span>4K</span> / TECH MASTER',
     "NO HDR",
     "Утвердить Tech Master",
-    "Передать утверждённый Tech Master в MG4K",
+    "Сохранить и передать в выбранный контур",
     "Открыть Tech Master в MG4K",
     'id="intake-check-preview"',
     'id="intake-check-geometry"',
     'id="intake-check-materials"',
     "intakeHandoff",
   ]) assert.ok(tech.includes(token),token);
-  assert.ok(tech.includes("16-битный TIFF перенесён в MG 4K. Генерация не запускалась."));
+  assert.ok(tech.includes("Утверждённый TIFF сохранён и принят выбранным контуром. Генерация не запускалась."));
 });
 
 test("MG4K handoff cannot bypass Tech Master approval and provenance",()=>{
