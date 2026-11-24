@@ -220,29 +220,31 @@ export async function editorialApi(request,env,url,authorizeSession){
     filename,mime:"application/x-camera-raw",source_key:key,source_sha256:expectedSha,bytes:expectedSize
   });
 
-  let started=false,workflow_error=null;
+  // On upload: save immutable RAW and prepare an uncorrected camera thumbnail.
+  // NO technical Workflow and NO auto geometry are launched until explicit click.
+  let preview_started=false,preview_error=null;
   if(env.TROPICANA_TECH_WORKFLOW){
     try{
-      await env.TROPICANA_TECH_WORKFLOW.create({id:intake.job_id,params:{job_id:intake.job_id}});
-      started=true;
+      await env.TROPICANA_TECH_WORKFLOW.create({
+        id:crypto.randomUUID(),params:{job_id:intake.job_id,preview_only:true}
+      });
+      preview_started=true;
     }catch(err){
-      workflow_error=String(err?.message||err).slice(0,250);
-      console.error("EDITORIAL_RAW_TECH_WORKFLOW_DISPATCH",intake.job_id,workflow_error);
-      await env.TROPICANA_EDITORIAL_R2.put("tropicana-park/editorial-jobs/"+intake.job_id+"/processing-state.json",
-        JSON.stringify({job_id:intake.job_id,status:"FAILED",stage:"workflow_dispatch_failed",
-          progress:null,message:"RAW сохранён, но технический процессор не запущен.",error:workflow_error}),
+      preview_error=String(err?.message||err).slice(0,200);
+      console.error("EDITORIAL_RAW_PREVIEW_WORKFLOW",intake.job_id,preview_error);
+      await env.TROPICANA_EDITORIAL_R2.put("tropicana-park/editorial-jobs/"+intake.job_id+"/preview-state.json",
+        JSON.stringify({status:"FAILED",stage:"raw_preview_dispatch_failed",error:preview_error}),
         {httpMetadata:{contentType:"application/json"}});
     }
-  }else workflow_error="technical_workflow_not_configured";
-
+  }else preview_error="raw_preview_workflow_not_configured";
   return j({ok:true,project:PROJECT,frame:"NEW_RAW_UPLOAD",source_kind:"CAMERA_RAW",
     job_id:intake.job_id,job_token:intake.job_token,
-    status:started?"QUEUED":workflow_error?"FAILED":intake.status,
-    stage:started?"raw_decode_queued":intake.stage,progress:null,
+    status:"AWAITING_TECH_PROCESSING",stage:"source_stored",progress:null,
     source_key:key,sha256:expectedSha,bytes:expectedSize,filename,
-    raw_decoder:"rawpy-0.28.0/LibRaw",workflow_control:"automatic_free_technical_only",
-    message:started?"RAW сохранён по SHA-256; запущена 16-битная техническая проявка без HDR и генерации.":"Технический процессор недоступен.",
-    workflow_error},201);
+    source_preview_started:preview_started,source_preview_error:preview_error,
+    technical_processing_started:false,raw_decoder:"rawpy-0.28.0/LibRaw",
+    message:"RAW сохранён. Превью готовится отдельно; анализ и коррекция — только по кнопке.",
+    generation_started:false},201);
  }
 
  if(path==="/api/editorial/upload"&&method==="POST"){
@@ -269,25 +271,13 @@ export async function editorialApi(request,env,url,authorizeSession){
   await env.SESSION_STATE_R7.put(limitKey,String(usage+1),{expirationTtl:3600});
   await Promise.all([env.SESSION_STATE_R7.put(ipKey,String(Number(ipCount||0)+1),{expirationTtl:7200}),env.SESSION_STATE_R7.put(globalKey,String(Number(globalCount||0)+1),{expirationTtl:7200})]);
   const intake=await createEditorialIntakeJob(env,session,{filename:file.name,mime:file.type,source_key:key,source_sha256:sha,bytes:bytes.byteLength});
-  let started=false,workflow_error=null;
-  if(env.TROPICANA_TECH_WORKFLOW){
-    try{
-      await env.TROPICANA_TECH_WORKFLOW.create({id:intake.job_id,params:{job_id:intake.job_id}});
-      started=true;
-    }catch(err){
-      workflow_error=String(err?.message||err).slice(0,250);
-      console.error("EDITORIAL_TECH_WORKFLOW_DISPATCH",intake.job_id,workflow_error);
-      await env.TROPICANA_EDITORIAL_R2.put("tropicana-park/editorial-jobs/"+intake.job_id+"/processing-state.json",
-        JSON.stringify({job_id:intake.job_id,status:"FAILED",stage:"workflow_dispatch_failed",
-          progress:null,message:"Технический процессор не запущен.",error:workflow_error}),
-        {httpMetadata:{contentType:"application/json"}});
-    }
-  }else workflow_error="technical_workflow_not_configured";
+  // Raster pixels can be previewed immediately. Do not launch correction on upload.
   return j({ok:true,project:PROJECT,frame:"NEW_UPLOAD",job_id:intake.job_id,job_token:intake.job_token,
-    status:started?"QUEUED":workflow_error?"FAILED":intake.status,stage:started?"technical_queued":intake.stage,progress:null,
-    source_key:key,sha256:sha,bytes:bytes.byteLength,workflow_control:"automatic_free_technical_only",
-    message:started?"Исходник сохранён; технический процессор запущен без HDR и OpenRouter.":"Технический процессор недоступен.",
-    workflow_error},201);
+    status:"AWAITING_TECH_PROCESSING",stage:"source_stored",progress:null,
+    source_key:key,sha256:sha,bytes:bytes.byteLength,filename:file.name,
+    source_preview_ready:true,technical_processing_started:false,
+    message:"Оригинал сохранён, превью доступно. Нажмите «Анализировать и исправить», чтобы продолжить.",
+    generation_started:false},201);
  }
  if(path==="/api/editorial/view"&&method==="GET"){
   const id=url.searchParams.get("job")||"",kind=url.searchParams.get("kind")||"manifest";

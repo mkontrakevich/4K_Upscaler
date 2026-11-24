@@ -53,11 +53,34 @@ def main():
                          {**auth,"content-type":"multipart/form-data; boundary="+boundary},form,timeout=60)
     assert status==201,(status,raw[:600])
     created=json.loads(raw)
-    assert created.get("job_id") and created.get("workflow_control")=="automatic_free_technical_only"
-    assert created.get("job_token") and not created.get("workflow_error"),created
+    assert created.get("job_id") and created.get("technical_processing_started") is False
+    assert created.get("job_token") and created.get("source_preview_ready") is True,created
     job=created["job_id"]
     auth["x-editorial-job-token"]=created["job_token"]
     print("EDITORIAL_TECH_SMOKE_CREATED",job,flush=True)
+    status,_,raw=request(root+"/api/editorial/job/status?job="+job,headers=auth,timeout=30)
+    assert status==200,(status,raw[:500])
+    waiting=json.loads(raw)
+    assert waiting.get("status")=="AWAITING_TECH_PROCESSING",waiting
+    assert waiting.get("source_preview_ready") is True and waiting.get("can_start_processing") is True,waiting
+    assert waiting.get("technical_master_ready") is False and waiting.get("can_approve") is False,waiting
+    status,headers,pixels=request(root+"/api/editorial/job/source?job="+job,headers=auth,timeout=60)
+    assert status==200 and headers.get("Content-Type","").startswith("image/png"),status
+    assert len(pixels)==len(image) and pixels==image
+    denied,_,_=request(root+"/api/editorial/job/handoff?job="+job,method="POST",
+                       headers={**auth,"content-type":"application/json"},
+                       body=b'{"target_id":"marins-mg4k"}')
+    assert denied==409,denied
+    print("EDITORIAL_SOURCE_PREVIEW_READY_WITHOUT_PROCESSING",job,flush=True)
+    status,_,raw=request(root+"/api/editorial/job/process?job="+job,method="POST",
+                         headers={**auth,"content-type":"application/json"},body=b"{}",timeout=30)
+    assert status==202,(status,raw[:500])
+    dispatched=json.loads(raw)
+    assert dispatched.get("generation_started") is False,dispatched
+    again,_,_=request(root+"/api/editorial/job/process?job="+job,method="POST",
+                      headers={**auth,"content-type":"application/json"},body=b"{}",timeout=30)
+    assert again==409,again
+    print("EDITORIAL_TECH_SMOKE_EXPLICITLY_STARTED",job,flush=True)
     deadline=time.monotonic()+opts.timeout
     while time.monotonic()<deadline:
         status,_,raw=request(root+"/api/editorial/job/status?job="+job,headers=auth,timeout=30)
@@ -71,7 +94,9 @@ def main():
             assert preview==200 and headers.get("Content-Type","").startswith("image/jpeg") and len(pixels)>1000
             denied,_,_=request(root+"/api/editorial/job/download?job="+job,headers=auth)
             assert denied==409,denied
-            denied,_,_=request(root+"/api/editorial/job/handoff?job="+job,method="POST",headers=auth,body=b"")
+            denied,_,_=request(root+"/api/editorial/job/handoff?job="+job,method="POST",
+                               headers={**auth,"content-type":"application/json"},
+                               body=b'{"target_id":"marins-mg4k"}')
             assert denied==409,denied
             print("EDITORIAL_LIVE_NO_HDR_TECH_QA_SMOKE_PASS",job,flush=True)
             return

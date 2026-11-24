@@ -11,8 +11,8 @@ const hex=buf=>Array.from(new Uint8Array(buf),v=>v.toString(16).padStart(2,"0"))
 const fromHex=s=>Uint8Array.from(s.match(/../g)||[],h=>parseInt(h,16)).buffer;
 const endpoint=(id,action)=>"http://container/editorial-tech/jobs/"+id+"/"+action;
 
-async function update(env,id,s){
-  await env.TROPICANA_EDITORIAL_R2.put(ROOT(id)+"processing-state.json",
+async function update(env,id,s,previewOnly=false){
+  await env.TROPICANA_EDITORIAL_R2.put(ROOT(id)+(previewOnly?"preview-state.json":"processing-state.json"),
     JSON.stringify({...s,job_id:id,updated_at:new Date().toISOString()}),
     {httpMetadata:{contentType:"application/json"}});
 }
@@ -29,7 +29,7 @@ async function processor(env){
   });
   return c;
 }
-async function start(env,id,job){
+async function start(env,id,job,previewOnly=false){
   const input=await env.TROPICANA_EDITORIAL_R2.get(job.source_key);
   if(!input||input.size!==job.source_bytes||!input.body)throw Error("source_missing_or_size_changed");
   if(input.customMetadata?.sha256!==job.source_sha256)throw Error("source_SHA_metadata_mismatch");
@@ -38,7 +38,7 @@ async function start(env,id,job){
   const c=await processor(env);
   const {readable,writable}=new FixedLengthStream(input.size);
   const copy=input.body.pipeTo(writable);
-  const request=new Request(endpoint(id,"start"),{
+  const request=new Request(endpoint(id,previewOnly?"preview-start":"start"),{
     method:"POST",body:readable,headers:{
       "content-type":job.mime,
       "x-source-sha256":job.source_sha256,
@@ -52,9 +52,9 @@ async function start(env,id,job){
   if(!res.ok)throw Error("technical_start_"+res.status+":"+String(data.error||"unknown"));
   return {status:String(data.status||"QUEUED")};
 }
-async function status(env,id){
+async function status(env,id,previewOnly=false){
   const c=await processor(env);
-  const r=await c.fetch(new Request(endpoint(id,"status")));
+  const r=await c.fetch(new Request(endpoint(id,previewOnly?"preview-status":"status")));
   if(!r.ok)throw Error("technical_status_http_"+r.status);
   return r.json();
 }
@@ -207,6 +207,51 @@ async function persist(env,id,job,qa){
           signal_bits:qa.source_signal_bits,geometry:qa.geometry};
 }
 
+async function runSourcePreview(env,id,job,step){
+  // Thumbnail extraction is a separate, free, non-generative operation.
+  // The technical master Workflow must never be invoked on upload.
+  if(job.mime!=="application/x-camera-raw"||job.correction_plan)
+    throw Error("preview_only_requires_original_camera_raw");
+  await update(env,id,{status:"PROCESSING",stage:"RAW_thumbnail_only",
+    message:"Извлекается превью RAW; техническая коррекция ещё не запущена."},true);
+  await step.do("transfer-source-for-preview",()=>start(env,id,job,true));
+  let ready=null;
+  for(let n=0;n<48;n++){
+    await step.sleep("preview-wait-"+n,"2 seconds");
+    const state=await step.do("preview-poll-"+n,()=>status(env,id,true));
+    if(state.status==="READY"){ready=state;break}
+    if(state.status==="FAILED")throw Error("RAW_thumbnail_failed:"+String(state.error||"unknown"));
+  }
+  if(!ready)throw Error("RAW_thumbnail_timeout");
+  if(!Number.isSafeInteger(ready.preview_bytes)||ready.preview_bytes<10000||
+     !SHA.test(String(ready.preview_sha256||""))||
+     ready.source_sha256!==job.source_sha256||
+     ready.preview_kind!=="RAW_CAMERA_THUMBNAIL_NOT_TECH_MASTER")
+    throw Error("RAW_thumbnail_QA_invalid");
+  const c=await processor(env);
+  const image=await c.fetch(new Request(endpoint(id,"preview-image")));
+  if(!image.ok||image.headers.get("content-type")!=="image/jpeg"||
+     Number(image.headers.get("content-length"))!==ready.preview_bytes)
+    throw Error("RAW_thumbnail_response_invalid");
+  const objectKey=ROOT(id)+"preview/source-preview.jpg";
+  await persistKnownLength(env,objectKey,image,ready.preview_bytes,{
+    onlyIf:new Headers({"If-None-Match":"*"}),sha256:fromHex(ready.preview_sha256),
+    httpMetadata:{contentType:"image/jpeg"},
+    customMetadata:{sha256:ready.preview_sha256,source_sha256:job.source_sha256,
+      kind:"RAW_PREVIEW_ONLY_NO_CORRECTION"}
+  });
+  const head=await env.TROPICANA_EDITORIAL_R2.head(objectKey);
+  if(!head||head.size!==ready.preview_bytes||
+     head.customMetadata?.sha256!==ready.preview_sha256||
+     !head.checksums?.sha256||hex(head.checksums.sha256)!==ready.preview_sha256)
+    throw Error("RAW_preview_R2_integrity_HOLD");
+  await update(env,id,{status:"READY",stage:"source_preview_ready",
+    source_sha256:job.source_sha256,preview_sha256:ready.preview_sha256,
+    preview_bytes:ready.preview_bytes,generation_started:false,
+    message:"Превью загружено. Анализ и коррекция — только по вашей кнопке."},true);
+  return {job_id:id,status:"SOURCE_PREVIEW_READY",technical_processing_started:false};
+}
+
 export class EditorialTechWorkflow extends WorkflowEntrypoint{
   async run(event,step){
     const payload=typeof event.payload==="string"?JSON.parse(event.payload):event.payload||{};
@@ -224,6 +269,8 @@ export class EditorialTechWorkflow extends WorkflowEntrypoint{
                 filename:j.filename,mime:j.mime,
                 correction_plan:j.correction_plan||null};
       });
+      if(payload.preview_only===true)
+        return await runSourcePreview(env,id,job,step);
       await update(env,id,{status:"PROCESSING",stage:"technical_dispatch",progress:0,
         message:"Сохранённый источник проверяется и передаётся техническому процессору."});
       await step.do("start-technical-processor",()=>start(env,id,job));
@@ -264,9 +311,15 @@ export class EditorialTechWorkflow extends WorkflowEntrypoint{
         technical_master_sha256:saved.master_sha256});
       return {job_id:id,status:"AWAITING_HUMAN_QA",...saved};
     }catch(error){
-      await update(env,id,{status:"FAILED",stage:"technical_failed",progress:null,
-        error:String(error?.message||error).slice(0,1000),
-        message:"Техническая обработка завершилась ошибкой. Генерация заблокирована."});
+      if(payload.preview_only===true){
+        await update(env,id,{status:"FAILED",stage:"raw_thumbnail_failed",
+          error:String(error?.message||error).slice(0,500),
+          message:"Превью RAW недоступно. Коррекция не запускалась."},true);
+      }else{
+        await update(env,id,{status:"FAILED",stage:"technical_failed",progress:null,
+          error:String(error?.message||error).slice(0,1000),
+          message:"Техническая обработка завершилась ошибкой. Генерация заблокирована."});
+      }
       throw error;
     }
   }

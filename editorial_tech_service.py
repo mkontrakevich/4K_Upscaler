@@ -20,6 +20,7 @@ ROOT.mkdir(parents=True,exist_ok=True)
 ID=re.compile(r"^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$",re.I)
 SHA=re.compile(r"^[0-9a-f]{64}$",re.I)
 STATES={}
+PREVIEWS={}
 MUTEX=threading.RLock()
 PROCESS_SLOT=threading.Lock()
 MAX_SOURCE=90*1024*1024
@@ -84,6 +85,76 @@ def _start_worker(job_id: str,filename: str,expected_sha: str)->None:
             stage="correction_hold" if hold else "technical_failed",
             progress=None,error=msg)
 
+def _preview_worker(job_id: str, expected_sha: str)->None:
+    """RAW-only camera thumbnail; NEVER invokes technical_master or auto geometry."""
+    try:
+        source=_path(job_id)/"preview-source"
+        if not source.is_file():
+            raise ValueError("preview_source_missing")
+        checksum=hashlib.sha256()
+        with source.open("rb") as verify_file:
+            while True:
+                chunk=verify_file.read(1024*1024)
+                if not chunk:break
+                checksum.update(chunk)
+        if checksum.hexdigest()!=expected_sha:
+            raise ValueError("preview_source_sha256_mismatch")
+        import cv2
+        import numpy as np
+        import rawpy
+        # RAW preview and technical development share a bounded processing slot;
+        # no simultaneous full-resolution LibRaw allocations on the same container.
+        with PROCESS_SLOT:
+            with rawpy.imread(str(source)) as raw:
+                image=None
+                try:
+                    thumb=raw.extract_thumb()
+                    if thumb.format==rawpy.ThumbFormat.JPEG:
+                        image=cv2.imdecode(np.frombuffer(thumb.data,dtype=np.uint8),cv2.IMREAD_COLOR)
+                    else:
+                        image=cv2.cvtColor(thumb.data,cv2.COLOR_RGB2BGR)
+                except Exception:
+                    image=None
+                if (image is None or image.ndim!=3 or image.shape[2]!=3 or
+                    min(image.shape[:2])<80):
+                    # Missing, unreadable or very small camera thumbnail:
+                    # develop a reduced RAW preview only, not a Tech Master.
+                    image=cv2.cvtColor(raw.postprocess(
+                        half_size=True,use_camera_wb=True,no_auto_bright=True,
+                        output_bps=8,output_color=rawpy.ColorSpace.sRGB
+                    ),cv2.COLOR_RGB2BGR)
+        if image is None or image.ndim!=3 or image.shape[2]!=3:
+            raise ValueError("RAW_preview_decode_failed")
+        h,w=image.shape[:2]
+        if h<80 or w<80:
+            raise ValueError("RAW_preview_too_small")
+        if max(h,w)>1600:
+            ratio=1600/max(h,w)
+            image=cv2.resize(image,(max(1,round(w*ratio)),max(1,round(h*ratio))),
+                             interpolation=cv2.INTER_AREA)
+        ok,encoded=cv2.imencode(".jpg",image,[cv2.IMWRITE_JPEG_QUALITY,92])
+        if not ok or encoded.nbytes<10000:
+            raise ValueError("RAW_preview_encode_failed")
+        output=_path(job_id)/"source-preview.jpg"
+        data=encoded.tobytes()
+        output.write_bytes(data)
+        with MUTEX:
+            PREVIEWS[job_id]={
+                "job_id":job_id,"source_sha256":expected_sha,
+                "status":"READY","stage":"source_preview_ready",
+                "preview_sha256":hashlib.sha256(data).hexdigest(),
+                "preview_bytes":len(data),"preview_kind":"RAW_CAMERA_THUMBNAIL_NOT_TECH_MASTER",
+                "HDR_applied":False,"generation_started":False
+            }
+    except Exception as error:
+        with MUTEX:
+            PREVIEWS[job_id]={
+                "job_id":job_id,"source_sha256":expected_sha,
+                "status":"FAILED","stage":"source_preview_failed",
+                "error":str(error)[-300:],"generation_started":False
+            }
+
+
 def _json(handler,status: int,body: dict)->None:
     data=json.dumps(body,ensure_ascii=False).encode("utf-8")
     handler.send_response(status)
@@ -113,6 +184,19 @@ def route(handler,method:str)->bool:
         _json(handler,400,{"error":"invalid_editorial_job"})
         return True
     if method=="GET":
+        if action=="preview-status":
+            with MUTEX:
+                v=dict(PREVIEWS.get(job_id) or {})
+            _json(handler,200,v or {"status":"NOT_FOUND","job_id":job_id})
+            return True
+        if action=="preview-image":
+            with MUTEX:
+                v=dict(PREVIEWS.get(job_id) or {})
+            if v.get("status")!="READY":
+                _json(handler,409,{"error":"source_preview_not_ready"})
+            else:
+                _send_file(handler,_path(job_id)/"source-preview.jpg","image/jpeg")
+            return True
         state=_status(job_id)
         if action=="status":
             _json(handler,200,state if state else {"status":"NOT_FOUND","job_id":job_id})
@@ -129,8 +213,43 @@ def route(handler,method:str)->bool:
         name,mime=files[action]
         _send_file(handler,_path(job_id)/"technical"/name,mime)
         return True
-    if method!="POST" or action!="start":
+    if method!="POST" or action not in ("start","preview-start"):
         _json(handler,405,{"error":"method_not_allowed"})
+        return True
+    if action=="preview-start":
+        length=int(handler.headers.get("content-length") or handler.headers.get("x-mg4k-source-size") or 0)
+        source_sha=str(handler.headers.get("x-source-sha256") or "").lower()
+        if not SHA.fullmatch(source_sha) or length<10000 or length>MAX_SOURCE:
+            _json(handler,400,{"error":"invalid_preview_source_integrity_or_length"})
+            return True
+        with MUTEX:
+            existing=PREVIEWS.get(job_id)
+            if existing:
+                _json(handler,200,dict(existing) if existing.get("source_sha256")==source_sha
+                      else {"error":"preview_source_conflict"})
+                return True
+            PREVIEWS[job_id]={"job_id":job_id,"source_sha256":source_sha,
+                              "status":"UPLOADING","stage":"preview_source_receive"}
+        folder=_path(job_id);folder.mkdir(parents=True,exist_ok=True)
+        source_path=folder/"preview-source"
+        digest=hashlib.sha256();received=0
+        with source_path.open("wb") as out:
+            while received<length:
+                chunk=handler.rfile.read(min(1024*1024,length-received))
+                if not chunk:break
+                out.write(chunk);digest.update(chunk);received+=len(chunk)
+        if received!=length or digest.hexdigest()!=source_sha:
+            source_path.unlink(missing_ok=True)
+            with MUTEX:
+                PREVIEWS[job_id]={"job_id":job_id,"source_sha256":source_sha,
+                                  "status":"FAILED","error":"preview_source_sha256_mismatch"}
+            _json(handler,409,{"error":"preview_source_sha256_mismatch"})
+            return True
+        with MUTEX:
+            PREVIEWS[job_id].update(status="QUEUED",stage="preview_only_queued")
+        threading.Thread(target=_preview_worker,args=(job_id,source_sha),daemon=True,
+                         name="editorial-preview-"+job_id[:8]).start()
+        _json(handler,202,dict(PREVIEWS[job_id]))
         return True
     plan_header=str(handler.headers.get("x-mg4k-correction-plan") or "")
     if len(plan_header)>4096:

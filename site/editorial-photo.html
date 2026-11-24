@@ -105,21 +105,29 @@
 @media(min-width:801px) and (max-width:920px){.grid.editorial-layout{grid-template-columns:minmax(0,1fr) 260px}}
 @media(max-width:800px){.grid.editorial-layout{grid-template-columns:minmax(0,1fr);grid-template-areas:"primary" "rail"}}
 
-.workflow-nav{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:1px;background:#20384a;border-bottom:1px solid #294054}
+.workflow-nav{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:#20384a;border-bottom:1px solid #294054}
 .workflow-step{min-height:52px;padding:9px 14px;background:#081724;color:#7792a6;text-decoration:none;display:flex;align-items:center;gap:10px;min-width:0}
 .workflow-step b{width:22px;height:22px;border:1px solid #34566f;border-radius:50%;display:grid;place-items:center;font-size:10px;flex:none}
 .workflow-step span{display:block;min-width:0}.workflow-step strong{display:block;color:#a9bfce;font-size:11px;letter-spacing:.05em}.workflow-step small{display:block;font-size:9px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .workflow-step.active{background:#0c2638;color:#c9f2ff}.workflow-step.active b{border-color:#3db9df;color:#d9f8ff}.workflow-step.active strong{color:#e8f9ff}
 .workflow-step.ready:hover{background:#0d2131;color:#d7f2ff}
-@media(max-width:800px){.workflow-nav{grid-template-columns:repeat(5,minmax(92px,1fr));overflow-x:auto}.workflow-step{min-width:112px}.workflow-step small{display:none}}
+@media(max-width:800px){.workflow-nav{grid-template-columns:repeat(4,minmax(92px,1fr));overflow-x:auto}.workflow-step{min-width:112px}.workflow-step small{display:none}}
+.raw-source-stage{border:1px solid #37627a;background:#0a1d2b;padding:14px;margin:14px 0}
+.raw-source-stage img{display:block;max-width:100%;max-height:min(57vh,650px);margin:8px auto;object-fit:contain}
+.raw-source-stage figcaption{font-size:12px;color:#a8c9dd}
+.raw-process-actions{display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:14px 0;border-bottom:1px solid var(--line)}
+.raw-destination{border-top:1px solid #36566b;margin-top:16px;padding:16px;background:#0b2535}
+.raw-destination select{background:#071723;color:#e5f5fb;border:1px solid #4d8cae;padding:12px;min-height:45px;width:100%;margin:8px 0 12px}
+.raw-destination option:disabled{color:#a6b8c4}
+.workflow-step[data-stage-state="current"]{background:#0c2638}
+.workflow-step[data-stage-state="completed"]{background:#0d2a30;color:#a9dfd0}
 </style><link rel="stylesheet" href="/editorial-compare.css"></head><body>
 <header><div class="brand">MG <span>4K</span> / TECH MASTER</div><nav><a href="/">MG4K GENERATIVE</a></nav></header>
-<nav class="workflow-nav" aria-label="MG 4K pipeline">
-  <a class="workflow-step ready" href="/editorial-photo.html"><b>1</b><span><strong>SOURCE</strong><small>исходник / RAW</small></span></a>
-  <a class="workflow-step active" href="/editorial-photo.html"><b>2</b><span><strong>TECH MASTER</strong><small>геометрия · оптика · NO HDR · QA</small></span></a>
-  <a class="workflow-step ready" href="/"><b>3</b><span><strong>MG4K</strong><small>AI SOURCE PROFILE · DONOR</small></span></a>
-  <a class="workflow-step" href="/#analysis-panel"><b>4</b><span><strong>ИНСПЕКЦИЯ</strong><small>SPLIT · DIFF · BLINK</small></span></a>
-  <a class="workflow-step" href="/#actions-panel"><b>5</b><span><strong>FINAL</strong><small>human approval · RESULT</small></span></a>
+<nav class="workflow-nav" aria-label="Пайплайн RAW — четыре шага">
+  <div class="workflow-step active" data-raw-stage="1" data-stage-state="current"><b>1</b><span><strong>ЗАГРУЗКА</strong><small>оригинал и превью</small></span></div>
+  <div class="workflow-step" data-raw-stage="2" data-stage-state="pending"><b>2</b><span><strong>КОРРЕКЦИЯ</strong><small>автоанализ по кнопке</small></span></div>
+  <div class="workflow-step" data-raw-stage="3" data-stage-state="pending"><b>3</b><span><strong>QA</strong><small>сравнение и утверждение</small></span></div>
+  <div class="workflow-step" data-raw-stage="4" data-stage-state="pending"><b>4</b><span><strong>ПЕРЕДАЧА</strong><small>сохранение и выбор контура</small></span></div>
 </nav>
 <main>
 <div class="eyebrow">MG 4K / SOURCE PREPARATION / RAW & TECHNICAL MASTER</div><h1>TECH MASTER</h1>
@@ -137,25 +145,24 @@
     <section class="panel">
       <h2>Новый SOURCE → TECH MASTER</h2>
       <p class="muted">RAW: ARW / DNG / NEF / CR2 / CR3 / RAF / ORF / RW2 до 90 MiB. JPEG / PNG / WEBP — до 8 МБ. RAW проявляется в 16-bit через LibRaw без HDR и без генерации.</p>
-      <div class="fields"><input id="file" type="file" accept="image/jpeg,image/png,image/webp,.arw,.dng,.nef,.cr2,.cr3,.raf,.orf,.rw2"><button id="upload" class="btn" type="button">Загрузить SOURCE</button></div>
+      <div class="fields"><input id="file" type="file" accept="image/jpeg,image/png,image/webp,.arw,.dng,.nef,.cr2,.cr3,.raf,.orf,.rw2"><button id="upload" class="btn" type="button">Загрузить оригинал</button></div>
       <p id="upload-result" class="key"></p>
-      <p class="muted">Платный запуск OpenRouter управляется отдельно через одноразовую задачу Cloudflare Workflows. Публичных неконтролируемых запусков нет.</p>
+      <p class="muted">Загрузка не запускает техническую коррекцию. Для RAW извлекается только превью без HDR и генерации. Полноценный анализ включается отдельно по кнопке.</p>
     </section>
 
     <section class="panel">
       <h2>Протокол</h2>
-      <div class="metric"><span class="muted">1. Верификация источника</span><strong>SHA-256</strong></div>
-      <div class="metric"><span class="muted">2. Техническая коррекция</span><strong>NO HDR / NO GEN</strong></div>
-      <div class="metric"><span class="muted">3. SOURCE ↔ TECH сравнение</span><strong>SPLIT / 1:1</strong></div>
-      <div class="metric"><span class="muted">4. Human QA</span><strong>APPROVE / REWORK</strong></div>
-      <div class="metric"><span class="muted">5. Передача в MG4K</span><strong>Только после QA</strong></div>
+      <div class="metric"><span class="muted">1. Исходник и превью</span><strong>IMMUTABLE SOURCE</strong></div>
+      <div class="metric"><span class="muted">2. Автоанализ и коррекция</span><strong>ПО КНОПКЕ · NO HDR</strong></div>
+      <div class="metric"><span class="muted">3. Визуальный QA</span><strong>SPLIT / APPROVE</strong></div>
+      <div class="metric"><span class="muted">4. Сохранить и передать</span><strong>ВЫБОР КОНТУРА</strong></div>
       <p><a href="https://github.com/mkontrakevich/marins-platform/blob/main/skills/marins-architectural-raw-photo/SKILL.md" target="_blank" rel="noreferrer">MARINS Architectural RAW Photo Skill</a></p>
     </section>
   </aside>
   <section class="stack workspace-primary">
     <section class="panel qa-panel" aria-label="Текущий Tech Master и визуальное QA">
       <div class="qa-head">
-        <div><div class="eyebrow qa-eyebrow">Текущая фотография / Шаг 02 · Визуальная приёмка</div>
+        <div><div class="eyebrow qa-eyebrow">Текущая фотография / RAW · 4 этапа</div>
         <h2>Фотография · обработка и проверка</h2></div>
         <span class="muted">Без HDR · Perspective Lock · исходник неизменен</span>
       </div>
@@ -165,6 +172,15 @@
       <progress id="intake-progress" max="100" value="0" hidden class="qa-progress" style="width:100%;height:12px"></progress>
       <p id="intake-empty" class="note">Нет открытого задания в этом браузере. Для уже обработанной фотографии используйте персональную ссылку на QA — повторно загружать исходник не требуется.</p>
       <p id="intake-message" class="muted" role="status"></p>
+      <figure class="raw-source-stage" id="intake-source-stage" hidden aria-label="Шаг 1: превью загруженного оригинала">
+        <figcaption>01 · Оригинал / защищённое превью</figcaption>
+        <img id="intake-source-image" alt="Превью исходной фотографии до автоматической коррекции">
+        <p class="muted" id="intake-source-caption">Исходный файл не изменяется.</p>
+      </figure>
+      <div class="raw-process-actions">
+        <button class="btn geometry-first-btn" type="button" id="intake-process" disabled>02 · Анализировать и исправить</button>
+        <span class="muted" id="intake-process-notice">Сначала загрузите оригинал и дождитесь его превью.</span>
+      </div>
       <p id="intake-auto-geometry-status" class="muted" aria-live="polite">Автоматический анализ геометрии: данные ещё не получены.</p>
       <section id="intake-geometry-first" class="geometry-first" hidden aria-label="Автоматическая техническая коррекция">
         <div>
@@ -275,10 +291,20 @@
       <div class="flex qa-actions">
         <button class="btn" id="intake-approve" disabled type="button">Утвердить Tech Master</button>
         <button class="btn mutebtn" id="intake-reject" disabled type="button">Вернуть на доработку</button>
-        <button class="btn mutebtn" id="intake-download" disabled type="button">Скачать 16-bit TIFF</button>
-        <button class="btn" id="intake-handoff" disabled type="button">Передать утверждённый Tech Master в MG4K</button>
+        <!-- Export/transfer is a separate fourth step AFTER human QA. -->
       </div>
 
+      <section class="raw-destination" id="intake-destination-panel" hidden aria-label="Шаг 4: сохранение и передача">
+        <h3>04 · Сохранение и передача</h3>
+        <p class="muted">Утверждённый 16-битный мастер сохраняется отдельной версией. Выберите совместимый контур. Недоступные приёмники не запускаются.</p>
+        <label for="intake-destination">Контур-получатель</label>
+        <select id="intake-destination"><option value="marins-mg4k">MG4K — улучшение</option></select>
+        <div class="flex">
+          <button class="btn mutebtn" id="intake-download" disabled type="button">Скачать TIFF</button>
+          <button class="btn" id="intake-handoff" disabled type="button">Сохранить и передать в выбранный контур</button>
+        </div>
+        <p id="intake-handoff-receipt" class="muted" role="status">Передача не выполнялась.</p>
+      </section>
       <div id="intake-rework-form" hidden style="margin:14px 0;padding:14px;border:1px solid #4d6070">
         <h3>Замечания к техническому мастеру</h3>
         <p class="muted">Выберите категории и обязательно опишите конкретные изменения. Исходник и отклонённая версия сохраняются.</p>
@@ -366,6 +392,7 @@ let comparisonFor="",comparisonUrls=[];
 
 let intakePreviewURL=null,intakePreviewFor="",intakePreviewReady=false;
 let intakeSourceURL=null,intakeSourceFor="";
+let intakeStagePreviewFor="",localSourceStageURL=null;
 let intakeSplitViewer=null,intakeSplitFor="",intakeSplitRequest="";
 function getIntakeSplitViewer(){
  if(!intakeSplitViewer){
@@ -399,7 +426,7 @@ function persistJobToken(id,token){
  for(const [k,v] of Object.entries(current)){if(!v||now-Number(v.at||0)>30*24*3600*1000)delete current[k]}
  current[id]={token,at:now};localStorage.setItem(jobAccessStore,JSON.stringify(current));
 }
-const readableStatus={HOLD:"Техническая коррекция: HOLD",AWAITING_TECH_PROCESSING:"Ожидает технической обработки",QUEUED:"В очереди технической обработки",PROCESSING:"Выполняется Tech Master",TECHNICAL_QA_PENDING:"Проверка технического мастера",AWAITING_HUMAN_QA:"Ожидает визуального QA",TECH_MASTER_APPROVED:"Мастер утверждён",MG4K_MASTER_IMPORTED:"Импортировано в MG 4K",FAILED:"Ошибка технической обработки",REWORK_REQUESTED:"Возвращено на доработку",REVISION_CREATED:"Исправленная версия создана",REJECTED:"QA отклонён"};
+const readableStatus={AWAITING_TECH_PROCESSING:"Исходник сохранён · ожидает вашего запуска",HOLD:"Техническая коррекция: HOLD",AWAITING_TECH_PROCESSING:"Ожидает технической обработки",QUEUED:"В очереди технической обработки",PROCESSING:"Выполняется Tech Master",TECHNICAL_QA_PENDING:"Проверка технического мастера",AWAITING_HUMAN_QA:"Ожидает визуального QA",TECH_MASTER_APPROVED:"Мастер утверждён",MG4K_MASTER_IMPORTED:"Импортировано в MG 4K",FAILED:"Ошибка технической обработки",REWORK_REQUESTED:"Возвращено на доработку",REVISION_CREATED:"Исправленная версия создана",REJECTED:"QA отклонён"};
 function sessionHeaders(extra={}){return {...extra,"x-session-id":session?.id||"","x-session-token":session?.token||"","x-editorial-job-token":jobToken(intakeId)}}
 function reviewChecksPass(){
  return intakePreviewReady&&["intake-check-preview","intake-check-geometry","intake-check-materials"].every(id=>e(id).checked);
@@ -476,10 +503,70 @@ async function startInlineSplit(id,masterSHA){
  }finally{if(intakeSplitRequest===key)intakeSplitRequest=""}
 }
 
+function updateRawStages(data){
+ const completed=data.mg4k_imported?4:data.approval?.decision==="APPROVED"?3:
+   data.technical_master_ready?2:data.status==="AWAITING_TECH_PROCESSING"?0:1;
+ for(const node of document.querySelectorAll("[data-raw-stage]")){
+   const n=Number(node.dataset.rawStage);
+   node.dataset.stageState=n<=completed?"completed":n===completed+1?"current":"pending";
+ }
+ const previewText=data.source_preview_ready?
+   (intakeStagePreviewFor===data.job_id?"Оригинал доступен; анализ запускается только кнопкой.":"Загружаю превью оригинала…"):
+   data.source_preview_status==="FAILED"?"Превью RAW не удалось подготовить; коррекция заблокирована.":
+   "Ожидайте превью исходного RAW. Анализ ещё не выполнялся.";
+ e("intake-process-notice").textContent=data.can_start_processing?previewText:
+   data.technical_master_ready?"Техническая обработка закончена; выполните QA.":
+   data.status==="AWAITING_TECH_PROCESSING"?previewText:
+   "Технический процесс уже запущен или ожидает дальнейшей проверки.";
+}
+async function loadSourceStagePreview(id){
+ if(intakeStagePreviewFor===id)return;
+ const url=await ensureIntakeSource(id);
+ if(intakeId!==id)return;
+ e("intake-source-image").src=url;
+ e("intake-source-stage").hidden=false;
+ e("intake-source-caption").textContent="Превью камеры или исходного изображения · не технический мастер. Оригинал хранится отдельно и не изменяется.";
+ intakeStagePreviewFor=id;
+ updateIntakeActions();
+}
+async function startTechnicalProcessing(){
+ if(!intakeId||intakeBusy||intakeStagePreviewFor!==intakeId||!intakeState?.can_start_processing)return;
+ intakeBusy=true;updateIntakeActions();
+ e("intake-process-notice").textContent="Запрашиваю автоанализ и техническую коррекцию…";
+ try{
+  const r=await fetch(base+"/job/process?job="+encodeURIComponent(intakeId),{
+   method:"POST",headers:sessionHeaders({"content-type":"application/json"}),body:"{}"
+  });
+  const d=await r.json().catch(()=>({}));
+  if(!r.ok)throw Error(d.error||"Запуск не подтверждён");
+  e("intake-message").textContent="Обработка запущена вручную. Без HDR и без генерации.";
+  await intakeStatus();
+ }catch(err){e("intake-message").textContent="HOLD: "+String(err.message||err)}
+ finally{intakeBusy=false;updateIntakeActions()}
+}
 function updateIntakeActions(){
  const data=intakeState||{};
  for(const [id,flag] of [["intake-approve","can_approve"],["intake-reject","can_rework"],["intake-download","can_download"],["intake-handoff","can_handoff"]])
    e(id).disabled=intakeBusy||data[flag]!==true||(id==="intake-approve"&&!reviewChecksPass());
+ e("intake-process").disabled=intakeBusy||data.can_start_processing!==true||
+   intakeStagePreviewFor!==data.job_id;
+ const receiver=e("intake-destination"),selected=receiver.value;
+ if(Array.isArray(data.destination_choices)){
+   receiver.replaceChildren();
+   for(const target of data.destination_choices){
+     const option=document.createElement("option");
+     option.value=target.id;
+     option.disabled=target.enabled!==true;
+     option.textContent=target.name+(option.disabled?" · недоступен":"");
+     receiver.append(option);
+   }
+   if([...receiver.options].some(x=>x.value===selected&&!x.disabled))receiver.value=selected;
+ }
+ e("intake-destination-panel").hidden=data.can_download!==true;
+ if(data.mg4k_imported)e("intake-handoff-receipt").textContent=
+   "MG4K подтвердил получение утверждённого TIFF. Генерация не запускалась.";
+ e("intake-handoff").disabled=e("intake-handoff").disabled||
+   ![...receiver.options].some(x=>x.value===receiver.value&&!x.disabled);
  e("intake-revision-submit").disabled=intakeBusy||data.can_upload_revision!==true;
 }
 async function loadIntakePreview(id,sha){
@@ -537,6 +624,7 @@ function updateSourceVerification(data){
 }
 function setIntake(data){
  intakeState=data;
+ updateRawStages(data);
  intakeProof=data.technical_qa||null;
  e("intake-empty").hidden=true;
  updateSourceVerification(data);
@@ -637,6 +725,8 @@ async function intakeStatus(){
  const d=await r.json().catch(()=>({error:"invalid_response"}));
  if(!r.ok){e("intake-status").textContent="Ошибка "+r.status;e("intake-message").textContent=d.error||"Нет доступа к заданию";return}
  setIntake(d);
+ if(d.source_preview_ready&&intakeStagePreviewFor!==intakeId)
+  loadSourceStagePreview(intakeId).catch(err=>{e("intake-message").textContent="Превью: "+String(err.message||err)});
  if(d.technical_master_ready&&d.technical_qa?.master_sha256)
   loadIntakePreview(intakeId,d.technical_qa.master_sha256).catch(err=>{
    e("intake-message").textContent=String(err);updateIntakeActions();
@@ -651,6 +741,12 @@ function activateIntake(id){
  if(jobToken(id))try{localStorage.setItem(lastJobStore,id)}catch{}
 
  intakePreviewFor="";intakePreviewReady=false;intakeState=null;
+ intakeStagePreviewFor="";
+ if(localSourceStageURL){URL.revokeObjectURL(localSourceStageURL);localSourceStageURL=null}
+ e("intake-source-stage").hidden=true;
+ e("intake-source-image").removeAttribute("src");
+ e("intake-destination-panel").hidden=true;
+ e("intake-handoff-receipt").textContent="Передача не выполнялась.";
  geometryPoints=[];geometryAnchorJob="";geometryLoadingJob="";
  geometryPreviewReady=false;
  e("intake-geometry-preview").hidden=true;
@@ -860,9 +956,16 @@ async function intakeHandoff(){
  if(!intakeId)return;
  e("intake-handoff").disabled=true;
  try{
-  const r=await fetch(base+"/job/handoff?job="+encodeURIComponent(intakeId),{method:"POST",headers:sessionHeaders()});
+  const chosen=e("intake-destination").value;
+  const r=await fetch(base+"/job/handoff?job="+encodeURIComponent(intakeId),{
+    method:"POST",headers:sessionHeaders({"content-type":"application/json"}),
+    body:JSON.stringify({target_id:chosen})
+  });
   const d=await r.json();if(!r.ok)throw Error(d.error||"Handoff failed");
-  e("intake-message").textContent="16-битный TIFF перенесён в MG 4K. Генерация не запускалась.";
+  e("intake-message").textContent="Утверждённый TIFF сохранён и принят выбранным контуром. Генерация не запускалась.";
+  e("intake-handoff-receipt").textContent="Контур: "+
+    e("intake-destination").selectedOptions[0].textContent+
+    " · "+(d.stage||"подтверждено")+" · версия "+String(d.job_id||intakeId);
   if(d.mg4k_import_url){e("intake-import-link").href=d.mg4k_import_url;e("intake-import-link").hidden=false;}
  }catch(err){e("intake-message").textContent=String(err)}finally{await intakeStatus().catch(()=>{})}
 }
@@ -914,7 +1017,7 @@ async function upload(){
    sourceURL=URL.createObjectURL(file);e("source").src=sourceURL;e("source").classList.add("ready");e("source-label").hidden=true;
  }else{
    sourceURL=null;e("source").removeAttribute("src");e("source").classList.remove("ready");e("source-label").hidden=false;
-   e("source-label").textContent="RAW загружен · нейтральный preview появится после LibRaw decode";
+   e("source-label").textContent="RAW загружен · превью подготавливается без технической коррекции";
  }
 }
 async function load(){const id=e("job").value.trim();if(!/^[0-9a-f-]{36}$/i.test(id))return say("Укажите UUID задания");const r=await fetch(base+"/view?job="+encodeURIComponent(id)+"&kind=manifest");const data=await r.json();if(!r.ok)return say(data);e("status").textContent=data.status||"REVIEW";say(data);e("source").src=base+"/view?job="+encodeURIComponent(id)+"&kind=source";e("source").classList.add("ready");e("source-label").hidden=true;
@@ -943,6 +1046,20 @@ e("open-editorial").addEventListener("click",()=>{
  const id=e("job").value.trim();if(!id)return say("Не указан ID задания.");
  window.EditorialCompare?.open(id,"tech-editorial").catch(err=>say(String(err)));
 });
+e("file").addEventListener("change",()=>{
+ const file=e("file").files[0];
+ if(localSourceStageURL){URL.revokeObjectURL(localSourceStageURL);localSourceStageURL=null}
+ if(file&&!RAW_EXTENSIONS.has(fileExt(file))&&file.type.startsWith("image/")){
+   localSourceStageURL=URL.createObjectURL(file);
+   e("intake-source-image").src=localSourceStageURL;
+   e("intake-source-stage").hidden=false;
+   e("intake-source-caption").textContent="Локальное превью · сначала загрузите файл. Исходник ещё не отправлен.";
+ }else if(file){
+   e("intake-source-stage").hidden=true;
+   e("intake-source-caption").textContent="После загрузки сервер отдельно извлечёт RAW-превью.";
+ }
+});
+e("intake-process").addEventListener("click",startTechnicalProcessing);
 e("upload").addEventListener("click",()=>upload().catch(err=>say(String(err))));e("load").addEventListener("click",()=>load().catch(err=>say(String(err))));e("refresh").addEventListener("click",()=>load().catch(err=>health().catch(e=>say(String(e)))));["intake-check-preview","intake-check-geometry","intake-check-materials"].forEach(id=>
  e(id).addEventListener("change",updateIntakeActions));
 e("intake-approve").addEventListener("click",()=>intakeDecision("APPROVED"));
