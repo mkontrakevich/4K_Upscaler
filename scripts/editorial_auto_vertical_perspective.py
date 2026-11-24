@@ -11,8 +11,8 @@ import cv2
 import numpy as np
 
 ENGINE = "AUTO_VERTICAL_PERSPECTIVE_V1"
-MAX_CROP_FRACTION = 0.23
-MAX_ZOOM = 1.135
+MAX_CROP_FRACTION = 0.30
+MAX_ZOOM = 1.20
 MAX_CORNER_DRIFT = 0.16
 
 
@@ -215,6 +215,7 @@ def apply(rgb16, analysis):
         "vertical_residual_after_deg": round(float(residual), 5),
         "vertical_lines_after": int(after.get("vertical_inlier_count") or 0),
         "changed_mean_absolute_fraction": round(changed, 7),
+        "strong_crop_review_required": bool(crop > 0.20),
         "operations": [{
             "op": "AUTO_VERTICAL_PERSPECTIVE",
             "vanishing_point_norm": [round(float(vx), 6), round(float(vy), 6)],
