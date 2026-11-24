@@ -392,6 +392,7 @@ let comparisonFor="",comparisonUrls=[];
 
 let intakePreviewURL=null,intakePreviewFor="",intakePreviewReady=false;
 let intakeSourceURL=null,intakeSourceFor="";
+let intakeStagePreviewFor="",localSourceStageURL=null;
 let intakeSplitViewer=null,intakeSplitFor="",intakeSplitRequest="";
 function getIntakeSplitViewer(){
  if(!intakeSplitViewer){
@@ -425,7 +426,7 @@ function persistJobToken(id,token){
  for(const [k,v] of Object.entries(current)){if(!v||now-Number(v.at||0)>30*24*3600*1000)delete current[k]}
  current[id]={token,at:now};localStorage.setItem(jobAccessStore,JSON.stringify(current));
 }
-const readableStatus={HOLD:"Техническая коррекция: HOLD",AWAITING_TECH_PROCESSING:"Ожидает технической обработки",QUEUED:"В очереди технической обработки",PROCESSING:"Выполняется Tech Master",TECHNICAL_QA_PENDING:"Проверка технического мастера",AWAITING_HUMAN_QA:"Ожидает визуального QA",TECH_MASTER_APPROVED:"Мастер утверждён",MG4K_MASTER_IMPORTED:"Импортировано в MG 4K",FAILED:"Ошибка технической обработки",REWORK_REQUESTED:"Возвращено на доработку",REVISION_CREATED:"Исправленная версия создана",REJECTED:"QA отклонён"};
+const readableStatus={AWAITING_TECH_PROCESSING:"Исходник сохранён · ожидает вашего запуска",HOLD:"Техническая коррекция: HOLD",AWAITING_TECH_PROCESSING:"Ожидает технической обработки",QUEUED:"В очереди технической обработки",PROCESSING:"Выполняется Tech Master",TECHNICAL_QA_PENDING:"Проверка технического мастера",AWAITING_HUMAN_QA:"Ожидает визуального QA",TECH_MASTER_APPROVED:"Мастер утверждён",MG4K_MASTER_IMPORTED:"Импортировано в MG 4K",FAILED:"Ошибка технической обработки",REWORK_REQUESTED:"Возвращено на доработку",REVISION_CREATED:"Исправленная версия создана",REJECTED:"QA отклонён"};
 function sessionHeaders(extra={}){return {...extra,"x-session-id":session?.id||"","x-session-token":session?.token||"","x-editorial-job-token":jobToken(intakeId)}}
 function reviewChecksPass(){
  return intakePreviewReady&&["intake-check-preview","intake-check-geometry","intake-check-materials"].every(id=>e(id).checked);
@@ -502,10 +503,70 @@ async function startInlineSplit(id,masterSHA){
  }finally{if(intakeSplitRequest===key)intakeSplitRequest=""}
 }
 
+function updateRawStages(data){
+ const completed=data.mg4k_imported?4:data.approval?.decision==="APPROVED"?3:
+   data.technical_master_ready?2:data.status==="AWAITING_TECH_PROCESSING"?0:1;
+ for(const node of document.querySelectorAll("[data-raw-stage]")){
+   const n=Number(node.dataset.rawStage);
+   node.dataset.stageState=n<=completed?"completed":n===completed+1?"current":"pending";
+ }
+ const previewText=data.source_preview_ready?
+   (intakeStagePreviewFor===data.job_id?"Оригинал доступен; анализ запускается только кнопкой.":"Загружаю превью оригинала…"):
+   data.source_preview_status==="FAILED"?"Превью RAW не удалось подготовить; коррекция заблокирована.":
+   "Ожидайте превью исходного RAW. Анализ ещё не выполнялся.";
+ e("intake-process-notice").textContent=data.can_start_processing?previewText:
+   data.technical_master_ready?"Техническая обработка закончена; выполните QA.":
+   data.status==="AWAITING_TECH_PROCESSING"?previewText:
+   "Технический процесс уже запущен или ожидает дальнейшей проверки.";
+}
+async function loadSourceStagePreview(id){
+ if(intakeStagePreviewFor===id)return;
+ const url=await ensureIntakeSource(id);
+ if(intakeId!==id)return;
+ e("intake-source-image").src=url;
+ e("intake-source-stage").hidden=false;
+ e("intake-source-caption").textContent="Превью оригинала · без геометрической коррекции и HDR. Полный исходник сохранён отдельно.";
+ intakeStagePreviewFor=id;
+ updateIntakeActions();
+}
+async function startTechnicalProcessing(){
+ if(!intakeId||intakeBusy||intakeStagePreviewFor!==intakeId||!intakeState?.can_start_processing)return;
+ intakeBusy=true;updateIntakeActions();
+ e("intake-process-notice").textContent="Запрашиваю автоанализ и техническую коррекцию…";
+ try{
+  const r=await fetch(base+"/job/process?job="+encodeURIComponent(intakeId),{
+   method:"POST",headers:sessionHeaders({"content-type":"application/json"}),body:"{}"
+  });
+  const d=await r.json().catch(()=>({}));
+  if(!r.ok)throw Error(d.error||"Запуск не подтверждён");
+  e("intake-message").textContent="Обработка запущена вручную. Без HDR и без генерации.";
+  await intakeStatus();
+ }catch(err){e("intake-message").textContent="HOLD: "+String(err.message||err)}
+ finally{intakeBusy=false;updateIntakeActions()}
+}
 function updateIntakeActions(){
  const data=intakeState||{};
  for(const [id,flag] of [["intake-approve","can_approve"],["intake-reject","can_rework"],["intake-download","can_download"],["intake-handoff","can_handoff"]])
    e(id).disabled=intakeBusy||data[flag]!==true||(id==="intake-approve"&&!reviewChecksPass());
+ e("intake-process").disabled=intakeBusy||data.can_start_processing!==true||
+   intakeStagePreviewFor!==data.job_id;
+ const receiver=e("intake-destination"),selected=receiver.value;
+ if(Array.isArray(data.destination_choices)){
+   receiver.replaceChildren();
+   for(const target of data.destination_choices){
+     const option=document.createElement("option");
+     option.value=target.id;
+     option.disabled=target.enabled!==true;
+     option.textContent=target.name+(option.disabled?" · недоступен":"");
+     receiver.append(option);
+   }
+   if([...receiver.options].some(x=>x.value===selected&&!x.disabled))receiver.value=selected;
+ }
+ e("intake-destination-panel").hidden=data.can_download!==true;
+ if(data.mg4k_imported)e("intake-handoff-receipt").textContent=
+   "MG4K подтвердил получение утверждённого TIFF. Генерация не запускалась.";
+ e("intake-handoff").disabled=e("intake-handoff").disabled||
+   ![...receiver.options].some(x=>x.value===receiver.value&&!x.disabled);
  e("intake-revision-submit").disabled=intakeBusy||data.can_upload_revision!==true;
 }
 async function loadIntakePreview(id,sha){
@@ -563,6 +624,7 @@ function updateSourceVerification(data){
 }
 function setIntake(data){
  intakeState=data;
+ updateRawStages(data);
  intakeProof=data.technical_qa||null;
  e("intake-empty").hidden=true;
  updateSourceVerification(data);
@@ -663,6 +725,8 @@ async function intakeStatus(){
  const d=await r.json().catch(()=>({error:"invalid_response"}));
  if(!r.ok){e("intake-status").textContent="Ошибка "+r.status;e("intake-message").textContent=d.error||"Нет доступа к заданию";return}
  setIntake(d);
+ if(d.source_preview_ready&&intakeStagePreviewFor!==intakeId)
+  loadSourceStagePreview(intakeId).catch(err=>{e("intake-message").textContent="Превью: "+String(err.message||err)});
  if(d.technical_master_ready&&d.technical_qa?.master_sha256)
   loadIntakePreview(intakeId,d.technical_qa.master_sha256).catch(err=>{
    e("intake-message").textContent=String(err);updateIntakeActions();
@@ -677,6 +741,12 @@ function activateIntake(id){
  if(jobToken(id))try{localStorage.setItem(lastJobStore,id)}catch{}
 
  intakePreviewFor="";intakePreviewReady=false;intakeState=null;
+ intakeStagePreviewFor="";
+ if(localSourceStageURL){URL.revokeObjectURL(localSourceStageURL);localSourceStageURL=null}
+ e("intake-source-stage").hidden=true;
+ e("intake-source-image").removeAttribute("src");
+ e("intake-destination-panel").hidden=true;
+ e("intake-handoff-receipt").textContent="Передача не выполнялась.";
  geometryPoints=[];geometryAnchorJob="";geometryLoadingJob="";
  geometryPreviewReady=false;
  e("intake-geometry-preview").hidden=true;
@@ -969,6 +1039,20 @@ e("open-editorial").addEventListener("click",()=>{
  const id=e("job").value.trim();if(!id)return say("Не указан ID задания.");
  window.EditorialCompare?.open(id,"tech-editorial").catch(err=>say(String(err)));
 });
+e("file").addEventListener("change",()=>{
+ const file=e("file").files[0];
+ if(localSourceStageURL){URL.revokeObjectURL(localSourceStageURL);localSourceStageURL=null}
+ if(file&&!RAW_EXTENSIONS.has(fileExt(file))&&file.type.startsWith("image/")){
+   localSourceStageURL=URL.createObjectURL(file);
+   e("intake-source-image").src=localSourceStageURL;
+   e("intake-source-stage").hidden=false;
+   e("intake-source-caption").textContent="Локальное превью · сначала загрузите файл. Исходник ещё не отправлен.";
+ }else if(file){
+   e("intake-source-stage").hidden=true;
+   e("intake-source-caption").textContent="После загрузки сервер отдельно извлечёт RAW-превью.";
+ }
+});
+e("intake-process").addEventListener("click",startTechnicalProcessing);
 e("upload").addEventListener("click",()=>upload().catch(err=>say(String(err))));e("load").addEventListener("click",()=>load().catch(err=>say(String(err))));e("refresh").addEventListener("click",()=>load().catch(err=>health().catch(e=>say(String(e)))));["intake-check-preview","intake-check-geometry","intake-check-materials"].forEach(id=>
  e(id).addEventListener("change",updateIntakeActions));
 e("intake-approve").addEventListener("click",()=>intakeDecision("APPROVED"));
