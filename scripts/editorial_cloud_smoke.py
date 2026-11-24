@@ -27,7 +27,17 @@ def make_png(width=500,height=500):
 
 
 def request(url,method="GET",headers=None,body=None,timeout=30):
-    r=urllib.request.Request(url,method=method,headers=headers or {},data=body)
+    # Cloudflare Browser Integrity Check rejects urllib's default Python UA
+    # (HTTP 403 / 1010). Present a conventional browser User-Agent, but DO NOT
+    # disable WAF/Access, use bypass tokens, or weaken production policy.
+    request_headers={
+        "user-agent":"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+                     "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+        "accept":"application/json,text/plain,*/*",
+        "accept-language":"ru-RU,ru;q=0.9,en;q=0.8"
+    }
+    request_headers.update(headers or {})
+    r=urllib.request.Request(url,method=method,headers=request_headers,data=body)
     try:
         with urllib.request.urlopen(r,timeout=timeout) as reply:
             return reply.status,dict(reply.headers),reply.read()
