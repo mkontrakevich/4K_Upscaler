@@ -397,7 +397,8 @@ export async function editorialJobApi(request,env,url,authorizeSession) {
          !preview.checksums?.sha256||hex(preview.checksums.sha256)!==expectedSha)
         return json({error:"RAW_source_preview_integrity_HOLD"},409);
       return new Response(preview.body,{headers:{"content-type":"image/jpeg","cache-control":"private,no-store",
-        "x-content-type-options":"nosniff","x-mg4k-source-representation":"RAW_NEUTRAL_PREVIEW",
+        "x-content-type-options":"nosniff","x-mg4k-source-representation":
+          completed?"RAW_NEUTRAL_PREVIEW":"RAW_CAMERA_PREVIEW_UNCORRECTED",
         "x-mg4k-original-source-sha256":job.source_sha256}});
     }
     const src=await env.TROPICANA_EDITORIAL_R2.get(job.source_key);
