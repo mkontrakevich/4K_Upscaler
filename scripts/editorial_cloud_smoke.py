@@ -94,7 +94,9 @@ def main():
             assert preview==200 and headers.get("Content-Type","").startswith("image/jpeg") and len(pixels)>1000
             denied,_,_=request(root+"/api/editorial/job/download?job="+job,headers=auth)
             assert denied==409,denied
-            denied,_,_=request(root+"/api/editorial/job/handoff?job="+job,method="POST",headers=auth,body=b"")
+            denied,_,_=request(root+"/api/editorial/job/handoff?job="+job,method="POST",
+                               headers={**auth,"content-type":"application/json"},
+                               body=b'{"target_id":"marins-mg4k"}')
             assert denied==409,denied
             print("EDITORIAL_LIVE_NO_HDR_TECH_QA_SMOKE_PASS",job,flush=True)
             return
