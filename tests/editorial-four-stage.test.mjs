@@ -136,3 +136,18 @@ test("upload routes do not dispatch a technical Workflow implicitly",()=>{
  assert.match(raw,/technical_processing_started:false/);
  assert.match(raster,/technical_processing_started:false/);
 });
+
+test("owner-only technical diagnostic never leaks credentials and holds missing evidence",async()=>{
+ const x=await fixture(false);
+ const response=await x.call("/api/editorial/job/diagnostics");
+ assert.equal(response.status,200);
+ const d=await response.json();
+ assert.equal(d.overall,"HOLD");
+ assert.equal(d.checks.technical_proof_present,false);
+ assert.equal(d.checks.server_technical_qa_verified,false);
+ assert.equal(d.checks.range_response_bytes,0);
+ assert.equal(d.no_generation_started,true);
+ assert.equal(JSON.stringify(d).includes("job_token"),false);
+ assert.equal(JSON.stringify(d).includes("source_key"),false);
+ assert.equal((await x.call("/api/editorial/job/diagnostics","GET",{},false)).status,404);
+});
