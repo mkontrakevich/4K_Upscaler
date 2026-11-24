@@ -72,6 +72,7 @@ jobs:
           assert roll['status'] in ('APPLIED','NO_CHANGE_NEEDED','HOLD')
           assert perspective['status']=='APPLIED',perspective
           assert abs(perspective['vertical_residual_after_deg'])<=.45
+          assert perspective['crop_area_fraction']<=.23
           assert photo['status'] in ('APPLIED','NO_CHANGE_NEEDED','HOLD')
           assert photo['HDR_applied'] is False and photo['generative_processing'] is False
           master=Path('/tmp/tech-v2/out/master16.tif')
