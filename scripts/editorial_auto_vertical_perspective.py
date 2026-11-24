@@ -197,6 +197,16 @@ def apply(rgb16, analysis):
     residual = v.get("median_tilt_deg")
     if not isinstance(residual, (int, float)) or not math.isfinite(float(residual)) or abs(float(residual)) > 0.45:
         base["reason"] = "VERTICAL_PERSPECTIVE_POST_QA_FAILED"
+        base["candidate_crop_zoom"] = round(zoom, 6)
+        base["candidate_crop_area_fraction"] = round(crop, 7)
+        base["candidate_max_corner_drift_fraction"] = round(drift, 7)
+        base["post_qa"] = {
+            "vertical_residual_after_deg": round(float(residual), 5) if isinstance(residual,(int,float)) and math.isfinite(float(residual)) else None,
+            "vertical_lines_after": int(after.get("vertical_inlier_count") or 0),
+            "detected_lines_after": int(after.get("detected_line_count") or 0),
+            "vertical_status_after": v.get("status"),
+            "analysis_confidence_after": (after.get("scene") or {}).get("confidence"),
+        }
         return rgb16, base
 
     changed = float(np.mean(np.abs(corrected.astype(np.int32) - rgb16.astype(np.int32))) / 65535.0)
