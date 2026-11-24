@@ -167,22 +167,42 @@ def apply(rgb16, analysis):
 
     diag = math.hypot(w, h)
     corners = np.float32([[[0, 0]], [[w - 1, 0]], [[w - 1, h - 1]], [[0, h - 1]]])
-    chosen = None
-    for zoom in np.linspace(1.0, MAX_ZOOM, 21):
-        z = np.array([[zoom, 0, (1 - zoom) * (w - 1) * 0.5],
-                      [0, zoom, (1 - zoom) * (h - 1) * 0.5],
-                      [0, 0, 1]], dtype=np.float64)
-        H = z @ hbase
-        mask = cv2.warpPerspective(np.ones((h, w), np.uint8), H, (w, h),
-                                   flags=cv2.INTER_NEAREST, borderMode=cv2.BORDER_CONSTANT, borderValue=0)
-        invalid = 1.0 - float(np.mean(mask))
-        if invalid <= 0.00002:
-            moved = cv2.perspectiveTransform(corners, H).reshape(-1, 2)
-            drift = float(np.max(np.linalg.norm(moved - corners.reshape(-1, 2), axis=1)) / diag)
-            crop = 1.0 - 1.0 / (float(zoom) ** 2)
-            if drift <= MAX_CORNER_DRIFT and crop <= MAX_CROP_FRACTION:
-                chosen = (H, float(zoom), invalid, drift, crop)
+
+    def choose_candidate(base_h):
+        # Coarse-to-fine validity keeps the full-resolution path deterministic
+        # while avoiding dozens of large temporary masks.
+        sw, sh = max(320, round(w * min(1.0, 900 / max(w, h)))), max(240, round(h * min(1.0, 900 / max(w, h))))
+        sx, sy = sw / w, sh / h
+        S = np.array([[sx, 0, 0], [0, sy, 0], [0, 0, 1]], dtype=np.float64)
+        Si = np.linalg.inv(S)
+        chosen_local = None
+        for zoom_local in np.linspace(1.0, MAX_ZOOM, 41):
+            z = np.array([[zoom_local, 0, (1 - zoom_local) * (w - 1) * 0.5],
+                          [0, zoom_local, (1 - zoom_local) * (h - 1) * 0.5],
+                          [0, 0, 1]], dtype=np.float64)
+            H_local = z @ base_h
+            Hs = S @ H_local @ Si
+            mask_small = cv2.warpPerspective(np.ones((sh, sw), np.uint8), Hs, (sw, sh),
+                                             flags=cv2.INTER_NEAREST,
+                                             borderMode=cv2.BORDER_CONSTANT, borderValue=0)
+            invalid_small = 1.0 - float(np.mean(mask_small))
+            if invalid_small > 0.0015:
+                continue
+            moved = cv2.perspectiveTransform(corners, H_local).reshape(-1, 2)
+            drift_local = float(np.max(np.linalg.norm(moved - corners.reshape(-1, 2), axis=1)) / diag)
+            crop_local = 1.0 - 1.0 / (float(zoom_local) ** 2)
+            if drift_local > MAX_CORNER_DRIFT or crop_local > MAX_CROP_FRACTION:
+                continue
+            mask = cv2.warpPerspective(np.ones((h, w), np.uint8), H_local, (w, h),
+                                       flags=cv2.INTER_NEAREST,
+                                       borderMode=cv2.BORDER_CONSTANT, borderValue=0)
+            invalid_local = 1.0 - float(np.mean(mask))
+            if invalid_local <= 0.00002:
+                chosen_local = (H_local, float(zoom_local), invalid_local, drift_local, crop_local)
                 break
+        return chosen_local
+
+    chosen = choose_candidate(hbase)
     if chosen is None:
         base["reason"] = "VERTICAL_PERSPECTIVE_SAFE_CROP_OR_DRIFT_LIMIT"
         return rgb16, base
@@ -195,6 +215,38 @@ def apply(rgb16, analysis):
     after = analyze(corrected)
     v = after.get("verticals") or {}
     residual = v.get("median_tilt_deg")
+    refinements = []
+
+    # One measured residual pass is allowed. This is not a heuristic "beauty"
+    # rotation: the angle comes only from post-warp architectural verticals,
+    # then the whole candidate is rebuilt and revalidated from SOURCE pixels.
+    if (isinstance(residual, (int, float)) and math.isfinite(float(residual)) and
+        0.45 < abs(float(residual)) <= 1.50 and
+        (after.get("vertical_inlier_count") or 0) >= 10):
+        residual_before_refine = float(residual)
+        correction_angle = -residual_before_refine
+        affine = cv2.getRotationMatrix2D(((w - 1) * 0.5, (h - 1) * 0.5),
+                                         correction_angle, 1.0)
+        A = np.vstack([affine, [0.0, 0.0, 1.0]])
+        refined = choose_candidate(A @ hbase)
+        if refined is not None:
+            H2, zoom2, invalid2, drift2, crop2 = refined
+            corrected2 = cv2.warpPerspective(rgb16, H2, (w, h), flags=cv2.INTER_LINEAR,
+                                             borderMode=cv2.BORDER_CONSTANT, borderValue=(0, 0, 0))
+            after2 = analyze(corrected2)
+            v2 = after2.get("verticals") or {}
+            residual2 = v2.get("median_tilt_deg")
+            if (isinstance(residual2, (int, float)) and math.isfinite(float(residual2)) and
+                abs(float(residual2)) < abs(residual_before_refine)):
+                H, zoom, invalid, drift, crop = H2, zoom2, invalid2, drift2, crop2
+                corrected, after, v, residual = corrected2, after2, v2, float(residual2)
+                refinements.append({
+                    "op": "POST_QA_VERTICAL_RESIDUAL_COMPENSATION",
+                    "measured_residual_before_deg": round(residual_before_refine, 5),
+                    "correction_angle_deg": round(correction_angle, 5),
+                    "measured_residual_after_deg": round(float(residual), 5),
+                })
+
     if not isinstance(residual, (int, float)) or not math.isfinite(float(residual)) or abs(float(residual)) > 0.45:
         base["reason"] = "VERTICAL_PERSPECTIVE_POST_QA_FAILED"
         base["candidate_crop_zoom"] = round(zoom, 6)
@@ -206,6 +258,7 @@ def apply(rgb16, analysis):
             "detected_lines_after": int(after.get("detected_line_count") or 0),
             "vertical_status_after": v.get("status"),
             "analysis_confidence_after": (after.get("scene") or {}).get("confidence"),
+            "refinements": refinements,
         }
         return rgb16, base
 
@@ -231,6 +284,6 @@ def apply(rgb16, analysis):
             "vanishing_point_norm": [round(float(vx), 6), round(float(vy), 6)],
             "crop_zoom": round(zoom, 6),
             "interpolation": "LINEAR",
-        }],
+        }] + refinements,
     })
     return corrected, base
