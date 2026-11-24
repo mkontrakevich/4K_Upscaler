@@ -71,6 +71,9 @@ async function verifiedTech(env,job) {
      !["RASTER","CAMERA_RAW"].includes(sourceKind)||
      (sourceKind==="CAMERA_RAW"&&(
        q.raw_decoder!=="rawpy-0.28.0/LibRaw"||
+       q.qa_checks?.RAW_CAMERA_WB_APPLIED!=="PASS"||
+       !Array.isArray(q.raw_camera_white_balance)||q.raw_camera_white_balance.length<3||
+       q.base_color_management?.status!=="CAMERA_WB_APPLIED"||
        !SHA.test(String(q.source_preview_sha256||""))||
        !Number.isInteger(q.source_preview_bytes)||q.source_preview_bytes<10000
      ))||
@@ -244,7 +247,11 @@ function sourceVerification(job,a){
       autoPerspective?"AUTO_VERTICAL_PERSPECTIVE_PENDING_VISUAL_QA":
       autoLevelled?"AUTO_CAMERA_ROLL_PENDING_VISUAL_QA":"NOT_PERFORMED",
     exposure_correction:q?.auto_photometric_correction?.exposure_status||"NOT_PERFORMED",
-    color_correction:q?.auto_photometric_correction?.color_status||"NOT_PERFORMED",
+    color_correction:q?.source_kind==="CAMERA_RAW"&&checks.RAW_CAMERA_WB_APPLIED==="PASS"?
+      (q?.auto_photometric_correction?.color_status==="APPLIED"?"CAMERA_WB_PLUS_RESIDUAL_APPLIED":
+       q?.auto_photometric_correction?.color_status==="NO_CHANGE_NEEDED"?"CAMERA_WB_APPLIED":
+       "CAMERA_WB_APPLIED_RESIDUAL_HOLD"):
+      q?.auto_photometric_correction?.color_status||"NOT_PERFORMED",
     visual_review:a.d?.decision==="APPROVED"?"INCLUDED_IN_APPROVED_TECH_QA":
       a.d?.decision==="REWORK_REQUESTED"?"REWORK_REQUESTED":"PENDING_HUMAN_QA",
     verified_proof_sha:q?.master_sha256||null
