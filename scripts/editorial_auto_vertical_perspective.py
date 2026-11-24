@@ -111,6 +111,12 @@ def _pixel_homography(w, h, vp):
         return None, "VERTICAL_PERSPECTIVE_STRENGTH_TOO_HIGH"
 
     theta = math.atan2(xvp, yvp)
+    # A vanishing direction is unoriented: up and down describe the same
+    # architectural vertical. Fold the angle to the nearest vertical axis.
+    if theta > math.pi / 2:
+        theta -= math.pi
+    elif theta < -math.pi / 2:
+        theta += math.pi
     if abs(math.degrees(theta)) > 4.0:
         return None, "VERTICAL_DIRECTION_ROLL_TOO_HIGH"
 
