@@ -210,7 +210,11 @@ function sourceVerification(job,a){
   };
 }
 function state(job,a) {
-  const status=a.autoHold&&a.revision?"REVISION_CREATED":
+  // The producer may finish its work before the receiver verifies its R2 proof.
+  // Never display "awaiting human QA" until the strict technical gate actually passes.
+  const qaIntegrityHold=!a.q&&a.processing?.status==="AWAITING_HUMAN_QA";
+  const status=qaIntegrityHold?"QA_INTEGRITY_HOLD":
+    a.autoHold&&a.revision?"REVISION_CREATED":
     a.d?.decision==="REWORK_REQUESTED"?(a.revision?"REVISION_CREATED":"REWORK_REQUESTED"):a.d?.decision==="REJECTED"?"REJECTED":a.imported?"MG4K_MASTER_IMPORTED":a.approved?"TECH_MASTER_APPROVED":a.q?"AWAITING_HUMAN_QA":a.processing?.status||job.status;
   return {
     ok:true,job_id:job.job_id,filename:job.filename,project:job.project,
@@ -242,7 +246,7 @@ function state(job,a) {
       source_sha256:job.source_sha256,
       parent_master_sha256:job.correction_plan.parent_master_sha256
     }:null,
-    status,stage:a.q?"technical_qa_ready":a.processing?.stage||job.stage,
+    status,stage:a.q?"technical_qa_ready":qaIntegrityHold?"technical_qa_integrity_hold":a.processing?.stage||job.stage,
     source_preview_ready:a.previewReady||!!(a.q&&a.q.source_kind==="CAMERA_RAW"),
     source_preview_status:job.mime==="application/x-camera-raw"?
       (a.previewState?.status||"PREPARING"):"READY",
@@ -258,7 +262,9 @@ function state(job,a) {
     progress_kind:a.q?"TECHNICAL_STAGE_COMPLETE":a.processing?.status==="PROCESSING"?"TECHNICAL_STAGE_MEASURED":"NOT_MEASURED",
     message:a.d?.decision==="REWORK_REQUESTED"?
       "Мастер возвращён на доработку. Для геометрии укажите 4 угла фасада; для света и цвета доступен ограниченный корректор.":
-      a.q?"Технический мастер готов; требуется визуальное утверждение QA.":a.processing?.message||job.message,
+      a.q?"Технический мастер готов; требуется визуальное утверждение QA.":
+      qaIntegrityHold?"HOLD: технический TIFF сохранён, но проверка целостности не подтверждена. Откройте диагностику задания.":
+      a.processing?.message||job.message,
     error:a.processing?.error||null,
     technical_master_ready:!!a.q,technical_qa:a.q?{master_sha256:a.q.master_sha256,master_bytes:a.q.master_bytes,bit_depth:16,HDR_applied:false,source_kind:a.q.source_kind||"RASTER"}:null,
     locks:job.locks,approval:a.d?{decision:a.d.decision,at:a.d.at}:null,
