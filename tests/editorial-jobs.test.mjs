@@ -79,13 +79,36 @@ async function tech(h,job){
    master_key:masterKey,master_sha256:sha,master_bytes:1100000,
    preview_sha256:proxySHA,preview_bytes:proxyBytes.byteLength,
    master_bit_depth:16,technical_status:"TECHNICAL_QA_PASS",
-   width:640,height:480,source_signal_bits:8,
+   width:640,height:480,source_signal_bits:8,source_kind:"RASTER",
+   technical_version:job.correction_plan?(geom?"CONTROLLED_GEOMETRY_RECTIFICATION_V1":"DETERMINISTIC_PHOTOMETRIC_REWORK_V1"):"AUTO_TECH_MASTER_V2",
    geometry:geom?"CONTROLLED_PROJECTIVE_WARP":"IDENTITY_NO_CORRECTION",
+   auto_optics_correction:job.correction_plan?null:{
+     schema:1,engine:"AUTO_PROFILED_OPTICS_V1",status:"HOLD",
+     reason:"OPTICS_METADATA_NOT_TRUSTED_FOR_RASTER_SOURCE",HDR_applied:false,generative_processing:false
+   },
+   auto_geometry_correction:job.correction_plan?null:{
+     schema:1,engine:"AUTO_CAMERA_ROLL_SAFE_CROP_V1",status:"NO_CHANGE_NEEDED",
+     geometry_transform:"IDENTITY",HDR_applied:false,generative_processing:false
+   },
+   auto_vertical_perspective_correction:job.correction_plan?null:{
+     schema:1,engine:"AUTO_VERTICAL_PERSPECTIVE_V1",status:"HOLD",
+     reason:"VERTICAL_VP_INSUFFICIENT_LINES",geometry_transform:"IDENTITY",HDR_applied:false,generative_processing:false
+   },
+   auto_photometric_correction:job.correction_plan?null:{
+     schema:1,engine:"AUTO_NEUTRAL_PHOTOMETRY_V1",status:"NO_CHANGE_NEEDED",
+     exposure_status:"NO_CHANGE_NEEDED",color_status:"NO_CHANGE_NEEDED",
+     HDR_applied:false,local_tone_mapping:false,generative_processing:false,operations:[]
+   },
    HDR_applied:false,virtual_exposures:false,local_HDR:false,
    qa_checks:{HDR_ABSENT:"PASS",SOURCE_SHA256:"PASS",
      GEOMETRY_UNCHANGED:geom?"NOT_APPLICABLE":"PASS",
      GEOMETRY_TRANSFORM_EVIDENCED:geom?"PASS":"NOT_APPLICABLE",
-     TIFF_READBACK:"PASS"},
+     TIFF_READBACK:"PASS",
+     AUTO_OPTICS_CORRECTED:geom?"NOT_APPLICABLE":"HOLD",
+     AUTO_GEOMETRY_CORRECTED:geom?"NOT_APPLICABLE":"NO_CHANGE_NEEDED",
+     AUTO_VERTICAL_PERSPECTIVE_CORRECTED:geom?"NOT_APPLICABLE":"HOLD",
+     AUTO_EXPOSURE_CORRECTED:geom?"NOT_APPLICABLE":"NO_CHANGE_NEEDED",
+     AUTO_COLOR_CORRECTED:geom?"NOT_APPLICABLE":"NO_CHANGE_NEEDED"},
    correction_status:job.correction_plan?"APPLIED":"NOT_REQUESTED",
    correction:job.correction_plan?{correction_status:"APPLIED",
      parent_job_id:job.correction_plan.parent_job_id,
@@ -146,7 +169,7 @@ test("verified source evidence is explicit and never substitutes for visual QA",
  assert.equal(data.source_verification.height,480);
  assert.equal(data.source_verification.signal_bits,8);
  assert.equal(data.source_verification.perspective_correction,"NOT_PERFORMED");
- assert.equal(data.source_verification.optical_correction,"NOT_PERFORMED");
+ assert.equal(data.source_verification.optical_correction,"HOLD_UNCALIBRATED");
  assert.equal(data.source_verification.visual_review,"PENDING_HUMAN_QA");
  assert.equal(data.can_approve,true);
  assert.equal(data.can_handoff,false);
