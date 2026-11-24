@@ -96,21 +96,32 @@ def _vertical_vp(analysis):
 
 
 def _pixel_homography(w, h, vp):
+    # Work in centered pixel coordinates so x/y share physical pixel units.
+    # Projective P sends the measured vertical VP to infinity. R then rotates
+    # that infinite direction exactly onto the image vertical axis.
     vx, vy = vp
-    vpy = vy - 0.5
-    vpx = vx - 0.5
-    if abs(vpy) < 1.1:
+    xvp = (vx - 0.5) * w
+    yvp = (vy - 0.5) * h
+    if abs(yvp) < 1.1 * h:
         return None, "VERTICAL_VP_TOO_CLOSE_FOR_SAFE_RECTIFICATION"
-    if abs(vpx) > 0.28:
+    if abs(xvp) > 0.28 * w:
         return None, "VERTICAL_VP_OFF_AXIS_ROLL_OR_MULTIPLANE_RISK"
-    g = -1.0 / vpy
-    if abs(g) > 0.62:
+    g = -1.0 / yvp
+    if abs(g * h) > 0.62:
         return None, "VERTICAL_PERSPECTIVE_STRENGTH_TOO_HIGH"
 
-    n = np.array([[1.0 / w, 0, -0.5], [0, 1.0 / h, -0.5], [0, 0, 1]], dtype=np.float64)
-    ni = np.linalg.inv(n)
-    hn = np.array([[1, 0, 0], [0, 1, 0], [0, g, 1]], dtype=np.float64)
-    return ni @ hn @ n, None
+    theta = math.atan2(xvp, yvp)
+    if abs(math.degrees(theta)) > 4.0:
+        return None, "VERTICAL_DIRECTION_ROLL_TOO_HIGH"
+
+    cx, cy = (w - 1) * 0.5, (h - 1) * 0.5
+    C = np.array([[1, 0, -cx], [0, 1, -cy], [0, 0, 1]], dtype=np.float64)
+    Ci = np.array([[1, 0, cx], [0, 1, cy], [0, 0, 1]], dtype=np.float64)
+    P = np.array([[1, 0, 0], [0, 1, 0], [0, g, 1]], dtype=np.float64)
+    ct, st = math.cos(theta), math.sin(theta)
+    R = np.array([[ct, -st, 0], [st, ct, 0], [0, 0, 1]], dtype=np.float64)
+    H = Ci @ R @ P @ C
+    return H, None
 
 
 def apply(rgb16, analysis):
