@@ -956,9 +956,16 @@ async function intakeHandoff(){
  if(!intakeId)return;
  e("intake-handoff").disabled=true;
  try{
-  const r=await fetch(base+"/job/handoff?job="+encodeURIComponent(intakeId),{method:"POST",headers:sessionHeaders()});
+  const chosen=e("intake-destination").value;
+  const r=await fetch(base+"/job/handoff?job="+encodeURIComponent(intakeId),{
+    method:"POST",headers:sessionHeaders({"content-type":"application/json"}),
+    body:JSON.stringify({target_id:chosen})
+  });
   const d=await r.json();if(!r.ok)throw Error(d.error||"Handoff failed");
-  e("intake-message").textContent="16-битный TIFF перенесён в MG 4K. Генерация не запускалась.";
+  e("intake-message").textContent="Утверждённый TIFF сохранён и принят выбранным контуром. Генерация не запускалась.";
+  e("intake-handoff-receipt").textContent="Контур: "+
+    e("intake-destination").selectedOptions[0].textContent+
+    " · "+(d.stage||"подтверждено")+" · версия "+String(d.job_id||intakeId);
   if(d.mg4k_import_url){e("intake-import-link").href=d.mg4k_import_url;e("intake-import-link").hidden=false;}
  }catch(err){e("intake-message").textContent=String(err)}finally{await intakeStatus().catch(()=>{})}
 }
@@ -1010,7 +1017,7 @@ async function upload(){
    sourceURL=URL.createObjectURL(file);e("source").src=sourceURL;e("source").classList.add("ready");e("source-label").hidden=true;
  }else{
    sourceURL=null;e("source").removeAttribute("src");e("source").classList.remove("ready");e("source-label").hidden=false;
-   e("source-label").textContent="RAW загружен · нейтральный preview появится после LibRaw decode";
+   e("source-label").textContent="RAW загружен · превью подготавливается без технической коррекции";
  }
 }
 async function load(){const id=e("job").value.trim();if(!/^[0-9a-f-]{36}$/i.test(id))return say("Укажите UUID задания");const r=await fetch(base+"/view?job="+encodeURIComponent(id)+"&kind=manifest");const data=await r.json();if(!r.ok)return say(data);e("status").textContent=data.status||"REVIEW";say(data);e("source").src=base+"/view?job="+encodeURIComponent(id)+"&kind=source";e("source").classList.add("ready");e("source-label").hidden=true;
