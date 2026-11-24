@@ -232,6 +232,13 @@ def prepare(source: Path, out: Path, job_id: str, expected_sha: str, correction_
         ),
         "raw_decoder": raw_decoder,
         "raw_camera_white_balance": raw_camera_wb,
+        "base_color_management": {
+            "status": "CAMERA_WB_APPLIED" if source_kind == "CAMERA_RAW" else "SOURCE_COLOR_PRESERVED",
+            "method": "rawpy_use_camera_wb" if source_kind == "CAMERA_RAW" else "no_base_color_transform",
+            "residual_neutral_refinement": auto_photometry.get("color_status") if auto_photometry else "NOT_PERFORMED",
+            "HDR_applied": False,
+            "generative_processing": False,
+        },
         "raw_visible_shape": raw_visible_shape,
         "width": width,
         "height": height,
@@ -285,6 +292,9 @@ def prepare(source: Path, out: Path, job_id: str, expected_sha: str, correction_
                (auto_perspective and auto_perspective.get("status")=="APPLIED") else "NOT_APPLICABLE",
             "TIFF_READBACK": "PASS",
             "NO_GENERATIVE_PROCESSING": "PASS",
+            "RAW_CAMERA_WB_APPLIED": "PASS" if source_kind == "CAMERA_RAW" and
+                isinstance(raw_camera_wb, list) and len(raw_camera_wb) >= 3 else
+                "NOT_APPLICABLE" if source_kind != "CAMERA_RAW" else "HOLD",
             "AUTO_OPTICS_CORRECTED":
                 "PASS" if auto_optics and auto_optics.get("status")=="APPLIED" else
                 "NO_CHANGE_NEEDED" if auto_optics and auto_optics.get("status")=="NO_CHANGE_NEEDED" else
