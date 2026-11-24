@@ -108,7 +108,7 @@ jobs:
           PY
           node --check site/editorial-compare.js
           node --check site/editorial-import.js
-          python -m py_compile editorial_tech_service.py cloud_processor_service.py scripts/editorial_raster_technical_master.py scripts/editorial_deterministic_correction.py scripts/editorial_facade_geometry.py scripts/editorial_auto_perspective_analysis.py scripts/editorial_auto_roll_correction.py
+          python -m py_compile editorial_tech_service.py cloud_processor_service.py scripts/editorial_raster_technical_master.py scripts/editorial_deterministic_correction.py scripts/editorial_facade_geometry.py scripts/editorial_auto_perspective_analysis.py scripts/editorial_auto_roll_correction.py scripts/editorial_auto_optics.py scripts/editorial_auto_vertical_perspective.py scripts/editorial_auto_photometry.py
           python -m py_compile scripts/editorial_fullres_review.py scripts/editorial_original_raw_review.py scripts/editorial_dsc09818_technical_master_v10.py scripts/editorial_fullres_review_v10.py
       - name: Test generic raster Tech Master (no HDR, real TIFF)
         run: |
@@ -119,6 +119,7 @@ jobs:
           python tests/editorial-guided-geometry.py
           python tests/editorial-auto-scene-geometry.py
           python tests/editorial-auto-roll.py
+          python tests/editorial-auto-tech-master-v2.py
       - name: Validate geometry module
         run: |
           python -m py_compile editorial_geometry.py editorial_lens_profile.py
