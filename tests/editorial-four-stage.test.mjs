@@ -114,7 +114,7 @@ test("RAW preview is mandatory before process; independent preview metadata allo
  assert.equal(st.can_start_processing,true);
  const previewResponse=await x.call("/api/editorial/job/source");
  assert.equal(previewResponse.status,200);
- assert.equal(previewResponse.headers.get("x-mg4k-source-representation"),"RAW_NEUTRAL_PREVIEW");
+ assert.equal(previewResponse.headers.get("x-mg4k-source-representation"),"RAW_CAMERA_PREVIEW_UNCORRECTED");
  assert.equal((await x.call("/api/editorial/job/process","POST")).status,202);
  assert.equal(x.started.length,1);
 });
