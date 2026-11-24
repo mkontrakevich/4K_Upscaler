@@ -1,5 +1,5 @@
 name: TECH MASTER V2 real RAW smoke
-# Final strong-perspective validation
+# Final combined perspective + roll homography validation
 
 on:
   pull_request:
