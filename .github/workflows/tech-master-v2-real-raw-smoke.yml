@@ -1,6 +1,6 @@
 name: TECH MASTER V2 real RAW smoke
 # Final unoriented vertical-VP homography validation
-# Strong correction up to 30% requires explicit human QA
+# Strong correction diagnostics retained on post-QA HOLD
 
 on:
   pull_request:
