@@ -151,3 +151,18 @@ test("owner-only technical diagnostic never leaks credentials and holds missing 
  assert.equal(JSON.stringify(d).includes("source_key"),false);
  assert.equal((await x.call("/api/editorial/job/diagnostics","GET",{},false)).status,404);
 });
+
+test("producer-side QA stage cannot override receiver-side integrity HOLD",async()=>{
+ const x=await fixture(false);
+ await x.r2.put("tropicana-park/editorial-jobs/"+x.job.job_id+"/processing-state.json",
+   JSON.stringify({status:"AWAITING_HUMAN_QA",stage:"technical_qa_ready",progress:100}));
+ const response=await x.call("/api/editorial/job/status");
+ assert.equal(response.status,200);
+ const state=await response.json();
+ assert.equal(state.status,"QA_INTEGRITY_HOLD");
+ assert.equal(state.stage,"technical_qa_integrity_hold");
+ assert.equal(state.technical_master_ready,false);
+ assert.equal(state.can_approve,false);
+ assert.equal(state.can_handoff,false);
+ assert.match(state.message,/HOLD/);
+});
