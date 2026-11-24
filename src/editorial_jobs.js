@@ -351,6 +351,35 @@ export async function editorialJobApi(request,env,url,authorizeSession) {
   const a=await availability(env,job);
 
   if(path==="/api/editorial/job/status"&&method==="GET")return json(state(job,a));
+  if(path==="/api/editorial/job/diagnostics"&&method==="GET"){
+    // Per-owner forensic QA gate; no secrets, private object URLs or raw media.
+    const obj=await env.TROPICANA_EDITORIAL_R2.get(key(id,"technical/qa.json"));
+    const proof=obj?await obj.json().catch(()=>null):null;
+    const masterKey=key(id,"technical/master16.tif");
+    const head=proof?await env.TROPICANA_EDITORIAL_R2.head(masterKey):null;
+    const prefix=head?await env.TROPICANA_EDITORIAL_R2.get(masterKey,{range:{offset:0,length:4}}):null;
+    const bytes=prefix?new Uint8Array(await prefix.arrayBuffer()):new Uint8Array();
+    const signature=bytes.length===4&&(
+      (bytes[0]===73&&bytes[1]===73&&(bytes[2]===42||bytes[2]===43)&&bytes[3]===0)||
+      (bytes[0]===77&&bytes[1]===77&&bytes[2]===0&&(bytes[3]===42||bytes[3]===43)));
+    const checks={
+      technical_proof_present:!!proof,
+      technical_status_pass:proof?.technical_status==="TECHNICAL_QA_PASS",
+      source_proof_match:proof?.source_sha256===job.source_sha256,
+      qa_hdr_absent:proof?.HDR_applied===false,
+      master_size_match:!!(head&&proof&&head.size===proof.master_bytes),
+      master_content_type:head?.httpMetadata?.contentType==="image/tiff",
+      master_custom_sha_match:!!(head&&proof&&head.customMetadata?.sha256===proof.master_sha256),
+      master_checksum_match:!!(head&&proof&&head.checksums?.sha256&&
+        hex(head.checksums.sha256)===proof.master_sha256),
+      master_tiff_signature:signature,
+      range_response_bytes:bytes.length,
+      server_technical_qa_verified:!!a.q
+    };
+    return json({ok:true,stage:"technical_integrity_diagnostic",
+      job_id:id,overall:a.q?"PASS":"HOLD",checks,
+      no_generation_started:job.auto_generation!==true});
+  }
   if(path==="/api/editorial/job/process"&&method==="POST"){
     // Explicit user action only. Historical rework jobs have their own guarded entrypoints.
     if(job.status!=="AWAITING_TECH_PROCESSING"||a.processing||a.q||a.d)
