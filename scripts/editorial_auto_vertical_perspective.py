@@ -224,10 +224,14 @@ def apply(rgb16, analysis):
         0.45 < abs(float(residual)) <= 1.50 and
         (after.get("vertical_inlier_count") or 0) >= 10):
         residual_before_refine = float(residual)
-        correction_angle = -residual_before_refine
-        affine = cv2.getRotationMatrix2D(((w - 1) * 0.5, (h - 1) * 0.5),
-                                         correction_angle, 1.0)
-        A = np.vstack([affine, [0.0, 0.0, 1.0]])
+        shear = math.tan(math.radians(residual_before_refine))
+        cx2, cy2 = (w - 1) * 0.5, (h - 1) * 0.5
+        C2 = np.array([[1, 0, -cx2], [0, 1, -cy2], [0, 0, 1]], dtype=np.float64)
+        C2i = np.array([[1, 0, cx2], [0, 1, cy2], [0, 0, 1]], dtype=np.float64)
+        # x' = x - tan(residual)*y makes measured dx/dy -> 0 while
+        # preserving y and avoiding the extra crop of a second rotation.
+        Sh = np.array([[1, -shear, 0], [0, 1, 0], [0, 0, 1]], dtype=np.float64)
+        A = C2i @ Sh @ C2
         refined = choose_candidate(A @ hbase)
         if refined is not None:
             H2, zoom2, invalid2, drift2, crop2 = refined
@@ -241,9 +245,9 @@ def apply(rgb16, analysis):
                 H, zoom, invalid, drift, crop = H2, zoom2, invalid2, drift2, crop2
                 corrected, after, v, residual = corrected2, after2, v2, float(residual2)
                 refinements.append({
-                    "op": "POST_QA_VERTICAL_RESIDUAL_COMPENSATION",
+                    "op": "POST_QA_VERTICAL_RESIDUAL_SHEAR",
                     "measured_residual_before_deg": round(residual_before_refine, 5),
-                    "correction_angle_deg": round(correction_angle, 5),
+                    "horizontal_shear": round(float(-shear), 8),
                     "measured_residual_after_deg": round(float(residual), 5),
                 })
 
