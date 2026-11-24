@@ -5,6 +5,7 @@ on:
       - 'src/editorial_photo.js'
       - 'src/editorial_jobs.js'
       - 'tests/editorial-jobs.test.mjs'
+      - 'tests/editorial-four-stage.test.mjs'
       - 'tests/editorial-raster-tech.py'
       - 'scripts/editorial_raster_technical_master.py'
       - 'tests/editorial-auto-rework.py'
@@ -79,6 +80,7 @@ jobs:
           print('Cloudflare Workflow JSON string API input accepted')
           PY
           node --experimental-default-type=module --test tests/editorial-jobs.test.mjs
+          node --experimental-default-type=module --test tests/editorial-four-stage.test.mjs
           python - <<'PY'
           from pathlib import Path
           import re
