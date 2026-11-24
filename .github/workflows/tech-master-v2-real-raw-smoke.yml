@@ -54,6 +54,10 @@ jobs:
           q=json.loads(Path('/tmp/tech-v2/out/qa.json').read_text())
           assert q['source_kind']=='CAMERA_RAW'
           assert q['technical_version']=='AUTO_TECH_MASTER_V2'
+          assert q['qa_checks']['RAW_CAMERA_WB_APPLIED']=='PASS'
+          assert q['base_color_management']['status']=='CAMERA_WB_APPLIED'
+          assert q['auto_geometry_analysis']['analysis_proxy']['source_pixels_modified'] is False
+          assert q['auto_geometry_analysis']['detected_line_count']>0,q['auto_geometry_analysis']
           assert q['master_bit_depth']==16
           assert q['HDR_applied'] is False and q['virtual_exposures'] is False and q['local_HDR'] is False
           assert q['generative_processing'] is False
@@ -75,7 +79,9 @@ jobs:
             'result':'PASS','technical_version':q['technical_version'],
             'dimensions':[q['width'],q['height']],
             'master_bytes':q['master_bytes'],'master_sha256':q['master_sha256'],
-            'optics':optics,'roll':roll,'perspective':perspective,'photometry':photo,
+            'optics':optics,'geometry_analysis':q['auto_geometry_analysis'],
+            'roll':roll,'perspective':perspective,'photometry':photo,
+            'base_color_management':q['base_color_management'],
             'qa_checks':q['qa_checks']
           }
           print(json.dumps(result,ensure_ascii=False,indent=2))
