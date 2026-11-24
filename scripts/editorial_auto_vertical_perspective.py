@@ -86,7 +86,10 @@ def _vertical_vp(analysis):
         "angular_support_ratio": round(ratio, 5),
         "median_angular_error_deg": round(med_error, 5),
     }
-    if len(support) < 6 or ratio < 0.68 or med_error > 1.35:
+    # Distributed architectural lines can include windows/railings from
+    # several depth planes. 0.62 support remains conservative when the median
+    # angular residual is <=1.10° and at least 8 lines independently agree.
+    if len(support) < 8 or ratio < 0.62 or med_error > 1.10:
         evidence["reason"] = "VERTICAL_VP_UNSTABLE"
         return None, evidence
     return (vx, vy), evidence
