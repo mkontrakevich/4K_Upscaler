@@ -525,7 +525,7 @@ async function loadSourceStagePreview(id){
  if(intakeId!==id)return;
  e("intake-source-image").src=url;
  e("intake-source-stage").hidden=false;
- e("intake-source-caption").textContent="Превью оригинала · без геометрической коррекции и HDR. Полный исходник сохранён отдельно.";
+ e("intake-source-caption").textContent="Превью камеры или исходного изображения · не технический мастер. Оригинал хранится отдельно и не изменяется.";
  intakeStagePreviewFor=id;
  updateIntakeActions();
 }
