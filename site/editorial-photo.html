@@ -529,7 +529,9 @@ function updateSourceVerification(data){
    "Авто · геометрия оптики исправлена":
    v.geometry_preservation==="PASS"?
    "PASS · коррекция не требовалась":result(v.geometry_preservation);
- const stage=x=>x==="APPLIED"||x==="PROFILE_APPLIED_PENDING_VISUAL_QA"||x==="AUTO_VERTICAL_PERSPECTIVE_PENDING_VISUAL_QA"||x==="AUTO_CAMERA_ROLL_PENDING_VISUAL_QA"?"Исправлено · проверить":
+ const stage=x=>x==="APPLIED"||x==="PROFILE_APPLIED_PENDING_VISUAL_QA"||x==="AUTO_VERTICAL_PERSPECTIVE_PENDING_VISUAL_QA"||x==="AUTO_CAMERA_ROLL_PENDING_VISUAL_QA"||x==="CAMERA_WB_PLUS_RESIDUAL_APPLIED"?"Исправлено · проверить":
+   x==="CAMERA_WB_APPLIED"?"Camera WB применён · проверить":
+   x==="CAMERA_WB_APPLIED_RESIDUAL_HOLD"?"Camera WB применён · доп. нейтрализация HOLD":
    x==="NO_CHANGE_NEEDED"?"Коррекция не требуется":
    String(x||"").startsWith("HOLD")?"HOLD · нет надёжных оснований":"Не выполнялось";
  e("intake-source-optics").textContent=stage(v.optical_correction);
@@ -546,7 +548,7 @@ function updateSourceVerification(data){
    v.perspective_correction==="AUTO_VERTICAL_PERSPECTIVE_PENDING_VISUAL_QA"?"вертикальная перспектива":"",
    v.perspective_correction==="AUTO_CAMERA_ROLL_PENDING_VISUAL_QA"?"наклон камеры":"",
    v.exposure_correction==="APPLIED"?"экспозиция":"",
-   v.color_correction==="APPLIED"?"цвет / баланс белого":""
+   ["APPLIED","CAMERA_WB_PLUS_RESIDUAL_APPLIED","CAMERA_WB_APPLIED","CAMERA_WB_APPLIED_RESIDUAL_HOLD"].includes(v.color_correction)?"цвет / баланс белого":""
  ].filter(Boolean);
  e("intake-source-visual-note").textContent=
    (applied.length?"TECH MASTER автоматически исправил: "+applied.join(", ")+". ":"Отдельные технические этапы не потребовали безопасной коррекции. ")+
