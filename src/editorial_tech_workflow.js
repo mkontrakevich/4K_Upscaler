@@ -95,6 +95,7 @@ async function proof(env,id,job){
      (!job.correction_plan&&qa.technical_version!=="AUTO_TECH_MASTER_V2")||
      (!job.correction_plan&&(!ao||!ag||!ap||!ph))||
      (autoOptics&&(
+       qa.qa_checks?.AUTO_OPTICS_CORRECTED!=="PASS"||
        ao?.engine!=="AUTO_PROFILED_OPTICS_V1"||ao?.HDR_applied!==false||
        ao?.generative_processing!==false||!ao?.profile_id||
        !Number.isFinite(ao?.crop_area_fraction)||ao.crop_area_fraction<0||ao.crop_area_fraction>.14||
@@ -102,6 +103,7 @@ async function proof(env,id,job){
        !Number.isFinite(ao?.changed_mean_absolute_fraction)||ao.changed_mean_absolute_fraction<.0005
      ))||
      (autoRoll&&(
+       qa.qa_checks?.AUTO_GEOMETRY_CORRECTED!=="PASS"||
        ag?.engine!=="AUTO_CAMERA_ROLL_SAFE_CROP_V1"||
        ag?.geometry_transform!=="AUTO_CAMERA_ROLL_CORRECTION"||
        ag?.HDR_applied!==false||ag?.generative_processing!==false||
@@ -117,6 +119,7 @@ async function proof(env,id,job){
        !Array.isArray(ag?.operations)||ag.operations.length===0
      ))||
      (autoPerspective&&(
+       qa.qa_checks?.AUTO_VERTICAL_PERSPECTIVE_CORRECTED!=="PASS"||
        ap?.engine!=="AUTO_VERTICAL_PERSPECTIVE_V1"||
        ap?.geometry_transform!=="AUTO_VERTICAL_PERSPECTIVE_CORRECTION"||
        ap?.HDR_applied!==false||ap?.generative_processing!==false||
