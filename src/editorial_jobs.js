@@ -210,7 +210,11 @@ function sourceVerification(job,a){
   };
 }
 function state(job,a) {
-  const status=a.autoHold&&a.revision?"REVISION_CREATED":
+  // The producer may finish its work before the receiver verifies its R2 proof.
+  // Never display "awaiting human QA" until the strict technical gate actually passes.
+  const qaIntegrityHold=!a.q&&a.processing?.status==="AWAITING_HUMAN_QA";
+  const status=qaIntegrityHold?"QA_INTEGRITY_HOLD":
+    a.autoHold&&a.revision?"REVISION_CREATED":
     a.d?.decision==="REWORK_REQUESTED"?(a.revision?"REVISION_CREATED":"REWORK_REQUESTED"):a.d?.decision==="REJECTED"?"REJECTED":a.imported?"MG4K_MASTER_IMPORTED":a.approved?"TECH_MASTER_APPROVED":a.q?"AWAITING_HUMAN_QA":a.processing?.status||job.status;
   return {
     ok:true,job_id:job.job_id,filename:job.filename,project:job.project,
@@ -242,7 +246,7 @@ function state(job,a) {
       source_sha256:job.source_sha256,
       parent_master_sha256:job.correction_plan.parent_master_sha256
     }:null,
-    status,stage:a.q?"technical_qa_ready":a.processing?.stage||job.stage,
+    status,stage:a.q?"technical_qa_ready":qaIntegrityHold?"technical_qa_integrity_hold":a.processing?.stage||job.stage,
     source_preview_ready:a.previewReady||!!(a.q&&a.q.source_kind==="CAMERA_RAW"),
     source_preview_status:job.mime==="application/x-camera-raw"?
       (a.previewState?.status||"PREPARING"):"READY",
@@ -258,7 +262,9 @@ function state(job,a) {
     progress_kind:a.q?"TECHNICAL_STAGE_COMPLETE":a.processing?.status==="PROCESSING"?"TECHNICAL_STAGE_MEASURED":"NOT_MEASURED",
     message:a.d?.decision==="REWORK_REQUESTED"?
       "Мастер возвращён на доработку. Для геометрии укажите 4 угла фасада; для света и цвета доступен ограниченный корректор.":
-      a.q?"Технический мастер готов; требуется визуальное утверждение QA.":a.processing?.message||job.message,
+      a.q?"Технический мастер готов; требуется визуальное утверждение QA.":
+      qaIntegrityHold?"HOLD: технический TIFF сохранён, но проверка целостности не подтверждена. Откройте диагностику задания.":
+      a.processing?.message||job.message,
     error:a.processing?.error||null,
     technical_master_ready:!!a.q,technical_qa:a.q?{master_sha256:a.q.master_sha256,master_bytes:a.q.master_bytes,bit_depth:16,HDR_applied:false,source_kind:a.q.source_kind||"RASTER"}:null,
     locks:job.locks,approval:a.d?{decision:a.d.decision,at:a.d.at}:null,
@@ -351,6 +357,35 @@ export async function editorialJobApi(request,env,url,authorizeSession) {
   const a=await availability(env,job);
 
   if(path==="/api/editorial/job/status"&&method==="GET")return json(state(job,a));
+  if(path==="/api/editorial/job/diagnostics"&&method==="GET"){
+    // Per-owner forensic QA gate; no secrets, private object URLs or raw media.
+    const obj=await env.TROPICANA_EDITORIAL_R2.get(key(id,"technical/qa.json"));
+    const proof=obj?await obj.json().catch(()=>null):null;
+    const masterKey=key(id,"technical/master16.tif");
+    const head=proof?await env.TROPICANA_EDITORIAL_R2.head(masterKey):null;
+    const prefix=head?await env.TROPICANA_EDITORIAL_R2.get(masterKey,{range:{offset:0,length:4}}):null;
+    const bytes=prefix?new Uint8Array(await prefix.arrayBuffer()):new Uint8Array();
+    const signature=bytes.length===4&&(
+      (bytes[0]===73&&bytes[1]===73&&(bytes[2]===42||bytes[2]===43)&&bytes[3]===0)||
+      (bytes[0]===77&&bytes[1]===77&&bytes[2]===0&&(bytes[3]===42||bytes[3]===43)));
+    const checks={
+      technical_proof_present:!!proof,
+      technical_status_pass:proof?.technical_status==="TECHNICAL_QA_PASS",
+      source_proof_match:proof?.source_sha256===job.source_sha256,
+      qa_hdr_absent:proof?.HDR_applied===false,
+      master_size_match:!!(head&&proof&&head.size===proof.master_bytes),
+      master_content_type:head?.httpMetadata?.contentType==="image/tiff",
+      master_custom_sha_match:!!(head&&proof&&head.customMetadata?.sha256===proof.master_sha256),
+      master_checksum_match:!!(head&&proof&&head.checksums?.sha256&&
+        hex(head.checksums.sha256)===proof.master_sha256),
+      master_tiff_signature:signature,
+      range_response_bytes:bytes.length,
+      server_technical_qa_verified:!!a.q
+    };
+    return json({ok:true,stage:"technical_integrity_diagnostic",
+      job_id:id,overall:a.q?"PASS":"HOLD",checks,
+      no_generation_started:job.auto_generation!==true});
+  }
   if(path==="/api/editorial/job/process"&&method==="POST"){
     // Explicit user action only. Historical rework jobs have their own guarded entrypoints.
     if(job.status!=="AWAITING_TECH_PROCESSING"||a.processing||a.q||a.d)

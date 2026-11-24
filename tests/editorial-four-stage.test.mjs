@@ -136,3 +136,33 @@ test("upload routes do not dispatch a technical Workflow implicitly",()=>{
  assert.match(raw,/technical_processing_started:false/);
  assert.match(raster,/technical_processing_started:false/);
 });
+
+test("owner-only technical diagnostic never leaks credentials and holds missing evidence",async()=>{
+ const x=await fixture(false);
+ const response=await x.call("/api/editorial/job/diagnostics");
+ assert.equal(response.status,200);
+ const d=await response.json();
+ assert.equal(d.overall,"HOLD");
+ assert.equal(d.checks.technical_proof_present,false);
+ assert.equal(d.checks.server_technical_qa_verified,false);
+ assert.equal(d.checks.range_response_bytes,0);
+ assert.equal(d.no_generation_started,true);
+ assert.equal(JSON.stringify(d).includes("job_token"),false);
+ assert.equal(JSON.stringify(d).includes("source_key"),false);
+ assert.equal((await x.call("/api/editorial/job/diagnostics","GET",{},false)).status,404);
+});
+
+test("producer-side QA stage cannot override receiver-side integrity HOLD",async()=>{
+ const x=await fixture(false);
+ await x.r2.put("tropicana-park/editorial-jobs/"+x.job.job_id+"/processing-state.json",
+   JSON.stringify({status:"AWAITING_HUMAN_QA",stage:"technical_qa_ready",progress:100}));
+ const response=await x.call("/api/editorial/job/status");
+ assert.equal(response.status,200);
+ const state=await response.json();
+ assert.equal(state.status,"QA_INTEGRITY_HOLD");
+ assert.equal(state.stage,"technical_qa_integrity_hold");
+ assert.equal(state.technical_master_ready,false);
+ assert.equal(state.can_approve,false);
+ assert.equal(state.can_handoff,false);
+ assert.match(state.message,/HOLD/);
+});
