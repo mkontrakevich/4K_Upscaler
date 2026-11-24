@@ -83,7 +83,7 @@ with tempfile.TemporaryDirectory() as temp:
     assert result["qa_checks"]["GEOMETRY_UNCHANGED"]=="NOT_APPLICABLE"
     assert result["qa_checks"]["GEOMETRY_TRANSFORM_EVIDENCED"]=="PASS"
     assert result["qa_checks"]["AUTO_GEOMETRY_CORRECTED"]=="PASS"
-    assert result["technical_version"]=="AUTO_CAMERA_ROLL_SAFE_CROP_V1"
+    assert result["technical_version"]=="AUTO_TECH_MASTER_V2"
     assert result["human_visual_QA"]=="PENDING"
     assert result["HDR_applied"] is False
     assert result["generative_processing"] is False
