@@ -25,6 +25,13 @@ RUN python -m py_compile \
       /app/v8_safe_appearance.py \
       /app/cloudflare_bridge.py \
       /app/cloud_processor_service.py \
+      /app/editorial_tech_service.py \
+      /app/scripts/editorial_raster_technical_master.py \
+      /app/scripts/editorial_auto_optics.py \
+      /app/scripts/editorial_auto_perspective_analysis.py \
+      /app/scripts/editorial_auto_roll_correction.py \
+      /app/scripts/editorial_auto_vertical_perspective.py \
+      /app/scripts/editorial_auto_photometry.py \
     && useradd --create-home --uid 10001 mg4k \
     && mkdir -p /runtime/bridge /tmp/mg4k-jobs \
     && chown -R mg4k:mg4k /runtime /tmp/mg4k-jobs /app
