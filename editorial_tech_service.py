@@ -89,7 +89,15 @@ def _preview_worker(job_id: str, expected_sha: str)->None:
     """RAW-only camera thumbnail; NEVER invokes technical_master or auto geometry."""
     try:
         source=_path(job_id)/"preview-source"
-        if not source.is_file() or hashlib.sha256(source.read_bytes()).hexdigest()!=expected_sha:
+        if not source.is_file():
+            raise ValueError("preview_source_missing")
+        checksum=hashlib.sha256()
+        with source.open("rb") as verify_file:
+            while True:
+                chunk=verify_file.read(1024*1024)
+                if not chunk:break
+                checksum.update(chunk)
+        if checksum.hexdigest()!=expected_sha:
             raise ValueError("preview_source_sha256_mismatch")
         import cv2
         import numpy as np
