@@ -94,19 +94,27 @@ def _preview_worker(job_id: str, expected_sha: str)->None:
         import cv2
         import numpy as np
         import rawpy
-        with rawpy.imread(str(source)) as raw:
-            try:
-                thumb=raw.extract_thumb()
-                if thumb.format==rawpy.ThumbFormat.JPEG:
-                    image=cv2.imdecode(np.frombuffer(thumb.data,dtype=np.uint8),cv2.IMREAD_COLOR)
-                else:
-                    image=cv2.cvtColor(thumb.data,cv2.COLOR_RGB2BGR)
-            except Exception:
-                # Fallback is a reduced-size neutral RAW development for *preview only*.
-                image=cv2.cvtColor(raw.postprocess(
-                    half_size=True,use_camera_wb=True,no_auto_bright=True,
-                    output_bps=8,output_color=rawpy.ColorSpace.sRGB
-                ),cv2.COLOR_RGB2BGR)
+        # RAW preview and technical development share a bounded processing slot;
+        # no simultaneous full-resolution LibRaw allocations on the same container.
+        with PROCESS_SLOT:
+            with rawpy.imread(str(source)) as raw:
+                image=None
+                try:
+                    thumb=raw.extract_thumb()
+                    if thumb.format==rawpy.ThumbFormat.JPEG:
+                        image=cv2.imdecode(np.frombuffer(thumb.data,dtype=np.uint8),cv2.IMREAD_COLOR)
+                    else:
+                        image=cv2.cvtColor(thumb.data,cv2.COLOR_RGB2BGR)
+                except Exception:
+                    image=None
+                if (image is None or image.ndim!=3 or image.shape[2]!=3 or
+                    min(image.shape[:2])<80):
+                    # Missing, unreadable or very small camera thumbnail:
+                    # develop a reduced RAW preview only, not a Tech Master.
+                    image=cv2.cvtColor(raw.postprocess(
+                        half_size=True,use_camera_wb=True,no_auto_bright=True,
+                        output_bps=8,output_color=rawpy.ColorSpace.sRGB
+                    ),cv2.COLOR_RGB2BGR)
         if image is None or image.ndim!=3 or image.shape[2]!=3:
             raise ValueError("RAW_preview_decode_failed")
         h,w=image.shape[:2]
