@@ -42,7 +42,16 @@ with tempfile.TemporaryDirectory() as td:
     assert info["geometry"] == "IDENTITY_NO_CORRECTION"
     assert info["model_input_generated"] is False
     assert result.dtype == np.uint16
-    np.testing.assert_array_equal(result[:, :, ::-1], pixels.astype(np.uint16) * 257)
+    expected8 = pixels.astype(np.uint16) * 257
+    photo8 = info["auto_photometric_correction"]
+    assert photo8["status"] in ("APPLIED","NO_CHANGE_NEEDED","HOLD")
+    if photo8["status"] == "APPLIED":
+        assert not np.array_equal(result[:, :, ::-1], expected8)
+        assert photo8["operations"]
+        assert photo8["HDR_applied"] is False and photo8["generative_processing"] is False
+    else:
+        np.testing.assert_array_equal(result[:, :, ::-1], expected8)
+    assert info["technical_version"] == "AUTO_TECH_MASTER_V2"
     assert sha(root / "result8" / "master16.tif") == info["master_sha256"]
     assert (root / "result8" / "fullres-preview.jpg").stat().st_size > 1000
 
@@ -53,7 +62,12 @@ with tempfile.TemporaryDirectory() as td:
     info16 = tech.prepare(src16, root / "result16", JOB, sha(src16))
     result16 = tifffile.imread(root / "result16" / "master16.tif")
     assert info16["source_signal_bits"] == 16
-    np.testing.assert_array_equal(result16[:, :, ::-1], deep)
+    photo16 = info16["auto_photometric_correction"]
+    if photo16["status"] == "APPLIED":
+        assert not np.array_equal(result16[:, :, ::-1], deep)
+        assert photo16["HDR_applied"] is False
+    else:
+        np.testing.assert_array_equal(result16[:, :, ::-1], deep)
 
     try:
         tech.prepare(src, root / "bad", JOB, "0" * 64)
@@ -69,7 +83,11 @@ with tempfile.TemporaryDirectory() as td:
     opaque_master = tifffile.imread(root / "opaque-result" / "master16.tif")
     assert info_opaque["opaque_alpha_verified"] is True
     assert info_opaque["alpha_handling"] == "fully_opaque_alpha_removed_losslessly"
-    np.testing.assert_array_equal(opaque_master[:, :, ::-1], pixels.astype(np.uint16) * 257)
+    opaque_expected = pixels.astype(np.uint16) * 257
+    if info_opaque["auto_photometric_correction"]["status"] == "APPLIED":
+        assert not np.array_equal(opaque_master[:, :, ::-1], opaque_expected)
+    else:
+        np.testing.assert_array_equal(opaque_master[:, :, ::-1], opaque_expected)
 
     alpha = root / "alpha.png"
     assert cv2.imwrite(str(alpha), np.random.default_rng(3).integers(0, 255, size=(380, 510, 4), dtype=np.uint8))

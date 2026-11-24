@@ -118,8 +118,25 @@ def analyze(rgb16):
     scale = min(1., MAX_EDGE / max(h, w))
     dst = cv2.resize(rgb16, (max(1, round(w*scale)), max(1, round(h*scale))),
                      interpolation=cv2.INTER_AREA) if scale < 1 else rgb16
-    rgb8 = np.uint8(np.rint(dst.astype(np.float32)/257)) if dst.dtype == np.uint16 else dst
+
+    # Computer-vision proxy only: linear RAW can be visually almost black when
+    # naively divided by 257. Build one deterministic global display transform
+    # for line detection. It NEVER changes the source/TECH pixels.
+    proxy_white = None
+    if dst.dtype == np.uint16:
+        linear = np.clip(dst.astype(np.float32) / 65535.0, 0.0, 1.0)
+        luminance = np.sum(linear * np.array([.2126,.7152,.0722],dtype=np.float32), axis=2)
+        positive = luminance[luminance > 1.0/65535.0]
+        proxy_white = float(np.percentile(positive, 99.5)) if positive.size else 1.0
+        proxy_white = max(proxy_white, 1.0/65535.0)
+        display = np.clip(linear / proxy_white * .96, 0.0, 1.0)
+        display = np.power(display, 1.0 / 2.2)
+        rgb8 = np.uint8(np.rint(display * 255.0))
+    else:
+        rgb8 = dst
     gray = cv2.cvtColor(rgb8, cv2.COLOR_RGB2GRAY)
+    # Contrast normalization is analysis-only and keeps geometric positions fixed.
+    gray = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8)).apply(gray)
     detected = _line_features(gray)
     # Spatially distributed verticals, never a single facade/window edge.
     verts = [v for v in detected if abs(v["vertical_tilt_deg"]) <= 12 and
@@ -176,6 +193,13 @@ def analyze(rgb16):
       "pixels_corrected": False, "automatic_correction_applied": False,
       "source_dimensions": [w, h],
       "analysis_dimensions": [gray.shape[1], gray.shape[0]],
+      "analysis_proxy": {
+        "type": "GLOBAL_PERCENTILE_GAMMA_CLAHE_GEOMETRY_ONLY" if rgb16.dtype == np.uint16 else "CLAHE_GEOMETRY_ONLY",
+        "source_pixels_modified": False,
+        "white_percentile": 99.5 if rgb16.dtype == np.uint16 else None,
+        "white_linear_value": round(proxy_white, 7) if proxy_white is not None else None,
+        "gamma": round(1.0/2.2, 7) if rgb16.dtype == np.uint16 else None,
+      },
       "detected_line_count": len(detected),
       "vertical_inlier_count": len(verts),
       "horizontal_line_count": len(horizontal),

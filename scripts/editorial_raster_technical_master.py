@@ -101,8 +101,28 @@ def prepare(source: Path, out: Path, job_id: str, expected_sha: str, correction_
     if width < 320 or height < 320 or width * height > 80_000_000:
         raise ValueError("invalid_source_dimensions")
     source_preview_rgb16 = rgb16.copy() if source_kind == "CAMERA_RAW" else None
-    # Observe original pixels before any warp; this is NOT permission to apply
-    # automatic scene correction or to claim auto-rectification completed.
+    correction = None
+    auto_optics = None
+    auto_geometry = None
+    auto_perspective = None
+    auto_photometry = None
+
+    # Initial TECH MASTER is an active technical-development pipeline:
+    # verified optics -> camera geometry -> neutral exposure/color.
+    # Every risky stage can HOLD independently without blocking safe stages.
+    if correction_plan is None:
+        try:
+            from editorial_auto_optics import apply as auto_optics_apply
+            rgb16, auto_optics = auto_optics_apply(rgb16, source, source_kind)
+        except Exception as error:
+            auto_optics = {
+                "schema":1, "engine":"AUTO_PROFILED_OPTICS_V1", "status":"HOLD",
+                "reason":"OPTICS_ENGINE_FAILED_" + type(error).__name__,
+                "HDR_applied":False, "generative_processing":False,
+                "human_visual_QA":"PENDING"
+            }
+
+    # Geometry analysis is always based on the pixels that will enter geometry.
     try:
         from editorial_auto_perspective_analysis import analyze
         scene_analysis = analyze(rgb16)
@@ -114,11 +134,38 @@ def prepare(source: Path, out: Path, job_id: str, expected_sha: str, correction_
             "hold_reason":"ANALYSIS_FAILED_" + type(error).__name__,
             "next_stage":"MANUAL_DIAGNOSTIC_ONLY"
         }
-    correction = None
-    auto_geometry = None
+
     if correction_plan is None:
         from editorial_auto_roll_correction import apply as auto_roll
         rgb16, auto_geometry = auto_roll(rgb16, scene_analysis)
+
+        # Re-measure after roll before solving vertical camera perspective.
+        try:
+            post_roll_analysis = analyze(rgb16)
+        except Exception:
+            post_roll_analysis = scene_analysis
+        try:
+            from editorial_auto_vertical_perspective import apply as auto_vertical
+            rgb16, auto_perspective = auto_vertical(rgb16, post_roll_analysis)
+        except Exception as error:
+            auto_perspective = {
+                "schema":1, "engine":"AUTO_VERTICAL_PERSPECTIVE_V1", "status":"HOLD",
+                "reason":"PERSPECTIVE_ENGINE_FAILED_" + type(error).__name__,
+                "geometry_transform":"IDENTITY", "HDR_applied":False,
+                "generative_processing":False, "human_visual_QA":"PENDING"
+            }
+
+        try:
+            from editorial_auto_photometry import apply as auto_photo
+            rgb16, auto_photometry = auto_photo(rgb16, source_kind)
+        except Exception as error:
+            auto_photometry = {
+                "schema":1, "engine":"AUTO_NEUTRAL_PHOTOMETRY_V1", "status":"HOLD",
+                "reason":"PHOTOMETRY_ENGINE_FAILED_" + type(error).__name__,
+                "HDR_applied":False, "local_tone_mapping":False,
+                "generative_processing":False, "human_visual_QA":"PENDING"
+            }
+
     if correction_plan is not None:
         payload = json.loads(correction_plan.read_text(encoding="utf-8"))
         if payload.get("type") == "GEOMETRY_FACADE_QUAD_V1":
@@ -185,6 +232,13 @@ def prepare(source: Path, out: Path, job_id: str, expected_sha: str, correction_
         ),
         "raw_decoder": raw_decoder,
         "raw_camera_white_balance": raw_camera_wb,
+        "base_color_management": {
+            "status": "CAMERA_WB_APPLIED" if source_kind == "CAMERA_RAW" else "SOURCE_COLOR_PRESERVED",
+            "method": "rawpy_use_camera_wb" if source_kind == "CAMERA_RAW" else "no_base_color_transform",
+            "residual_neutral_refinement": auto_photometry.get("color_status") if auto_photometry else "NOT_PERFORMED",
+            "HDR_applied": False,
+            "generative_processing": False,
+        },
         "raw_visible_shape": raw_visible_shape,
         "width": width,
         "height": height,
@@ -197,14 +251,15 @@ def prepare(source: Path, out: Path, job_id: str, expected_sha: str, correction_
         "source_preview_bytes": source_preview.stat().st_size if source_preview.exists() else None,
         "technical_version": ("CONTROLLED_GEOMETRY_RECTIFICATION_V1" if correction and
             correction["geometry_transform"] == "CONTROLLED_PROJECTIVE_WARP"
-            else "DETERMINISTIC_PHOTOMETRIC_REWORK_V1") if correction else (
-            "AUTO_CAMERA_ROLL_SAFE_CROP_V1" if auto_geometry and auto_geometry["status"]=="APPLIED"
-            else "GENERIC_RASTER_NEUTRAL_NO_HDR_V1"),
+            else "DETERMINISTIC_PHOTOMETRIC_REWORK_V1") if correction else "AUTO_TECH_MASTER_V2",
         "correction": correction,
         "correction_status": correction["correction_status"] if correction else "NOT_REQUESTED",
+        "auto_optics_correction": auto_optics,
         "auto_geometry_analysis": scene_analysis,
         "auto_geometry_analysis_status": scene_analysis["status"],
         "auto_geometry_correction": auto_geometry,
+        "auto_vertical_perspective_correction": auto_perspective,
+        "auto_photometric_correction": auto_photometry,
         "technical_status": "TECHNICAL_QA_PASS",
         "HDR_applied": False,
         "virtual_exposures": False,
@@ -212,7 +267,9 @@ def prepare(source: Path, out: Path, job_id: str, expected_sha: str, correction_
         "generative_processing": False,
         "geometry": (correction["geometry_transform"] if correction and
              correction["geometry_transform"] == "CONTROLLED_PROJECTIVE_WARP" else
-             "AUTO_CAMERA_ROLL_CORRECTION" if auto_geometry and auto_geometry["status"]=="APPLIED"
+             "AUTO_VERTICAL_PERSPECTIVE_CORRECTION" if auto_perspective and auto_perspective.get("status")=="APPLIED" else
+             "AUTO_CAMERA_ROLL_CORRECTION" if auto_geometry and auto_geometry.get("status")=="APPLIED" else
+             "AUTO_LENS_PROFILE_CORRECTION" if auto_optics and auto_optics.get("status")=="APPLIED"
              else "IDENTITY_NO_CORRECTION"),
         "geometry_visual_review": "PENDING",
         "human_visual_QA": "PENDING",
@@ -225,17 +282,40 @@ def prepare(source: Path, out: Path, job_id: str, expected_sha: str, correction_
             "HDR_ABSENT": "PASS",
             "GEOMETRY_UNCHANGED": "NOT_APPLICABLE" if
                (correction and correction["geometry_transform"]=="CONTROLLED_PROJECTIVE_WARP") or
-               (auto_geometry and auto_geometry["status"]=="APPLIED") else "PASS",
+               (auto_optics and auto_optics.get("status")=="APPLIED") or
+               (auto_geometry and auto_geometry.get("status")=="APPLIED") or
+               (auto_perspective and auto_perspective.get("status")=="APPLIED") else "PASS",
             "GEOMETRY_TRANSFORM_EVIDENCED": "PASS" if
                (correction and correction["geometry_transform"]=="CONTROLLED_PROJECTIVE_WARP") or
-               (auto_geometry and auto_geometry["status"]=="APPLIED") else "NOT_APPLICABLE",
+               (auto_optics and auto_optics.get("status")=="APPLIED") or
+               (auto_geometry and auto_geometry.get("status")=="APPLIED") or
+               (auto_perspective and auto_perspective.get("status")=="APPLIED") else "NOT_APPLICABLE",
             "TIFF_READBACK": "PASS",
             "NO_GENERATIVE_PROCESSING": "PASS",
+            "RAW_CAMERA_WB_APPLIED": "PASS" if source_kind == "CAMERA_RAW" and
+                isinstance(raw_camera_wb, list) and len(raw_camera_wb) >= 3 else
+                "NOT_APPLICABLE" if source_kind != "CAMERA_RAW" else "HOLD",
+            "AUTO_OPTICS_CORRECTED":
+                "PASS" if auto_optics and auto_optics.get("status")=="APPLIED" else
+                "NO_CHANGE_NEEDED" if auto_optics and auto_optics.get("status")=="NO_CHANGE_NEEDED" else
+                "HOLD" if auto_optics and auto_optics.get("status")=="HOLD" else "NOT_APPLICABLE",
             "AUTO_GEOMETRY_ANALYZED": "PASS" if scene_analysis["status"]=="OBSERVATION_ONLY" else "HOLD",
             "AUTO_GEOMETRY_CORRECTED":
-                "PASS" if auto_geometry and auto_geometry["status"]=="APPLIED" else
-                "NO_CHANGE_NEEDED" if auto_geometry and auto_geometry["status"]=="NO_CHANGE_NEEDED" else
-                "HOLD" if auto_geometry and auto_geometry["status"]=="HOLD" else "NOT_APPLICABLE",
+                "PASS" if auto_geometry and auto_geometry.get("status")=="APPLIED" else
+                "NO_CHANGE_NEEDED" if auto_geometry and auto_geometry.get("status")=="NO_CHANGE_NEEDED" else
+                "HOLD" if auto_geometry and auto_geometry.get("status")=="HOLD" else "NOT_APPLICABLE",
+            "AUTO_VERTICAL_PERSPECTIVE_CORRECTED":
+                "PASS" if auto_perspective and auto_perspective.get("status")=="APPLIED" else
+                "NO_CHANGE_NEEDED" if auto_perspective and auto_perspective.get("status")=="NO_CHANGE_NEEDED" else
+                "HOLD" if auto_perspective and auto_perspective.get("status")=="HOLD" else "NOT_APPLICABLE",
+            "AUTO_EXPOSURE_CORRECTED":
+                "PASS" if auto_photometry and auto_photometry.get("exposure_status")=="APPLIED" else
+                "NO_CHANGE_NEEDED" if auto_photometry and auto_photometry.get("exposure_status")=="NO_CHANGE_NEEDED" else
+                "HOLD" if auto_photometry and auto_photometry.get("status")=="HOLD" else "NOT_APPLICABLE",
+            "AUTO_COLOR_CORRECTED":
+                "PASS" if auto_photometry and auto_photometry.get("color_status")=="APPLIED" else
+                "NO_CHANGE_NEEDED" if auto_photometry and auto_photometry.get("color_status")=="NO_CHANGE_NEEDED" else
+                "HOLD" if auto_photometry and auto_photometry.get("color_status")=="HOLD" else "NOT_APPLICABLE",
         },
     }
     qa.write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")

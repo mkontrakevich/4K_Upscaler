@@ -232,7 +232,11 @@
           <div><span>Контроль целостности SHA-256</span><strong id="intake-source-sha">Ожидание</strong></div>
           <div><span>Формат и декодирование</span><strong id="intake-source-raster">Ожидание</strong></div>
           <div><span>Размер / глубина сигнала</span><strong id="intake-source-dimensions">Не определено</strong></div>
-          <div><span>Геометрия при создании Tech Master</span><strong id="intake-source-geometry">Ожидание</strong></div>
+          <div><span>Геометрия кадра</span><strong id="intake-source-geometry">Ожидание</strong></div>
+          <div><span>Оптика / дисторсия</span><strong id="intake-source-optics">Ожидание</strong></div>
+          <div><span>Вертикальная перспектива</span><strong id="intake-source-perspective">Ожидание</strong></div>
+          <div><span>Экспозиция</span><strong id="intake-source-exposure">Ожидание</strong></div>
+          <div><span>Цвет / баланс белого</span><strong id="intake-source-color">Ожидание</strong></div>
         </div>
         <div class="qa-source-boundary">
           <strong id="intake-source-visual-status">Визуальная проверка: ожидает решения</strong>
@@ -603,24 +607,39 @@ function updateSourceVerification(data){
     v.width+"×"+v.height+" px · "+v.signal_bits+" бит входного сигнала":"Данные ещё не подтверждены";
  e("intake-source-geometry").textContent=
    v.geometry_preservation==="CORRECTED_PENDING_HUMAN_QA"?
-   "Исправлена по 4 точкам · требуется визуальная проверка":
+   "Исправлена по 4 точкам · проверить":
+   v.geometry_preservation==="AUTO_PERSPECTIVE_PENDING_HUMAN_QA"?
+   "Авто · вертикальная перспектива исправлена":
    v.geometry_preservation==="AUTO_LEVELLED_PENDING_HUMAN_QA"?
-   "Автоматически выровнен наклон камеры · проверить композицию":
+   "Авто · наклон камеры выровнен":
+   v.geometry_preservation==="AUTO_OPTICS_PENDING_HUMAN_QA"?
+   "Авто · геометрия оптики исправлена":
    v.geometry_preservation==="PASS"?
-   "PASS · пиксельная геометрия сохранена":result(v.geometry_preservation);
+   "PASS · коррекция не требовалась":result(v.geometry_preservation);
+ const stage=x=>x==="APPLIED"||x==="PROFILE_APPLIED_PENDING_VISUAL_QA"||x==="AUTO_VERTICAL_PERSPECTIVE_PENDING_VISUAL_QA"||x==="AUTO_CAMERA_ROLL_PENDING_VISUAL_QA"||x==="CAMERA_WB_PLUS_RESIDUAL_APPLIED"?"Исправлено · проверить":
+   x==="CAMERA_WB_APPLIED"?"Camera WB применён · проверить":
+   x==="CAMERA_WB_APPLIED_RESIDUAL_HOLD"?"Camera WB применён · доп. нейтрализация HOLD":
+   x==="NO_CHANGE_NEEDED"?"Коррекция не требуется":
+   String(x||"").startsWith("HOLD")?"HOLD · нет надёжных оснований":"Не выполнялось";
+ e("intake-source-optics").textContent=stage(v.optical_correction);
+ e("intake-source-perspective").textContent=stage(v.perspective_correction);
+ e("intake-source-exposure").textContent=stage(v.exposure_correction);
+ e("intake-source-color").textContent=stage(v.color_correction);
  const visual=e("intake-source-visual-status");
  visual.textContent=v.visual_review==="INCLUDED_IN_APPROVED_TECH_QA"?
    "Визуальная QA: утверждено человеком":
    v.visual_review==="REWORK_REQUESTED"?"Визуальная QA: возвращено на доработку":
    "Визуальная QA: ожидает вашего решения";
+ const applied=[
+   v.optical_correction==="PROFILE_APPLIED_PENDING_VISUAL_QA"?"оптика":"",
+   v.perspective_correction==="AUTO_VERTICAL_PERSPECTIVE_PENDING_VISUAL_QA"?"вертикальная перспектива":"",
+   v.perspective_correction==="AUTO_CAMERA_ROLL_PENDING_VISUAL_QA"?"наклон камеры":"",
+   v.exposure_correction==="APPLIED"?"экспозиция":"",
+   ["APPLIED","CAMERA_WB_PLUS_RESIDUAL_APPLIED","CAMERA_WB_APPLIED","CAMERA_WB_APPLIED_RESIDUAL_HOLD"].includes(v.color_correction)?"цвет / баланс белого":""
+ ].filter(Boolean);
  e("intake-source-visual-note").textContent=
-   (v.perspective_correction==="CONTROLLED_PROJECTIVE_PENDING_VISUAL_QA"?
-   "Плоскость фасада выпрямлена по указанным углам. Проверка всех внеплоскостных объектов обязательна. ":
-   v.perspective_correction==="AUTO_CAMERA_ROLL_PENDING_VISUAL_QA"?
-   "Автоматически выровнен общий наклон камеры. Полная коррекция перспективы фасада и объектива ещё не выполнялась. ":
-   "Автоматическая коррекция объектива, вертикалей и перспективы не выполнялась. ")+
-   "Проверка сохранности пикселей не означает проверку правильности архитектурной геометрии. "+
-   "Выполните оценку исходника и Tech Master через «Сплит» при 100% масштабе.";
+   (applied.length?"TECH MASTER автоматически исправил: "+applied.join(", ")+". ":"Отдельные технические этапы не потребовали безопасной коррекции. ")+
+   "HOLD означает, что система не стала угадывать параметры. Перед утверждением сравните SOURCE / TECH MASTER в «Сплит» при 100% масштабе.";
 }
 function setIntake(data){
  intakeState=data;
@@ -630,6 +649,8 @@ function setIntake(data){
  updateSourceVerification(data);
  e("intake-id").textContent=(data.job_id||"—")+" · V"+(data.revision_num||1);
  e("intake-geometry-check-label").textContent=
+   data.source_verification?.geometry_preservation==="AUTO_PERSPECTIVE_PENDING_HUMAN_QA"?
+   "Автоматическая геометрия проверена: вертикали, перспектива, обрезка и архитектура сохранены":
    data.source_verification?.geometry_preservation==="AUTO_LEVELLED_PENDING_HUMAN_QA"?
    "Автоматическое выравнивание проверено: вертикали, обрезка, архитектура и окружение сохранены":
    data.technical_correction?.geometry_correction==="CONTROLLED_PENDING_VISUAL_QA"?

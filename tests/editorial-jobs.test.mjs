@@ -79,13 +79,36 @@ async function tech(h,job){
    master_key:masterKey,master_sha256:sha,master_bytes:1100000,
    preview_sha256:proxySHA,preview_bytes:proxyBytes.byteLength,
    master_bit_depth:16,technical_status:"TECHNICAL_QA_PASS",
-   width:640,height:480,source_signal_bits:8,
+   width:640,height:480,source_signal_bits:8,source_kind:"RASTER",
+   technical_version:job.correction_plan?(geom?"CONTROLLED_GEOMETRY_RECTIFICATION_V1":"DETERMINISTIC_PHOTOMETRIC_REWORK_V1"):"AUTO_TECH_MASTER_V2",
    geometry:geom?"CONTROLLED_PROJECTIVE_WARP":"IDENTITY_NO_CORRECTION",
+   auto_optics_correction:job.correction_plan?null:{
+     schema:1,engine:"AUTO_PROFILED_OPTICS_V1",status:"HOLD",
+     reason:"OPTICS_METADATA_NOT_TRUSTED_FOR_RASTER_SOURCE",HDR_applied:false,generative_processing:false
+   },
+   auto_geometry_correction:job.correction_plan?null:{
+     schema:1,engine:"AUTO_CAMERA_ROLL_SAFE_CROP_V1",status:"NO_CHANGE_NEEDED",
+     geometry_transform:"IDENTITY",HDR_applied:false,generative_processing:false
+   },
+   auto_vertical_perspective_correction:job.correction_plan?null:{
+     schema:1,engine:"AUTO_VERTICAL_PERSPECTIVE_V1",status:"HOLD",
+     reason:"VERTICAL_VP_INSUFFICIENT_LINES",geometry_transform:"IDENTITY",HDR_applied:false,generative_processing:false
+   },
+   auto_photometric_correction:job.correction_plan?null:{
+     schema:1,engine:"AUTO_NEUTRAL_PHOTOMETRY_V1",status:"NO_CHANGE_NEEDED",
+     exposure_status:"NO_CHANGE_NEEDED",color_status:"NO_CHANGE_NEEDED",
+     HDR_applied:false,local_tone_mapping:false,generative_processing:false,operations:[]
+   },
    HDR_applied:false,virtual_exposures:false,local_HDR:false,
    qa_checks:{HDR_ABSENT:"PASS",SOURCE_SHA256:"PASS",
      GEOMETRY_UNCHANGED:geom?"NOT_APPLICABLE":"PASS",
      GEOMETRY_TRANSFORM_EVIDENCED:geom?"PASS":"NOT_APPLICABLE",
-     TIFF_READBACK:"PASS"},
+     TIFF_READBACK:"PASS",
+     AUTO_OPTICS_CORRECTED:geom?"NOT_APPLICABLE":"HOLD",
+     AUTO_GEOMETRY_CORRECTED:geom?"NOT_APPLICABLE":"NO_CHANGE_NEEDED",
+     AUTO_VERTICAL_PERSPECTIVE_CORRECTED:geom?"NOT_APPLICABLE":"HOLD",
+     AUTO_EXPOSURE_CORRECTED:geom?"NOT_APPLICABLE":"NO_CHANGE_NEEDED",
+     AUTO_COLOR_CORRECTED:geom?"NOT_APPLICABLE":"NO_CHANGE_NEEDED"},
    correction_status:job.correction_plan?"APPLIED":"NOT_REQUESTED",
    correction:job.correction_plan?{correction_status:"APPLIED",
      parent_job_id:job.correction_plan.parent_job_id,
@@ -146,7 +169,7 @@ test("verified source evidence is explicit and never substitutes for visual QA",
  assert.equal(data.source_verification.height,480);
  assert.equal(data.source_verification.signal_bits,8);
  assert.equal(data.source_verification.perspective_correction,"NOT_PERFORMED");
- assert.equal(data.source_verification.optical_correction,"NOT_PERFORMED");
+ assert.equal(data.source_verification.optical_correction,"HOLD_UNCALIBRATED");
  assert.equal(data.source_verification.visual_review,"PENDING_HUMAN_QA");
  assert.equal(data.can_approve,true);
  assert.equal(data.can_handoff,false);
@@ -638,52 +661,19 @@ test("auto geometry observations are shown separately from actual correction",as
 });
 
 
-test("legacy QA can spawn one auto geometry V2 from original without manual points or mutating V1",async()=>{
- const h=harness(),job=await intake(h),parentSha=await tech(h,job);
- const legacy=await (await h.call("/api/editorial/job/status?job="+job.job_id)).json();
- assert.equal(legacy.can_auto_geometry_reprocess,true);
- assert.equal(legacy.can_geometry_rework,true,"historic guided route retained only for fallback");
+test("active TECH MASTER V2 performs geometry in the primary pass and disables legacy reprocess",async()=>{
+ const h=harness(),job=await intake(h);await tech(h,job);
+ const current=await (await h.call("/api/editorial/job/status?job="+job.job_id)).json();
+ assert.equal(current.can_auto_geometry_reprocess,false);
+ assert.equal(current.can_geometry_rework,true,"guided four-corner fallback remains available for human-requested rework");
+ assert.equal(current.technical_master_ready,true);
+ assert.equal(current.can_approve,true);
+ assert.equal(current.can_handoff,false);
  const uri="/api/editorial/job/auto-geometry?job="+job.job_id;
- const unauth=await h.call(uri,"POST",{},false);
- assert.equal(unauth.status,404,"credentials are required");
- const launched=[];
- h.env.TROPICANA_TECH_WORKFLOW={async create(v){launched.push(v);return {id:v.id}}};
  const reply=await h.call(uri,"POST",{});
- assert.equal(reply.status,201);
- const result=await reply.json();
- assert.equal(result.revision_num,2);
- assert.equal(result.source_unchanged,true);
- assert.equal(result.parent_decision_mutated,false);
- assert.equal(result.generation_started,false);
- assert.equal(result.workflow_started,true);
- assert.equal(launched.length,1);
- assert.equal(launched[0].id,result.job_id);
- const base="tropicana-park/editorial-jobs/";
- const old=await (await h.r2.get(base+job.job_id+"/job.json")).json();
- const v2=await (await h.r2.get(base+result.job_id+"/job.json")).json();
- assert.equal(v2.parent_job_id,job.job_id);
- assert.equal(v2.root_job_id,job.job_id);
- assert.equal(v2.source_key,old.source_key);
- assert.equal(v2.source_sha256,old.source_sha256);
- assert.equal(v2.access_hash,old.access_hash);
- assert.equal(v2.correction_plan,null);
- assert.equal(await h.r2.get(base+job.job_id+"/technical/decision.json"),null);
- const link=await (await h.r2.get(base+job.job_id+"/rework/revision.json")).json();
- assert.equal(link.type,"AUTO_GEOMETRY_REPROCESS_V1");
- assert.equal(link.parent_decision_mutated,false);
- assert.equal(link.original_master_sha256,parentSha);
- const repeat=await h.call(uri,"POST",{});
- assert.equal(repeat.status,409,"never create uncontrolled repeat V2");
- const unready=await (await h.call("/api/editorial/job/status?job="+result.job_id,"GET",null,false,job.job_token)).json();
- assert.equal(unready.can_approve,false);
- assert.equal(unready.can_handoff,false);
- const corrected=await tech(h,v2);
- const ready=await (await h.call("/api/editorial/job/status?job="+result.job_id,"GET",null,false,job.job_token)).json();
- assert.equal(ready.can_auto_geometry_reprocess,false,"no indefinite chains of uncorrected synthetic V2s");
- assert.equal(ready.can_handoff,false);
- assert.equal(ready.can_approve,true);
- assert.equal(corrected,parentSha,"test fixture source remains identical until actual processor runs");
+ assert.equal(reply.status,409,"primary automatic geometry must not spawn a redundant V2");
 });
+
 test("automatic camera levelling evidence must pass independent QA checks",async()=>{
  const h=harness(),job=await intake(h);
  await tech(h,job);
