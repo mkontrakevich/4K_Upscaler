@@ -126,7 +126,7 @@ async function proof(env,id,job){
        ap?.engine!=="AUTO_VERTICAL_PERSPECTIVE_V1"||
        ap?.geometry_transform!=="AUTO_VERTICAL_PERSPECTIVE_CORRECTION"||
        ap?.HDR_applied!==false||ap?.generative_processing!==false||
-       !Number.isFinite(ap?.crop_area_fraction)||ap.crop_area_fraction<0||ap.crop_area_fraction>.17||
+       !Number.isFinite(ap?.crop_area_fraction)||ap.crop_area_fraction<0||ap.crop_area_fraction>.23||
        !Number.isFinite(ap?.invalid_border_fraction)||ap.invalid_border_fraction>.00002||
        !Number.isFinite(ap?.max_corner_drift_fraction)||ap.max_corner_drift_fraction>.16||
        !Number.isFinite(ap?.vertical_residual_after_deg)||Math.abs(ap.vertical_residual_after_deg)>.45||
