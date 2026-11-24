@@ -78,6 +78,9 @@ async function proof(env,id,job){
      !["RASTER","CAMERA_RAW"].includes(String(qa.source_kind||""))||
      (qa.source_kind==="CAMERA_RAW"&&(
        qa.raw_decoder!=="rawpy-0.28.0/LibRaw"||
+       qa.qa_checks?.RAW_CAMERA_WB_APPLIED!=="PASS"||
+       !Array.isArray(qa.raw_camera_white_balance)||qa.raw_camera_white_balance.length<3||
+       qa.base_color_management?.status!=="CAMERA_WB_APPLIED"||
        !Number.isInteger(qa.source_preview_bytes)||qa.source_preview_bytes<10000||
        !SHA.test(String(qa.source_preview_sha256||""))
      ))||
