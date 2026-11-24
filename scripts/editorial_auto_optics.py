@@ -78,21 +78,41 @@ def _profile_for(meta):
     return None
 
 
-def _map_for(w, h, abc, zoom):
+def _map_for_block(w, h, abc, zoom, y0, y1):
     cx, cy = (w - 1) * 0.5, (h - 1) * 0.5
     unit = min(w, h) * 0.5
-    yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
+    yy, xx = np.mgrid[y0:y1, 0:w].astype(np.float32)
     u = (xx - cx) / (unit * zoom)
     v = (yy - cy) / (unit * zoom)
     r = np.sqrt(u * u + v * v)
-    a, b, c = abc
-    factor = 1 - a - b - c + c * r + b * r * r + a * r * r * r
-    derivative = 1 - a - b - c + 2 * c * r + 3 * b * r * r + 4 * a * r * r * r
+    a, b, cc = abc
+    factor = 1 - a - b - cc + cc * r + b * r * r + a * r * r * r
+    derivative = 1 - a - b - cc + 2 * cc * r + 3 * b * r * r + 4 * a * r * r * r
     mx = u * factor * unit + cx
     my = v * factor * unit + cy
     valid = (mx >= 0) & (mx <= w - 1) & (my >= 0) & (my <= h - 1)
     return mx, my, valid, float(np.min(derivative))
 
+
+def _coarse_validity(w, h, abc, zoom):
+    # Determine a safe zoom on a small grid; the chosen value is then verified
+    # exactly while processing full-resolution stripes.
+    sw, sh = min(w, 192), min(h, 128)
+    xs = np.linspace(0, w - 1, sw, dtype=np.float32)
+    ys = np.linspace(0, h - 1, sh, dtype=np.float32)
+    xx, yy = np.meshgrid(xs, ys)
+    cx, cy = (w - 1) * 0.5, (h - 1) * 0.5
+    unit = min(w, h) * 0.5
+    u = (xx - cx) / (unit * zoom)
+    v = (yy - cy) / (unit * zoom)
+    r = np.sqrt(u * u + v * v)
+    a, b, cc = abc
+    factor = 1 - a - b - cc + cc * r + b * r * r + a * r * r * r
+    derivative = 1 - a - b - cc + 2 * cc * r + 3 * b * r * r + 4 * a * r * r * r
+    mx = u * factor * unit + cx
+    my = v * factor * unit + cy
+    valid = (mx >= 0) & (mx <= w - 1) & (my >= 0) & (my <= h - 1)
+    return 1.0 - float(np.mean(valid)), float(np.min(derivative))
 
 def apply(rgb16, source_path: Path, source_kind: str):
     if not isinstance(rgb16, np.ndarray) or rgb16.dtype != np.uint16 or rgb16.ndim != 3 or rgb16.shape[2] != 3:
@@ -132,29 +152,46 @@ def apply(rgb16, source_path: Path, source_kind: str):
     h, w = rgb16.shape[:2]
     chosen = None
     for zoom in np.linspace(1.0, MAX_ZOOM, 18):
-        mx, my, valid, derivative = _map_for(w, h, profile["abc"], float(zoom))
+        invalid_coarse, derivative = _coarse_validity(w, h, profile["abc"], float(zoom))
         if derivative <= 0:
             evidence["reason"] = "OPTICS_PROFILE_NON_MONOTONIC"
             return rgb16, evidence
-        invalid = 1.0 - float(np.mean(valid))
-        if invalid <= 0.00002:
-            chosen = (float(zoom), mx, my, invalid, derivative)
+        if invalid_coarse <= 0.00002:
+            chosen = (float(zoom), derivative)
             break
     if chosen is None:
         evidence["reason"] = "OPTICS_SAFE_CROP_LIMIT_EXCEEDED"
         return rgb16, evidence
 
-    zoom, mx, my, invalid, derivative = chosen
+    zoom, derivative = chosen
     crop_fraction = 1.0 - 1.0 / (zoom * zoom)
     if crop_fraction > MAX_CROP_FRACTION:
         evidence["reason"] = "OPTICS_SAFE_CROP_LIMIT_EXCEEDED"
         return rgb16, evidence
 
-    corrected = cv2.remap(
-        rgb16, mx, my, interpolation=cv2.INTER_LINEAR,
-        borderMode=cv2.BORDER_CONSTANT, borderValue=(0, 0, 0)
-    )
-    changed = float(np.mean(np.abs(corrected.astype(np.int32) - rgb16.astype(np.int32))) / 65535.0)
+    corrected = np.empty_like(rgb16)
+    invalid_count = 0
+    total = h * w
+    min_derivative = derivative
+    stripe = 192
+    for y0 in range(0, h, stripe):
+        y1 = min(h, y0 + stripe)
+        mx, my, valid, local_derivative = _map_for_block(w, h, profile["abc"], zoom, y0, y1)
+        min_derivative = min(min_derivative, local_derivative)
+        invalid_count += int(valid.size - np.count_nonzero(valid))
+        corrected[y0:y1] = cv2.remap(
+            rgb16, mx, my, interpolation=cv2.INTER_LINEAR,
+            borderMode=cv2.BORDER_CONSTANT, borderValue=(0, 0, 0)
+        )
+    invalid = invalid_count / max(1, total)
+    if min_derivative <= 0 or invalid > 0.00002:
+        evidence["reason"] = "OPTICS_FULL_RES_VALIDATION_FAILED"
+        return rgb16, evidence
+    derivative = min_derivative
+    step=max(1,int(math.sqrt((h*w)/350000)))
+    changed = float(np.mean(
+        np.abs(corrected[::step,::step].astype(np.int32)-rgb16[::step,::step].astype(np.int32))
+    )/65535.0)
     if changed < 0.0005:
         evidence["status"] = "NO_CHANGE_NEEDED"
         evidence["reason"] = "PROFILE_CHANGE_BELOW_SIGNIFICANCE"
