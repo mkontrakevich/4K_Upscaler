@@ -255,7 +255,11 @@ function sourceVerification(job,a){
     q.width>=320&&q.height>=320;
   const autoLevelled=rasterOK&&checks.AUTO_GEOMETRY_CORRECTED==="PASS";
   const autoPerspective=rasterOK&&checks.AUTO_VERTICAL_PERSPECTIVE_CORRECTED==="PASS";
-  const autoOptics=rasterOK&&checks.AUTO_OPTICS_CORRECTED==="PASS";
+  const optics=q?.auto_optics_correction||null;
+  const distortion=optics?.distortion||null;
+  const ca=optics?.chromatic_aberration||null;
+  const vignette=optics?.vignetting||null;
+  const autoOptics=rasterOK&&checks.AUTO_LENS_DISTORTION_CORRECTED==="PASS";
   const geometryModified=rasterOK&&checks.GEOMETRY_TRANSFORM_EVIDENCED==="PASS"&&
     q.geometry==="CONTROLLED_PROJECTIVE_WARP";
   const geometryUnchanged=rasterOK&&checks.GEOMETRY_UNCHANGED==="PASS"&&
@@ -276,9 +280,20 @@ function sourceVerification(job,a){
     width:rasterOK?q.width:null,height:rasterOK?q.height:null,
     signal_bits:rasterOK?q.source_signal_bits:null,
     alpha_handling:rasterOK?(q.alpha_handling||"none"):null,
-    optical_correction:autoOptics?"PROFILE_APPLIED_PENDING_VISUAL_QA":
-      q?.auto_optics_correction?.status==="HOLD"?"HOLD_UNCALIBRATED":
-      q?.auto_optics_correction?.status==="NO_CHANGE_NEEDED"?"NO_CHANGE_NEEDED":"NOT_PERFORMED",
+    optical_profile:checks.AUTO_OPTICS_PROFILE_VERIFIED==="PASS"?"VERIFIED":
+      optics?"HOLD_PROFILE_NOT_VERIFIED":"NOT_PERFORMED",
+    optical_correction:distortion?.status==="APPLIED"?"PROFILE_APPLIED_PENDING_VISUAL_QA":
+      distortion?.status==="NO_CHANGE_NEEDED"?"NO_CHANGE_NEEDED":
+      distortion?.status==="HOLD"?"HOLD_UNCALIBRATED":"NOT_PERFORMED",
+    optical_correction_reason:distortion?.reason||null,
+    chromatic_aberration:ca?.status==="APPLIED"?"PROFILE_APPLIED_PENDING_VISUAL_QA":
+      ca?.status==="NO_CHANGE_NEEDED"?"NO_CHANGE_NEEDED":
+      ca?.status==="HOLD"?"HOLD":"NOT_PERFORMED",
+    chromatic_aberration_reason:ca?.reason||null,
+    vignetting:vignette?.status==="APPLIED"?"PROFILE_APPLIED_PENDING_VISUAL_QA":
+      vignette?.status==="NO_CHANGE_NEEDED"?"NO_CHANGE_NEEDED":
+      vignette?.status==="HOLD"?"HOLD":"NOT_PERFORMED",
+    vignetting_reason:vignette?.reason||null,
     perspective_correction:geometryModified?"CONTROLLED_PROJECTIVE_PENDING_VISUAL_QA":
       autoPerspective?"AUTO_VERTICAL_PERSPECTIVE_PENDING_VISUAL_QA":
       autoLevelled?"AUTO_CAMERA_ROLL_PENDING_VISUAL_QA":"NOT_PERFORMED",
