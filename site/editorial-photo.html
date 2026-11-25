@@ -144,8 +144,8 @@
     </section>
     <section class="panel">
       <h2>Новый SOURCE → TECH MASTER</h2>
-      <p class="muted">RAW: ARW / DNG / NEF / CR2 / CR3 / RAF / ORF / RW2 до 90 MiB. JPEG / PNG / WEBP — до 8 МБ. RAW проявляется в 16-bit через LibRaw без HDR и без генерации.</p>
-      <div class="fields"><input id="file" type="file" accept="image/jpeg,image/png,image/webp,.arw,.dng,.nef,.cr2,.cr3,.raf,.orf,.rw2"><button id="upload" class="btn" type="button">Загрузить оригинал</button></div>
+      <p class="muted">RAW: ARW / DNG / NEF / NRW / CR2 / CR3 / RAF / ORF / RW2 / PEF / SRW / 3FR / IIQ / X3F до 90 MiB. JPEG / PNG / WEBP — до 8 МБ. RAW проявляется в 16-bit через LibRaw без HDR и без генерации.</p>
+      <div class="fields"><input id="file" type="file" accept="image/jpeg,image/png,image/webp,.arw,.dng,.nef,.nrw,.cr2,.cr3,.raf,.orf,.rw2,.pef,.srw,.3fr,.iiq,.x3f"><button id="upload" class="btn" type="button">Загрузить оригинал</button></div>
       <p id="upload-result" class="key"></p>
       <p class="muted">Загрузка не запускает техническую коррекцию. Для RAW извлекается только превью без HDR и генерации. Полноценный анализ включается отдельно по кнопке.</p>
     </section>
@@ -391,7 +391,7 @@
 <script src="/editorial-split.js"></script><script src="/editorial-geometry-preview.js"></script>
 <script>
 const base="/api/editorial";let session=null,sourceURL=null;
-const RAW_EXTENSIONS=new Set(["arw","dng","nef","cr2","cr3","raf","orf","rw2"]);
+const RAW_EXTENSIONS=new Set(["arw","dng","nef","nrw","cr2","cr3","raf","orf","rw2","pef","srw","3fr","iiq","x3f"]);
 const hexBytes=buffer=>[...new Uint8Array(buffer)].map(v=>v.toString(16).padStart(2,"0")).join("");
 const fileExt=file=>String(file?.name||"").split(".").pop().toLowerCase();
 let intakeId="",intakeProof=null,intakePoll=null,intakeBusy=false,intakeState=null;
