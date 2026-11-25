@@ -272,7 +272,8 @@ def prepare(source: Path, out: Path, job_id: str, expected_sha: str, correction_
              correction["geometry_transform"] == "CONTROLLED_PROJECTIVE_WARP" else
              "AUTO_VERTICAL_PERSPECTIVE_CORRECTION" if auto_perspective and auto_perspective.get("status")=="APPLIED" else
              "AUTO_CAMERA_ROLL_CORRECTION" if auto_geometry and auto_geometry.get("status")=="APPLIED" else
-             "AUTO_LENS_PROFILE_CORRECTION" if auto_optics and auto_optics.get("status")=="APPLIED"
+             "AUTO_LENS_PROFILE_CORRECTION" if auto_optics and
+                (auto_optics.get("distortion") or {}).get("status")=="APPLIED"
              else "IDENTITY_NO_CORRECTION"),
         "geometry_visual_review": "PENDING",
         "human_visual_QA": "PENDING",
@@ -285,12 +286,12 @@ def prepare(source: Path, out: Path, job_id: str, expected_sha: str, correction_
             "HDR_ABSENT": "PASS",
             "GEOMETRY_UNCHANGED": "NOT_APPLICABLE" if
                (correction and correction["geometry_transform"]=="CONTROLLED_PROJECTIVE_WARP") or
-               (auto_optics and auto_optics.get("status")=="APPLIED") or
+               (auto_optics and (auto_optics.get("distortion") or {}).get("status")=="APPLIED") or
                (auto_geometry and auto_geometry.get("status")=="APPLIED") or
                (auto_perspective and auto_perspective.get("status")=="APPLIED") else "PASS",
             "GEOMETRY_TRANSFORM_EVIDENCED": "PASS" if
                (correction and correction["geometry_transform"]=="CONTROLLED_PROJECTIVE_WARP") or
-               (auto_optics and auto_optics.get("status")=="APPLIED") or
+               (auto_optics and (auto_optics.get("distortion") or {}).get("status")=="APPLIED") or
                (auto_geometry and auto_geometry.get("status")=="APPLIED") or
                (auto_perspective and auto_perspective.get("status")=="APPLIED") else "NOT_APPLICABLE",
             "TIFF_READBACK": "PASS",
@@ -298,10 +299,25 @@ def prepare(source: Path, out: Path, job_id: str, expected_sha: str, correction_
             "RAW_CAMERA_WB_APPLIED": "PASS" if source_kind == "CAMERA_RAW" and
                 isinstance(raw_camera_wb, list) and len(raw_camera_wb) >= 3 else
                 "NOT_APPLICABLE" if source_kind != "CAMERA_RAW" else "HOLD",
+            "AUTO_OPTICS_PROFILE_VERIFIED":
+                "PASS" if auto_optics and auto_optics.get("profile_verified") is True else
+                "HOLD" if auto_optics else "NOT_APPLICABLE",
             "AUTO_OPTICS_CORRECTED":
-                "PASS" if auto_optics and auto_optics.get("status")=="APPLIED" else
-                "NO_CHANGE_NEEDED" if auto_optics and auto_optics.get("status")=="NO_CHANGE_NEEDED" else
-                "HOLD" if auto_optics and auto_optics.get("status")=="HOLD" else "NOT_APPLICABLE",
+                "PASS" if auto_optics and (auto_optics.get("distortion") or {}).get("status")=="APPLIED" else
+                "NO_CHANGE_NEEDED" if auto_optics and (auto_optics.get("distortion") or {}).get("status")=="NO_CHANGE_NEEDED" else
+                "HOLD" if auto_optics and (auto_optics.get("distortion") or {}).get("status")=="HOLD" else "NOT_APPLICABLE",
+            "AUTO_LENS_DISTORTION_CORRECTED":
+                "PASS" if auto_optics and (auto_optics.get("distortion") or {}).get("status")=="APPLIED" else
+                "NO_CHANGE_NEEDED" if auto_optics and (auto_optics.get("distortion") or {}).get("status")=="NO_CHANGE_NEEDED" else
+                "HOLD" if auto_optics and (auto_optics.get("distortion") or {}).get("status")=="HOLD" else "NOT_APPLICABLE",
+            "AUTO_CA_CORRECTED":
+                "PASS" if auto_optics and (auto_optics.get("chromatic_aberration") or {}).get("status")=="APPLIED" else
+                "NO_CHANGE_NEEDED" if auto_optics and (auto_optics.get("chromatic_aberration") or {}).get("status")=="NO_CHANGE_NEEDED" else
+                "HOLD" if auto_optics and (auto_optics.get("chromatic_aberration") or {}).get("status")=="HOLD" else "NOT_APPLICABLE",
+            "AUTO_VIGNETTING_CORRECTED":
+                "PASS" if auto_optics and (auto_optics.get("vignetting") or {}).get("status")=="APPLIED" else
+                "NO_CHANGE_NEEDED" if auto_optics and (auto_optics.get("vignetting") or {}).get("status")=="NO_CHANGE_NEEDED" else
+                "HOLD" if auto_optics and (auto_optics.get("vignetting") or {}).get("status")=="HOLD" else "NOT_APPLICABLE",
             "AUTO_GEOMETRY_ANALYZED": "PASS" if scene_analysis["status"]=="OBSERVATION_ONLY" else "HOLD",
             "AUTO_GEOMETRY_CORRECTED":
                 "PASS" if auto_geometry and auto_geometry.get("status")=="APPLIED" else
