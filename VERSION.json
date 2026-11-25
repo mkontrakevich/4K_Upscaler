@@ -207,5 +207,39 @@
   "acceptance_suite": "MG4K V8 Acceptance",
   "acceptance_status": "passed",
   "acceptance_date": "2026-10-11",
-  "acceptance_report": ".mg4k-v8-acceptance.json"
+  "acceptance_report": ".mg4k-v8-acceptance.json",
+  "tech_master_release_tag": "TECH_MASTER_UNIVERSAL_OPTICS_V2",
+  "tech_master_release_date": "2026-11-25",
+  "tech_master_optics_profile_backend": "Lensfun 1.18.0",
+  "tech_master_optics_stages": [
+    "distortion",
+    "lateral_chromatic_aberration",
+    "vignetting",
+    "camera_geometry",
+    "exposure",
+    "color"
+  ],
+  "tech_master_raw_formats": [
+    "ARW",
+    "DNG",
+    "NEF",
+    "NRW",
+    "CR2",
+    "CR3",
+    "RAF",
+    "ORF",
+    "RW2",
+    "PEF",
+    "SRW",
+    "3FR",
+    "IIQ",
+    "X3F"
+  ],
+  "tech_master_rendered_formats": [
+    "JPEG",
+    "PNG",
+    "WEBP"
+  ],
+  "tech_master_hdr": false,
+  "tech_master_generative_processing": false
 }
