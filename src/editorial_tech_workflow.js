@@ -66,10 +66,14 @@ async function proof(env,id,job){
   const geometryPlan=job.correction_plan?.type==="GEOMETRY_FACADE_QUAD_V1";
   const ao=qa.auto_optics_correction,ag=qa.auto_geometry_correction;
   const ap=qa.auto_vertical_perspective_correction,ph=qa.auto_photometric_correction;
-  const autoOptics=!job.correction_plan&&ao?.status==="APPLIED";
+  const opticsDistortion=ao?.distortion, opticsCA=ao?.chromatic_aberration, opticsVignette=ao?.vignetting;
+  const autoOptics=!job.correction_plan&&opticsDistortion?.status==="APPLIED";
   const autoRoll=!job.correction_plan&&ag?.status==="APPLIED";
   const autoPerspective=!job.correction_plan&&ap?.status==="APPLIED";
   const autoSpatial=autoOptics||autoRoll||autoPerspective;
+  const opticsStage=s=>s&&["APPLIED","NO_CHANGE_NEEDED","HOLD"].includes(String(s.status||""))&&
+    s.HDR_applied===false&&s.generative_processing===false;
+  const opticsQa=s=>s?.status==="APPLIED"?"PASS":s?.status==="NO_CHANGE_NEEDED"?"NO_CHANGE_NEEDED":"HOLD";
   if(qa.job_id!==id||qa.source_sha256!==job.source_sha256||
      qa.technical_status!=="TECHNICAL_QA_PASS"||qa.master_bit_depth!==16||
      qa.HDR_applied!==false||qa.virtual_exposures!==false||qa.local_HDR!==false||
@@ -97,13 +101,33 @@ async function proof(env,id,job){
         qa.geometry!=="IDENTITY_NO_CORRECTION"))||
      (!job.correction_plan&&qa.technical_version!=="AUTO_TECH_MASTER_V2")||
      (!job.correction_plan&&(!ao||!ag||!ap||!ph))||
-     (autoOptics&&(
-       qa.qa_checks?.AUTO_OPTICS_CORRECTED!=="PASS"||
-       ao?.engine!=="AUTO_PROFILED_OPTICS_V1"||ao?.HDR_applied!==false||
-       ao?.generative_processing!==false||!ao?.profile_id||
-       !Number.isFinite(ao?.crop_area_fraction)||ao.crop_area_fraction<0||ao.crop_area_fraction>.14||
-       !Number.isFinite(ao?.invalid_source_fraction)||ao.invalid_source_fraction>.00002||
-       !Number.isFinite(ao?.changed_mean_absolute_fraction)||ao.changed_mean_absolute_fraction<.0005
+     (!job.correction_plan&&(
+       ao?.engine!=="AUTO_PROFILED_OPTICS_V2"||ao?.HDR_applied!==false||
+       ao?.generative_processing!==false||
+       !opticsStage(opticsDistortion)||!opticsStage(opticsCA)||!opticsStage(opticsVignette)||
+       qa.qa_checks?.AUTO_LENS_DISTORTION_CORRECTED!==opticsQa(opticsDistortion)||
+       qa.qa_checks?.AUTO_CA_CORRECTED!==opticsQa(opticsCA)||
+       qa.qa_checks?.AUTO_VIGNETTING_CORRECTED!==opticsQa(opticsVignette)||
+       qa.qa_checks?.AUTO_OPTICS_CORRECTED!==opticsQa(opticsDistortion)||
+       qa.qa_checks?.AUTO_OPTICS_PROFILE_VERIFIED!==(ao?.profile_verified===true?"PASS":"HOLD")||
+       ((["APPLIED","NO_CHANGE_NEEDED"].includes(opticsDistortion?.status)||
+          ["APPLIED","NO_CHANGE_NEEDED"].includes(opticsCA?.status)||
+          ["APPLIED","NO_CHANGE_NEEDED"].includes(opticsVignette?.status))&&ao?.profile_verified!==true)||
+       (opticsDistortion?.status==="APPLIED"&&(
+          !Number.isFinite(opticsDistortion?.crop_area_fraction)||
+          opticsDistortion.crop_area_fraction<0||opticsDistortion.crop_area_fraction>.20
+       ))||
+       (opticsCA?.status==="APPLIED"&&(
+          !Number.isFinite(opticsCA?.shift_p9999_px)||
+          !Number.isFinite(opticsCA?.invalid_coordinate_fraction)||
+          opticsCA.invalid_coordinate_fraction>.002
+       ))||
+       (opticsVignette?.status==="APPLIED"&&(
+          !Number.isFinite(opticsVignette?.gain_p999)||
+          opticsVignette.gain_p999>1.55||
+          !Number.isFinite(opticsVignette?.clipped_pixel_fraction)||
+          opticsVignette.clipped_pixel_fraction>.006
+       ))
      ))||
      (autoRoll&&(
        qa.qa_checks?.AUTO_GEOMETRY_CORRECTED!=="PASS"||
