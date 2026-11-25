@@ -62,6 +62,18 @@ def _exactish(a, b):
     return a == b or (min(len(a), len(b)) >= 8 and (a in b or b in a))
 
 
+def _model_tokens(value):
+    return [x for x in re.findall(r"[a-z]+|\d+(?:\.\d+)?", str(value or "").casefold())
+            if x not in {"lens", "the", "for"}]
+
+
+def _token_similarity(a, b):
+    aa, bb = set(_model_tokens(a)), set(_model_tokens(b))
+    if not aa or not bb:
+        return 0.0
+    return len(aa & bb) / max(1, len(aa | bb))
+
+
 def _stage(status="HOLD", reason=None, **extra):
     return {
         "status": status,
@@ -93,14 +105,26 @@ def _profile_for(meta):
 def _best_unique(items, expected):
     if not items:
         return None
-    matches = [x for x in items if _exactish(getattr(x, "model", ""), expected)]
-    if not matches:
+    ranked = sorted(items, key=lambda x: int(getattr(x, "score", 0) or 0), reverse=True)
+
+    # Prefer canonical/exact model equivalence.
+    exact = [x for x in ranked if _exactish(getattr(x, "model", ""), expected)]
+    if exact:
+        if len(exact) > 1 and int(getattr(exact[0], "score", 0) or 0) == int(getattr(exact[1], "score", 0) or 0):
+            return None
+        return exact[0]
+
+    # EXIF and Lensfun frequently differ only by vendor suffixes (AF vs AF-D,
+    # punctuation, "DG DN", etc.). Lensfun has already filtered the candidate
+    # list by camera mount/model query; accept only a uniquely best candidate
+    # whose model tokens still overlap strongly. Ties remain HOLD.
+    top = ranked[0]
+    top_score = int(getattr(top, "score", 0) or 0)
+    second_score = int(getattr(ranked[1], "score", 0) or 0) if len(ranked) > 1 else -1
+    similarity = _token_similarity(getattr(top, "model", ""), expected)
+    if top_score <= second_score or similarity < 0.60:
         return None
-    matches.sort(key=lambda x: int(getattr(x, "score", 0) or 0), reverse=True)
-    if len(matches) > 1 and int(getattr(matches[0], "score", 0) or 0) == int(getattr(matches[1], "score", 0) or 0):
-        # Same-score ambiguity must be resolved by metadata/user, never guessed.
-        return None
-    return matches[0]
+    return top
 
 
 def _find_lensfun(meta):
