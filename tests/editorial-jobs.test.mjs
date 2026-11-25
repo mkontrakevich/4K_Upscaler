@@ -83,8 +83,13 @@ async function tech(h,job){
    technical_version:job.correction_plan?(geom?"CONTROLLED_GEOMETRY_RECTIFICATION_V1":"DETERMINISTIC_PHOTOMETRIC_REWORK_V1"):"AUTO_TECH_MASTER_V2",
    geometry:geom?"CONTROLLED_PROJECTIVE_WARP":"IDENTITY_NO_CORRECTION",
    auto_optics_correction:job.correction_plan?null:{
-     schema:1,engine:"AUTO_PROFILED_OPTICS_V1",status:"HOLD",
-     reason:"OPTICS_METADATA_NOT_TRUSTED_FOR_RASTER_SOURCE",HDR_applied:false,generative_processing:false
+     schema:2,engine:"AUTO_PROFILED_OPTICS_V2",status:"HOLD",completeness:"NONE",
+     reason:"OPTICS_METADATA_INCOMPLETE",profile_verified:false,profile_id:null,
+     HDR_applied:false,generative_processing:false,
+     distortion:{status:"HOLD",reason:"OPTICS_METADATA_INCOMPLETE",profile_verified:false,HDR_applied:false,generative_processing:false},
+     chromatic_aberration:{status:"HOLD",reason:"OPTICS_METADATA_INCOMPLETE",profile_verified:false,HDR_applied:false,generative_processing:false},
+     vignetting:{status:"HOLD",reason:"OPTICS_METADATA_INCOMPLETE",profile_verified:false,HDR_applied:false,generative_processing:false},
+     crop_area_fraction:0,invalid_source_fraction:0,changed_mean_absolute_fraction:0
    },
    auto_geometry_correction:job.correction_plan?null:{
      schema:1,engine:"AUTO_CAMERA_ROLL_SAFE_CROP_V1",status:"NO_CHANGE_NEEDED",
@@ -104,7 +109,11 @@ async function tech(h,job){
      GEOMETRY_UNCHANGED:geom?"NOT_APPLICABLE":"PASS",
      GEOMETRY_TRANSFORM_EVIDENCED:geom?"PASS":"NOT_APPLICABLE",
      TIFF_READBACK:"PASS",
+     AUTO_OPTICS_PROFILE_VERIFIED:geom?"NOT_APPLICABLE":"HOLD",
      AUTO_OPTICS_CORRECTED:geom?"NOT_APPLICABLE":"HOLD",
+     AUTO_LENS_DISTORTION_CORRECTED:geom?"NOT_APPLICABLE":"HOLD",
+     AUTO_CA_CORRECTED:geom?"NOT_APPLICABLE":"HOLD",
+     AUTO_VIGNETTING_CORRECTED:geom?"NOT_APPLICABLE":"HOLD",
      AUTO_GEOMETRY_CORRECTED:geom?"NOT_APPLICABLE":"NO_CHANGE_NEEDED",
      AUTO_VERTICAL_PERSPECTIVE_CORRECTED:geom?"NOT_APPLICABLE":"HOLD",
      AUTO_EXPOSURE_CORRECTED:geom?"NOT_APPLICABLE":"NO_CHANGE_NEEDED",
