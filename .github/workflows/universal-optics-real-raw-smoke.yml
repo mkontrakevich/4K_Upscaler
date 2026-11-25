@@ -65,9 +65,15 @@ jobs:
           assert o['engine']=='AUTO_PROFILED_OPTICS_V2'
           assert o['profile_verified'] is True,o
           assert o['profile_backend']=='LENSFUN_BUNDLED_DATABASE',o
-          assert o['distortion']['status'] in ('APPLIED','NO_CHANGE_NEEDED'),o['distortion']
-          assert o['chromatic_aberration']['status'] in ('APPLIED','NO_CHANGE_NEEDED','HOLD')
-          assert o['vignetting']['status'] in ('APPLIED','NO_CHANGE_NEEDED','HOLD')
+          assert o['distortion']['status']=='APPLIED',o['distortion']
+          assert o['chromatic_aberration']['status']=='APPLIED',o['chromatic_aberration']
+          assert o['vignetting']['status']=='APPLIED',o['vignetting']
+          assert o['completeness']=='COMPLETE',o
+          assert q['qa_checks']['AUTO_LENS_DISTORTION_CORRECTED']=='PASS'
+          assert q['qa_checks']['AUTO_CA_CORRECTED']=='PASS'
+          assert q['qa_checks']['AUTO_VIGNETTING_CORRECTED']=='PASS'
+          assert o['vignetting']['gain_p999']<=1.55
+          assert o['vignetting']['clipped_pixel_fraction']<=.006
           assert o['HDR_applied'] is False and o['generative_processing'] is False
           print('UNIVERSAL_OPTICS_REAL_RAW_PASS')
           PY
