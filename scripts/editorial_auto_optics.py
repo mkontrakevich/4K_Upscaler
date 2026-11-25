@@ -227,30 +227,65 @@ def _apply_vignetting(rgb16, cam, lens, meta):
         if not applied:
             return rgb16, _stage(reason="PROFILE_VIGNETTING_NOT_APPLICABLE_AT_CAPTURE_SETTINGS",
                                  profile_verified=True)
-        safe = before > 0.015
-        ratios = work[safe] / np.maximum(before[safe], 1e-6)
-        gain_p999 = float(np.percentile(ratios, 99.9)) if ratios.size else 1.0
-        clipped = float(np.mean(np.any(work > 1.0, axis=2)))
-        if gain_p999 > MAX_VIGNETTE_GAIN or clipped > MAX_VIGNETTE_CLIPPED_FRACTION:
+
+        # Lensfun can legitimately request very strong corner gain at wide
+        # apertures. TECH MASTER must correct vignetting without amplifying
+        # shadow noise or highlights blindly. Convert the calibrated result
+        # into a multiplicative gain map, then reduce only its magnitude until
+        # both the gain and clipping safety limits pass.
+        valid = before > 0.003
+        gain = np.ones_like(work, dtype=np.float32)
+        gain[valid] = work[valid] / np.maximum(before[valid], 1e-6)
+        gain = np.nan_to_num(gain, nan=1.0, posinf=MAX_VIGNETTE_GAIN * 4, neginf=1.0)
+        positive = gain[before > 0.015]
+        requested_gain_p999 = float(np.percentile(positive, 99.9)) if positive.size else 1.0
+
+        def bounded_candidate(cap):
+            bounded_gain = np.clip(gain, 0.85, float(cap))
+            candidate = before * bounded_gain
+            clip = float(np.mean(np.any(candidate > 1.0, axis=2)))
+            return candidate, clip
+
+        cap = min(MAX_VIGNETTE_GAIN, max(1.0, requested_gain_p999))
+        candidate, clipped = bounded_candidate(cap)
+        if clipped > MAX_VIGNETTE_CLIPPED_FRACTION:
+            lo, hi = 1.0, cap
+            for _ in range(14):
+                mid = (lo + hi) * 0.5
+                test, test_clip = bounded_candidate(mid)
+                if test_clip <= MAX_VIGNETTE_CLIPPED_FRACTION:
+                    lo = mid
+                    candidate, clipped = test, test_clip
+                else:
+                    hi = mid
+            cap = lo
+
+        if cap < 1.015:
             return rgb16, _stage(
-                reason="VIGNETTING_SAFETY_LIMIT",
+                reason="VIGNETTING_NO_SAFE_CORRECTION_HEADROOM",
                 profile_verified=True,
-                gain_p999=round(gain_p999, 6),
+                requested_gain_p999=round(requested_gain_p999, 6),
+                applied_gain_cap=round(cap, 6),
                 clipped_pixel_fraction=round(clipped, 7),
             )
-        out = np.uint16(np.rint(np.clip(work, 0.0, 1.0) * 65535.0))
+
+        out = np.uint16(np.rint(np.clip(candidate, 0.0, 1.0) * 65535.0))
         step = max(1, int(math.sqrt((out.shape[0] * out.shape[1]) / 350000)))
         changed = float(np.mean(np.abs(
             out[::step, ::step].astype(np.int32) - rgb16[::step, ::step].astype(np.int32)
         )) / 65535.0)
+        status = "APPLIED" if changed >= 0.00035 else "NO_CHANGE_NEEDED"
         return out, _stage(
-            status="APPLIED" if changed >= 0.00035 else "NO_CHANGE_NEEDED",
-            reason=None if changed >= 0.00035 else "PROFILE_CHANGE_BELOW_SIGNIFICANCE",
+            status=status,
+            reason=None if status=="APPLIED" else "PROFILE_CHANGE_BELOW_SIGNIFICANCE",
             profile_verified=True,
             aperture=round(float(aperture), 5),
             focus_distance_m=round(float(distance), 4),
             focus_distance_source=distance_source,
-            gain_p999=round(gain_p999, 6),
+            requested_gain_p999=round(requested_gain_p999, 6),
+            gain_p999=round(min(requested_gain_p999, cap), 6),
+            applied_gain_cap=round(cap, 6),
+            safety_limited=bool(requested_gain_p999 > cap + 1e-6),
             clipped_pixel_fraction=round(clipped, 7),
             changed_mean_absolute_fraction=round(changed, 7),
         )
