@@ -1,0 +1,51 @@
+{
+  "schema": 1,
+  "test": "UNIVERSAL_OPTICS_REAL_RAW",
+  "verified_at": "2026-11-25T13:07:18Z",
+  "github_run_id": 45620243124,
+  "github_job_id": 139226126640,
+  "source": "marins-tropicana-photo-originals/originals/DSC09818.ARW",
+  "source_sha256": "1b4344f4b8ca629830254850fbcbaf2931c83c00a158ab87d84e5ee7722046d5",
+  "source_format": "ARW",
+  "camera": "Sony ILCE-7M4",
+  "lens": "Sony FE 16-35mm f/2.8 GM",
+  "focal_mm": 16,
+  "aperture": 2.8,
+  "profile_backend": "Lensfun bundled database via lensfunpy 1.18.0",
+  "profile_calibrations": {
+    "distortion": 20,
+    "tca": 16,
+    "vignetting": 50
+  },
+  "distortion": {
+    "status": "APPLIED",
+    "crop_area_fraction": 0,
+    "invalid_coordinate_fraction": 0,
+    "changed_mean_absolute_fraction": 0.002763
+  },
+  "chromatic_aberration": {
+    "status": "APPLIED",
+    "invalid_coordinate_fraction": 0.00064,
+    "shift_p9999_px": 0.9715,
+    "changed_mean_absolute_fraction": 0.0002858
+  },
+  "vignetting": {
+    "status": "APPLIED",
+    "requested_gain_p999": 5.34088,
+    "applied_gain_cap": 1.55,
+    "safety_limited": true,
+    "clipped_pixel_fraction": 0.0003278,
+    "changed_mean_absolute_fraction": 0.0009059
+  },
+  "completeness": "COMPLETE",
+  "qa_checks": {
+    "AUTO_OPTICS_PROFILE_VERIFIED": "PASS",
+    "AUTO_LENS_DISTORTION_CORRECTED": "PASS",
+    "AUTO_CA_CORRECTED": "PASS",
+    "AUTO_VIGNETTING_CORRECTED": "PASS"
+  },
+  "HDR_applied": false,
+  "generative_processing": false,
+  "human_visual_QA": "PENDING",
+  "result": "PASS"
+}
