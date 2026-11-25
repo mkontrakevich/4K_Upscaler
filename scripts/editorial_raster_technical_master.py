@@ -101,6 +101,8 @@ def prepare(source: Path, out: Path, job_id: str, expected_sha: str, correction_
     if width < 320 or height < 320 or width * height > 80_000_000:
         raise ValueError("invalid_source_dimensions")
     source_preview_rgb16 = rgb16.copy() if source_kind == "CAMERA_RAW" else None
+    from editorial_source_metadata import extract_source_metadata
+    source_metadata = extract_source_metadata(source, source_kind)
     correction = None
     auto_optics = None
     auto_geometry = None
@@ -113,7 +115,7 @@ def prepare(source: Path, out: Path, job_id: str, expected_sha: str, correction_
     if correction_plan is None:
         try:
             from editorial_auto_optics import apply as auto_optics_apply
-            rgb16, auto_optics = auto_optics_apply(rgb16, source, source_kind)
+            rgb16, auto_optics = auto_optics_apply(rgb16, source, source_kind, source_metadata)
         except Exception as error:
             auto_optics = {
                 "schema":1, "engine":"AUTO_PROFILED_OPTICS_V1", "status":"HOLD",
@@ -222,6 +224,7 @@ def prepare(source: Path, out: Path, job_id: str, expected_sha: str, correction_
         "job_id": job_id,
         "source_sha256": expected_sha.lower(),
         "source_kind": source_kind,
+        "source_metadata": source_metadata,
         "source_signal_bits": signal_bits,
         "master_bit_depth": 16,
         "master_container_note": (
