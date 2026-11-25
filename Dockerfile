@@ -27,6 +27,7 @@ RUN python -m py_compile \
       /app/cloud_processor_service.py \
       /app/editorial_tech_service.py \
       /app/scripts/editorial_raster_technical_master.py \
+      /app/scripts/editorial_source_metadata.py \
       /app/scripts/editorial_auto_optics.py \
       /app/scripts/editorial_auto_perspective_analysis.py \
       /app/scripts/editorial_auto_roll_correction.py \

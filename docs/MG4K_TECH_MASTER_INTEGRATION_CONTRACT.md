@@ -27,6 +27,24 @@ Current TECH MASTER intake supports two truthful source classes:
 
 Large RAW uploads use a separate binary streaming path into R2 and are streamed from R2 to the isolated TECH container. They must not be buffered as a normal multipart image upload.
 
+### Universal optical profile contract
+
+Optical correction is selected from camera/lens metadata, not from the file extension.
+
+The current intake recognizes camera RAW families including ARW, DNG, NEF/NRW, CR2/CR3, RAF, ORF, RW2, PEF, SRW, 3FR, IIQ and X3F. Rendered JPEG/PNG/WebP sources remain supported.
+
+TECH MASTER uses the bundled Lensfun profile database when camera, lens and focal metadata resolve to one verified profile. Optical stages are independent:
+
+- lens distortion;
+- lateral chromatic aberration (TCA);
+- vignetting.
+
+For linear camera RAW, all three calibrated stages may run. For rendered nonlinear JPEG/PNG/WebP, profile-backed geometric distortion may run when EXIF is trustworthy, but TCA and vignetting remain HOLD because applying their linear-domain calibration after rendering would be technically unsafe.
+
+A missing or ambiguous profile never triggers guessed coefficients. The corresponding stage is HOLD.
+
+Profile vignetting is safety-bounded: the calibrated gain is reduced when necessary to stay within the configured amplification and highlight-clipping limits. This is recorded in QA evidence and still requires human visual review.
+
 ## Stage 2 — TECH MASTER
 
 Required properties:

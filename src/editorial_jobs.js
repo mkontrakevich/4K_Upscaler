@@ -59,10 +59,14 @@ async function verifiedTech(env,job) {
   const geom=job.correction_plan?.type==="GEOMETRY_FACADE_QUAD_V1";
   const ao=q.auto_optics_correction,ag=q.auto_geometry_correction;
   const ap=q.auto_vertical_perspective_correction,ph=q.auto_photometric_correction;
-  const autoOptics=!job.correction_plan&&ao?.status==="APPLIED";
+  const opticsDistortion=ao?.distortion, opticsCA=ao?.chromatic_aberration, opticsVignette=ao?.vignetting;
+  const autoOptics=!job.correction_plan&&opticsDistortion?.status==="APPLIED";
   const autoRoll=!job.correction_plan&&ag?.status==="APPLIED";
   const autoPerspective=!job.correction_plan&&ap?.status==="APPLIED";
   const autoSpatial=autoOptics||autoRoll||autoPerspective;
+  const opticsStage=s=>s&&["APPLIED","NO_CHANGE_NEEDED","HOLD"].includes(String(s.status||""))&&
+    s.HDR_applied===false&&s.generative_processing===false;
+  const opticsQa=s=>s?.status==="APPLIED"?"PASS":s?.status==="NO_CHANGE_NEEDED"?"NO_CHANGE_NEEDED":"HOLD";
   if(q.job_id!==job.job_id||q.source_sha256!==job.source_sha256||
      q.technical_status!=="TECHNICAL_QA_PASS"||q.HDR_applied!==false||
      q.virtual_exposures!==false||q.local_HDR!==false||
@@ -86,13 +90,33 @@ async function verifiedTech(env,job) {
        q.qa_checks?.GEOMETRY_UNCHANGED!=="PASS")||
      (!job.correction_plan&&q.technical_version!=="AUTO_TECH_MASTER_V2")||
      (!job.correction_plan&&(!ao||!ag||!ap||!ph))||
-     (autoOptics&&(
-       q.qa_checks?.AUTO_OPTICS_CORRECTED!=="PASS"||
-       ao?.engine!=="AUTO_PROFILED_OPTICS_V1"||ao?.HDR_applied!==false||
-       ao?.generative_processing!==false||!ao?.profile_id||
-       !Number.isFinite(ao?.crop_area_fraction)||ao.crop_area_fraction<0||ao.crop_area_fraction>.14||
-       !Number.isFinite(ao?.invalid_source_fraction)||ao.invalid_source_fraction>.00002||
-       !Number.isFinite(ao?.changed_mean_absolute_fraction)||ao.changed_mean_absolute_fraction<.0005
+     (!job.correction_plan&&(
+       ao?.engine!=="AUTO_PROFILED_OPTICS_V2"||ao?.HDR_applied!==false||
+       ao?.generative_processing!==false||
+       !opticsStage(opticsDistortion)||!opticsStage(opticsCA)||!opticsStage(opticsVignette)||
+       q.qa_checks?.AUTO_LENS_DISTORTION_CORRECTED!==opticsQa(opticsDistortion)||
+       q.qa_checks?.AUTO_CA_CORRECTED!==opticsQa(opticsCA)||
+       q.qa_checks?.AUTO_VIGNETTING_CORRECTED!==opticsQa(opticsVignette)||
+       q.qa_checks?.AUTO_OPTICS_CORRECTED!==opticsQa(opticsDistortion)||
+       q.qa_checks?.AUTO_OPTICS_PROFILE_VERIFIED!==(ao?.profile_verified===true?"PASS":"HOLD")||
+       ((["APPLIED","NO_CHANGE_NEEDED"].includes(opticsDistortion?.status)||
+          ["APPLIED","NO_CHANGE_NEEDED"].includes(opticsCA?.status)||
+          ["APPLIED","NO_CHANGE_NEEDED"].includes(opticsVignette?.status))&&ao?.profile_verified!==true)||
+       (opticsDistortion?.status==="APPLIED"&&(
+          !Number.isFinite(opticsDistortion?.crop_area_fraction)||
+          opticsDistortion.crop_area_fraction<0||opticsDistortion.crop_area_fraction>.20
+       ))||
+       (opticsCA?.status==="APPLIED"&&(
+          !Number.isFinite(opticsCA?.shift_p9999_px)||
+          !Number.isFinite(opticsCA?.invalid_coordinate_fraction)||
+          opticsCA.invalid_coordinate_fraction>.002
+       ))||
+       (opticsVignette?.status==="APPLIED"&&(
+          !Number.isFinite(opticsVignette?.gain_p999)||
+          opticsVignette.gain_p999>1.55||
+          !Number.isFinite(opticsVignette?.clipped_pixel_fraction)||
+          opticsVignette.clipped_pixel_fraction>.006
+       ))
      ))||
      (autoRoll&&(
        q.qa_checks?.AUTO_GEOMETRY_CORRECTED!=="PASS"||
@@ -231,7 +255,11 @@ function sourceVerification(job,a){
     q.width>=320&&q.height>=320;
   const autoLevelled=rasterOK&&checks.AUTO_GEOMETRY_CORRECTED==="PASS";
   const autoPerspective=rasterOK&&checks.AUTO_VERTICAL_PERSPECTIVE_CORRECTED==="PASS";
-  const autoOptics=rasterOK&&checks.AUTO_OPTICS_CORRECTED==="PASS";
+  const optics=q?.auto_optics_correction||null;
+  const distortion=optics?.distortion||null;
+  const ca=optics?.chromatic_aberration||null;
+  const vignette=optics?.vignetting||null;
+  const autoOptics=rasterOK&&checks.AUTO_LENS_DISTORTION_CORRECTED==="PASS";
   const geometryModified=rasterOK&&checks.GEOMETRY_TRANSFORM_EVIDENCED==="PASS"&&
     q.geometry==="CONTROLLED_PROJECTIVE_WARP";
   const geometryUnchanged=rasterOK&&checks.GEOMETRY_UNCHANGED==="PASS"&&
@@ -252,9 +280,20 @@ function sourceVerification(job,a){
     width:rasterOK?q.width:null,height:rasterOK?q.height:null,
     signal_bits:rasterOK?q.source_signal_bits:null,
     alpha_handling:rasterOK?(q.alpha_handling||"none"):null,
-    optical_correction:autoOptics?"PROFILE_APPLIED_PENDING_VISUAL_QA":
-      q?.auto_optics_correction?.status==="HOLD"?"HOLD_UNCALIBRATED":
-      q?.auto_optics_correction?.status==="NO_CHANGE_NEEDED"?"NO_CHANGE_NEEDED":"NOT_PERFORMED",
+    optical_profile:checks.AUTO_OPTICS_PROFILE_VERIFIED==="PASS"?"VERIFIED":
+      optics?"HOLD_PROFILE_NOT_VERIFIED":"NOT_PERFORMED",
+    optical_correction:distortion?.status==="APPLIED"?"PROFILE_APPLIED_PENDING_VISUAL_QA":
+      distortion?.status==="NO_CHANGE_NEEDED"?"NO_CHANGE_NEEDED":
+      distortion?.status==="HOLD"?"HOLD_UNCALIBRATED":"NOT_PERFORMED",
+    optical_correction_reason:distortion?.reason||null,
+    chromatic_aberration:ca?.status==="APPLIED"?"PROFILE_APPLIED_PENDING_VISUAL_QA":
+      ca?.status==="NO_CHANGE_NEEDED"?"NO_CHANGE_NEEDED":
+      ca?.status==="HOLD"?"HOLD":"NOT_PERFORMED",
+    chromatic_aberration_reason:ca?.reason||null,
+    vignetting:vignette?.status==="APPLIED"?"PROFILE_APPLIED_PENDING_VISUAL_QA":
+      vignette?.status==="NO_CHANGE_NEEDED"?"NO_CHANGE_NEEDED":
+      vignette?.status==="HOLD"?"HOLD":"NOT_PERFORMED",
+    vignetting_reason:vignette?.reason||null,
     perspective_correction:geometryModified?"CONTROLLED_PROJECTIVE_PENDING_VISUAL_QA":
       autoPerspective?"AUTO_VERTICAL_PERSPECTIVE_PENDING_VISUAL_QA":
       autoLevelled?"AUTO_CAMERA_ROLL_PENDING_VISUAL_QA":"NOT_PERFORMED",

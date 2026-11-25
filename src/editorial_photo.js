@@ -6,7 +6,7 @@ const PROJECT="tropicana-park", FRAME="DSC09818";
 const ROOT=PROJECT+"/"+FRAME+"/";
 const MAX_SOURCE=8*1024*1024;
 const MAX_RAW_SOURCE=90*1024*1024;
-const RAW_EXTENSIONS=new Set(["arw","dng","nef","cr2","cr3","raf","orf","rw2"]);
+const RAW_EXTENSIONS=new Set(["arw","dng","nef","nrw","cr2","cr3","raf","orf","rw2","pef","srw","3fr","iiq","x3f"]);
 const MODEL="google/gemini-3.1-flash-image";
 const AUDIT_MODEL="google/gemini-3-flash-preview";
 const j=(x,s=200)=>Response.json(x,{status:s,headers:{"cache-control":"no-store"}});

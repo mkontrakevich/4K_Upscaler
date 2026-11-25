@@ -62,7 +62,7 @@ test("universal camera RAW intake preserves no-HDR technical boundaries",()=>{
 
   for(const token of [
     'MAX_RAW_SOURCE=90*1024*1024',
-    'RAW_EXTENSIONS=new Set(["arw","dng","nef","cr2","cr3","raf","orf","rw2"])',
+    'RAW_EXTENSIONS=new Set(["arw","dng","nef","nrw","cr2","cr3","raf","orf","rw2","pef","srw","3fr","iiq","x3f"])',
     '"/api/editorial/upload-raw"',
     'new FixedLengthStream(expectedSize)',
     'sha256:expectedSha',
@@ -88,15 +88,23 @@ test("universal camera RAW intake preserves no-HDR technical boundaries",()=>{
     '"source_preview_sha256"',
   ]) assert.ok(raster.includes(token),token);
   assert.match(requirements,/rawpy==0\.28\.0/);
+  assert.match(requirements,/lensfunpy==1\.18\.0/);
+  assert.match(requirements,/ExifRead>=3\.0,<4/);
+  assert.ok(raster.includes("source_metadata"));
+  assert.ok(raster.includes("AUTO_CA_CORRECTED"));
+  assert.ok(raster.includes("AUTO_VIGNETTING_CORRECTED"));
 });
 
 test("TECH MASTER UI accepts RAW but keeps explicit human QA",()=>{
   for(const token of [
-    ".arw,.dng,.nef,.cr2,.cr3,.raf,.orf,.rw2",
+    ".arw,.dng,.nef,.nrw,.cr2,.cr3,.raf,.orf,.rw2,.pef,.srw,.3fr,.iiq,.x3f",
     "RAW больше 90 MiB",
     'fetch(base+"/upload-raw"',
     "Проверяю SHA-256 RAW",
     "LibRaw",
+    "Хроматические аберрации",
+    "Виньетирование",
+    "Профиль камеры / объектива",
     "Утвердить Tech Master",
   ]) assert.ok(tech.includes(token),token);
 });

@@ -144,8 +144,8 @@
     </section>
     <section class="panel">
       <h2>Новый SOURCE → TECH MASTER</h2>
-      <p class="muted">RAW: ARW / DNG / NEF / CR2 / CR3 / RAF / ORF / RW2 до 90 MiB. JPEG / PNG / WEBP — до 8 МБ. RAW проявляется в 16-bit через LibRaw без HDR и без генерации.</p>
-      <div class="fields"><input id="file" type="file" accept="image/jpeg,image/png,image/webp,.arw,.dng,.nef,.cr2,.cr3,.raf,.orf,.rw2"><button id="upload" class="btn" type="button">Загрузить оригинал</button></div>
+      <p class="muted">RAW: ARW / DNG / NEF / NRW / CR2 / CR3 / RAF / ORF / RW2 / PEF / SRW / 3FR / IIQ / X3F до 90 MiB. JPEG / PNG / WEBP — до 8 МБ. RAW проявляется в 16-bit через LibRaw без HDR и без генерации.</p>
+      <div class="fields"><input id="file" type="file" accept="image/jpeg,image/png,image/webp,.arw,.dng,.nef,.nrw,.cr2,.cr3,.raf,.orf,.rw2,.pef,.srw,.3fr,.iiq,.x3f"><button id="upload" class="btn" type="button">Загрузить оригинал</button></div>
       <p id="upload-result" class="key"></p>
       <p class="muted">Загрузка не запускает техническую коррекцию. Для RAW извлекается только превью без HDR и генерации. Полноценный анализ включается отдельно по кнопке.</p>
     </section>
@@ -232,8 +232,11 @@
           <div><span>Контроль целостности SHA-256</span><strong id="intake-source-sha">Ожидание</strong></div>
           <div><span>Формат и декодирование</span><strong id="intake-source-raster">Ожидание</strong></div>
           <div><span>Размер / глубина сигнала</span><strong id="intake-source-dimensions">Не определено</strong></div>
-          <div><span>Геометрия кадра</span><strong id="intake-source-geometry">Ожидание</strong></div>
+          <div><span>Профиль камеры / объектива</span><strong id="intake-source-optics-profile">Ожидание</strong></div>
           <div><span>Оптика / дисторсия</span><strong id="intake-source-optics">Ожидание</strong></div>
+          <div><span>Хроматические аберрации</span><strong id="intake-source-ca">Ожидание</strong></div>
+          <div><span>Виньетирование</span><strong id="intake-source-vignetting">Ожидание</strong></div>
+          <div><span>Геометрия кадра</span><strong id="intake-source-geometry">Ожидание</strong></div>
           <div><span>Вертикальная перспектива</span><strong id="intake-source-perspective">Ожидание</strong></div>
           <div><span>Экспозиция</span><strong id="intake-source-exposure">Ожидание</strong></div>
           <div><span>Цвет / баланс белого</span><strong id="intake-source-color">Ожидание</strong></div>
@@ -388,7 +391,7 @@
 <script src="/editorial-split.js"></script><script src="/editorial-geometry-preview.js"></script>
 <script>
 const base="/api/editorial";let session=null,sourceURL=null;
-const RAW_EXTENSIONS=new Set(["arw","dng","nef","cr2","cr3","raf","orf","rw2"]);
+const RAW_EXTENSIONS=new Set(["arw","dng","nef","nrw","cr2","cr3","raf","orf","rw2","pef","srw","3fr","iiq","x3f"]);
 const hexBytes=buffer=>[...new Uint8Array(buffer)].map(v=>v.toString(16).padStart(2,"0")).join("");
 const fileExt=file=>String(file?.name||"").split(".").pop().toLowerCase();
 let intakeId="",intakeProof=null,intakePoll=null,intakeBusy=false,intakeState=null;
@@ -616,12 +619,23 @@ function updateSourceVerification(data){
    "Авто · геометрия оптики исправлена":
    v.geometry_preservation==="PASS"?
    "PASS · коррекция не требовалась":result(v.geometry_preservation);
- const stage=x=>x==="APPLIED"||x==="PROFILE_APPLIED_PENDING_VISUAL_QA"||x==="AUTO_VERTICAL_PERSPECTIVE_PENDING_VISUAL_QA"||x==="AUTO_CAMERA_ROLL_PENDING_VISUAL_QA"||x==="CAMERA_WB_PLUS_RESIDUAL_APPLIED"?"Исправлено · проверить":
+ const holdReason=reason=>{
+   const s=String(reason||"");
+   if(s.includes("NONLINEAR_RENDERED_SOURCE_UNSAFE"))return "HOLD · нужен линейный RAW";
+   if(s.includes("PROFILE_HAS_NO_"))return "HOLD · нет калибровки в профиле";
+   if(s.includes("APERTURE_METADATA_REQUIRED"))return "HOLD · нет данных диафрагмы";
+   if(s.includes("PROFILE_NOT_FOUND")||s.includes("PROFILE_LOOKUP")||s.includes("METADATA_INCOMPLETE"))return "HOLD · профиль не определён";
+   return "HOLD · нет надёжных оснований";
+ };
+ const stage=(x,reason)=>x==="APPLIED"||x==="PROFILE_APPLIED_PENDING_VISUAL_QA"||x==="AUTO_VERTICAL_PERSPECTIVE_PENDING_VISUAL_QA"||x==="AUTO_CAMERA_ROLL_PENDING_VISUAL_QA"||x==="CAMERA_WB_PLUS_RESIDUAL_APPLIED"?"Исправлено · проверить":
    x==="CAMERA_WB_APPLIED"?"Camera WB применён · проверить":
    x==="CAMERA_WB_APPLIED_RESIDUAL_HOLD"?"Camera WB применён · доп. нейтрализация HOLD":
    x==="NO_CHANGE_NEEDED"?"Коррекция не требуется":
-   String(x||"").startsWith("HOLD")?"HOLD · нет надёжных оснований":"Не выполнялось";
- e("intake-source-optics").textContent=stage(v.optical_correction);
+   String(x||"").startsWith("HOLD")?holdReason(reason):"Не выполнялось";
+ e("intake-source-optics-profile").textContent=v.optical_profile==="VERIFIED"?"Профиль подтверждён":"HOLD · профиль не подтверждён";
+ e("intake-source-optics").textContent=stage(v.optical_correction,v.optical_correction_reason);
+ e("intake-source-ca").textContent=stage(v.chromatic_aberration,v.chromatic_aberration_reason);
+ e("intake-source-vignetting").textContent=stage(v.vignetting,v.vignetting_reason);
  e("intake-source-perspective").textContent=stage(v.perspective_correction);
  e("intake-source-exposure").textContent=stage(v.exposure_correction);
  e("intake-source-color").textContent=stage(v.color_correction);
@@ -631,7 +645,9 @@ function updateSourceVerification(data){
    v.visual_review==="REWORK_REQUESTED"?"Визуальная QA: возвращено на доработку":
    "Визуальная QA: ожидает вашего решения";
  const applied=[
-   v.optical_correction==="PROFILE_APPLIED_PENDING_VISUAL_QA"?"оптика":"",
+   v.optical_correction==="PROFILE_APPLIED_PENDING_VISUAL_QA"?"дисторсия объектива":"",
+   v.chromatic_aberration==="PROFILE_APPLIED_PENDING_VISUAL_QA"?"хроматические аберрации":"",
+   v.vignetting==="PROFILE_APPLIED_PENDING_VISUAL_QA"?"виньетирование":"",
    v.perspective_correction==="AUTO_VERTICAL_PERSPECTIVE_PENDING_VISUAL_QA"?"вертикальная перспектива":"",
    v.perspective_correction==="AUTO_CAMERA_ROLL_PENDING_VISUAL_QA"?"наклон камеры":"",
    v.exposure_correction==="APPLIED"?"экспозиция":"",
