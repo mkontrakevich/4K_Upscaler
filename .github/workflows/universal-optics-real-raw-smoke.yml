@@ -1,0 +1,73 @@
+name: Universal optics real RAW smoke
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/universal-optics-real-raw-smoke.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  sony-raw:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      RAW_SHA256: 1b4344f4b8ca629830254850fbcbaf2931c83c00a158ab87d84e5ee7722046d5
+      RAW_BUCKET: marins-tropicana-photo-originals
+      RAW_KEY: originals/DSC09818.ARW
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install production optical runtime
+        run: |
+          npm install
+          python -m pip install --disable-pip-version-check -r requirements.txt
+      - name: Download immutable Sony RAW
+        run: |
+          mkdir -p /tmp/universal-optics
+          npx wrangler r2 object get "$RAW_BUCKET/$RAW_KEY" --file /tmp/universal-optics/source.ARW --remote
+          python - <<'PY'
+          import hashlib,os
+          from pathlib import Path
+          p=Path('/tmp/universal-optics/source.ARW')
+          got=hashlib.sha256(p.read_bytes()).hexdigest()
+          assert got==os.environ['RAW_SHA256'],(got,os.environ['RAW_SHA256'])
+          print('SOURCE_SHA_PASS',got,p.stat().st_size)
+          PY
+      - name: Run universal TECH MASTER
+        run: |
+          python scripts/editorial_raster_technical_master.py             --input /tmp/universal-optics/source.ARW             --out /tmp/universal-optics/out             --job-id 33333333-3333-4333-8333-333333333333             --source-sha256 "$RAW_SHA256"
+      - name: Verify universal profile and print optical evidence
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          q=json.loads(Path('/tmp/universal-optics/out/qa.json').read_text())
+          o=q['auto_optics_correction']
+          print(json.dumps({
+            'source_metadata':q.get('source_metadata'),
+            'optics':o,
+            'qa_checks':{k:v for k,v in q['qa_checks'].items() if 'OPTIC' in k or 'DISTORTION' in k or 'CA_' in k or 'VIGNET' in k},
+            'geometry':q.get('geometry'),
+            'photometry':q.get('auto_photometric_correction')
+          },ensure_ascii=False,indent=2))
+          assert q['source_kind']=='CAMERA_RAW'
+          assert q['technical_version']=='AUTO_TECH_MASTER_V2'
+          assert o['engine']=='AUTO_PROFILED_OPTICS_V2'
+          assert o['profile_verified'] is True,o
+          assert o['profile_backend']=='LENSFUN_BUNDLED_DATABASE',o
+          assert o['distortion']['status'] in ('APPLIED','NO_CHANGE_NEEDED'),o['distortion']
+          assert o['chromatic_aberration']['status'] in ('APPLIED','NO_CHANGE_NEEDED','HOLD')
+          assert o['vignetting']['status'] in ('APPLIED','NO_CHANGE_NEEDED','HOLD')
+          assert o['HDR_applied'] is False and o['generative_processing'] is False
+          print('UNIVERSAL_OPTICS_REAL_RAW_PASS')
+          PY
