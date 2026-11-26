@@ -1,0 +1,132 @@
+name: Yandex public folder live smoke
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/yandex-public-folder-live-smoke.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  live-yandex-source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Verify public-folder -> SOURCE -> TECH MASTER
+        env:
+          MG4K_BASE: https://4k-upscaler.kontrakevich.workers.dev
+          YANDEX_PUBLIC_FOLDER: https://disk.yandex.ru/d/fRdUTghPuc1y9w
+          EXPECTED_FILE: DSC09818.ARW
+          EXPECTED_SHA256: 1b4344f4b8ca629830254850fbcbaf2931c83c00a158ab87d84e5ee7722046d5
+        run: |
+          python - <<'PY'
+          import json, os, time, urllib.request, urllib.error
+
+          base=os.environ["MG4K_BASE"].rstrip("/")
+          public=os.environ["YANDEX_PUBLIC_FOLDER"]
+          target=os.environ["EXPECTED_FILE"]
+          expected_sha=os.environ["EXPECTED_SHA256"]
+
+          def call(path, method="GET", payload=None, headers=None, timeout=120):
+              body=None
+              h=dict(headers or {})
+              if payload is not None:
+                  body=json.dumps(payload).encode()
+                  h["content-type"]="application/json"
+              req=urllib.request.Request(base+path,data=body,headers=h,method=method)
+              try:
+                  with urllib.request.urlopen(req,timeout=timeout) as r:
+                      raw=r.read()
+                      return r.status, json.loads(raw or b"{}")
+              except urllib.error.HTTPError as e:
+                  raw=e.read()
+                  try:data=json.loads(raw or b"{}")
+                  except Exception:data={"raw":raw.decode("utf-8","replace")}
+                  raise RuntimeError(f"{method} {path} -> {e.code}: {data}")
+
+          status,session=call("/api/session/start","POST",{})
+          assert session.get("id") and session.get("token"),session
+          common={"x-session-id":session["id"],"x-session-token":session["token"]}
+
+          def list_dir(path=""):
+              _,data=call("/api/editorial/yandex/list","POST",{"url":public,"path":path},common)
+              assert data.get("ok") is True,data
+              return data
+
+          found=None
+          queue=[""]
+          visited=set()
+          while queue and not found:
+              path=queue.pop(0)
+              if path in visited: continue
+              visited.add(path)
+              data=list_dir(path)
+              for item in data.get("items") or []:
+                  if item.get("type")=="file" and item.get("name")==target:
+                      found=item
+                      break
+                  if item.get("type")=="dir" and len(visited)<40:
+                      queue.append(item.get("path") or "")
+          assert found, f"{target} not found"
+          print("FOUND_SOURCE",json.dumps(found,ensure_ascii=False))
+
+          _,imp=call("/api/editorial/yandex/import","POST",
+                     {"url":public,"path":found["path"]},common,timeout=240)
+          assert imp.get("ok") is True,imp
+          assert imp.get("source_kind")=="CAMERA_RAW",imp
+          assert imp.get("sha256")==expected_sha,imp
+          assert imp.get("technical_processing_started") is False,imp
+          job=imp["job_id"]; token=imp["job_token"]
+          auth={**common,"x-editorial-job-token":token}
+          print("IMPORTED",job,imp.get("filename"),imp.get("sha256"))
+
+          preview_ready=False
+          last=None
+          for _ in range(36):
+              _,last=call("/api/editorial/job/status?job="+job,headers=auth)
+              if last.get("source_preview_ready"):
+                  preview_ready=True
+                  break
+              time.sleep(5)
+          assert preview_ready,last
+          assert last.get("can_start_processing") is True,last
+          print("PREVIEW_READY",last.get("status"),last.get("stage"))
+
+          _,started=call("/api/editorial/job/process?job="+job,"POST",{},auth)
+          assert started.get("ok") is True,started
+          print("TECH_STARTED",started.get("status"),started.get("stage"))
+
+          final=None
+          rechecked=False
+          for _ in range(42):
+              _,final=call("/api/editorial/job/status?job="+job,headers=auth)
+              if final.get("technical_master_ready"):
+                  break
+              if final.get("status")=="QA_INTEGRITY_HOLD" and final.get("can_recheck_integrity") and not rechecked:
+                  try:
+                      call("/api/editorial/job/recheck?job="+job,"POST",{},auth)
+                  except Exception as e:
+                      print("RECHECK_HOLD",e)
+                  rechecked=True
+              if final.get("status")=="FAILED":
+                  break
+              time.sleep(7)
+          assert final and final.get("technical_master_ready") is True,final
+          assert final.get("status")=="AWAITING_HUMAN_QA",final
+          assert final.get("technical_qa",{}).get("bit_depth")==16,final
+          assert final.get("technical_qa",{}).get("HDR_applied") is False,final
+          print("TECH_MASTER_READY",json.dumps({
+              "job_id":job,
+              "status":final.get("status"),
+              "source_kind":final.get("technical_qa",{}).get("source_kind"),
+              "master_sha256":final.get("technical_qa",{}).get("master_sha256"),
+              "rechecked":rechecked
+          },ensure_ascii=False))
+          print("YANDEX_FOLDER_TO_TECH_MASTER_PASS")
+          PY
