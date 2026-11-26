@@ -110,3 +110,40 @@ test("TECH MASTER UI accepts RAW but keeps explicit human QA",()=>{
     'id="intake-approve"',
   ]) assert.ok(tech.includes(token),token);
 });
+
+
+import { providerCreditPreflight, canResumeCreditJob } from "../src/provider_credit_guard.js";
+test("credit preflight is read-only and fail-closed for missing account/key budget",async()=>{
+ const env={OPENROUTER_API_KEY:"test-key",OPENROUTER_MANAGEMENT_KEY:"test-management"};
+ let calls=[];
+ const mock=(remaining,balance)=>async(url,init)=>{
+   calls.push({url,method:init.method||"GET",auth:init.headers.Authorization});
+   return new Response(JSON.stringify({data:url.endsWith("/key")?{limit_remaining:remaining,is_free_tier:false}:{total_credits:5,total_usage:5-balance}}));
+ };
+ assert.equal((await providerCreditPreflight(env,mock(.1,5))).code,"PROVIDER_CREDITS_EXHAUSTED");
+ assert.equal((await providerCreditPreflight(env,mock(null,.1))).code,"PROVIDER_CREDITS_EXHAUSTED");
+ assert.equal((await providerCreditPreflight(env,mock(2,2))).ok,true);
+ assert.equal((await providerCreditPreflight({OPENROUTER_API_KEY:"key"},mock(2,2))).code,"PROVIDER_CREDIT_CHECK_UNAVAILABLE");
+ assert.equal((await providerCreditPreflight(env,mock(undefined,2))).ok,false);
+ assert.equal((await providerCreditPreflight(env,async()=>{throw Error("network")})).ok,false);
+ assert.ok(calls.every(c=>c.method==="GET"&&c.auth===(c.url.endsWith("/key")?"Bearer test-key":"Bearer test-management")||c.auth==="Bearer key"));
+});
+test("credit resume is restricted to refused requests without paid artifacts",()=>{
+ const job={status:"failed",mode:"generative",diagnostic_code:"PROVIDER_CREDITS_EXHAUSTED",diagnostic_http_status:402,provider_request_count:1,provider_cost_usd:0};
+ assert.equal(canResumeCreditJob(job),true);
+ assert.equal(canResumeCreditJob({...job,provider_cost_usd:.25}),false);
+ assert.equal(canResumeCreditJob({...job,provider_request_count:2}),false);
+ assert.equal(canResumeCreditJob({...job,archive_donor_keys:["donor"]}),false);
+ assert.equal(canResumeCreditJob({...job,result_key:"result"}),false);
+ assert.equal(canResumeCreditJob({...job,diagnostic_code:"PROVIDER_TIMEOUT"}),false);
+ assert.equal(canResumeCreditJob({...job,status:"processing"}),false);
+ assert.ok(worker.indexOf("const credit=await providerCreditPreflight(env)")<worker.indexOf("const container = await ensureCloudProcessor(env, origin);",worker.indexOf("async function dispatchJobToContainer")));
+ assert.ok(worker.includes('onlyIf:new Headers({"If-None-Match":"*"})'));
+ assert.ok(worker.includes('resumed_from_job_id:parent.id'));
+ assert.ok(main.includes('/resume-credit'));
+ const py=readFileSync("v8_safe_appearance.py","utf8");
+ const processor=readFileSync("cloud_processor_service.py","utf8");
+ assert.ok(py.includes('max_retries = 1 if os.environ.get("MG4K_SINGLE_PAID_ATTEMPT")'));
+ assert.ok(py.includes('/api/processor/credit-check'));
+ assert.ok(processor.includes('PAID_REPLACEMENT_REQUIRES_EXPLICIT_OPERATOR_ACTION'));
+});
