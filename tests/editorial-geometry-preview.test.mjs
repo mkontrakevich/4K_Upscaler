@@ -95,14 +95,16 @@ test("editor has immediate visible entry, reversible preview and explicit final 
  scripts.forEach(x=>new Script(x));
 });
 
-test("rework geometry entry remains usable during polling and import is explicitly separate",()=>{
+test("automatic-only primary UI: no accessible manual geometry control, live server status",()=>{
  const html=readFileSync("site/editorial-photo.html","utf8");
- assert.match(html,/id="intake-geometry-open"/);
- assert.match(html,/e\("intake-geometry-open"\)\.addEventListener\("click",\(\)=>showGeometryEditor/);
- assert.match(html,/e\("intake-rework-action"\)\.hidden=data\.can_geometry_rework!==true/);
- assert.match(html,/if\(!data\.can_geometry_rework\)e\("intake-geometry-panel"\)\.hidden=true/);
- assert.doesNotMatch(html,/legacy four-corner tool is not in standard user flow/);
- assert.match(html,/Резерв: загрузить уже исправленный файл с компьютера/);
+ assert.match(html,/id="intake-front-auto"/);
+ assert.match(html,/e\("intake-front-auto"\)\.addEventListener\("click",automaticFrontRework\)/);
+ assert.match(html,/id="intake-geometry-open" hidden disabled inert/);
+ assert.match(html,/id="intake-geometry-panel" hidden inert/);
+ assert.doesNotMatch(html,/e\("intake-geometry-open"\)\.addEventListener\("click"/);
+ assert.match(html,/e\("intake-geometry-panel"\)\.hidden=true/);
+ assert.match(html,/id="intake-live-percent"/);
+ assert.match(html,/e\("intake-live-percent"\)\.textContent=Math\.round\(bar\.value\)/);
  assert.match(html,/id="intake-rework-progress" role="status" aria-live="polite"/);
  assert.match(html,/\[REDACTED\]/);
 });
