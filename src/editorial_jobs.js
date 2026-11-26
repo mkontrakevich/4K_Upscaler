@@ -174,6 +174,7 @@ async function verifiedTech(env,job) {
        q.correction.operations.length<1||
        q.correction?.correction_status!=="APPLIED"||
        q.correction?.geometry_transform!==(geom?"CONTROLLED_PROJECTIVE_WARP":"IDENTITY")||
+        (job.correction_plan.anchor_mode==="AUTO_FRONT"&&(q.correction?.anchor_mode!=="AUTO_FRONT"||q.correction?.correction_class!=="AUTO_INFERRED_PROJECTIVE"||!q.correction?.automatic_anchor_evidence?.residual_QA))||
        (geom&&(q.correction?.perspective_corrected!==true||
                q.correction?.off_plane_geometry_review_required!==true||
                q.correction?.invalid_border_fraction>.001||
@@ -361,7 +362,7 @@ function state(job,a) {
     progress:a.q?100:typeof a.processing?.progress==="number"?a.processing.progress:null,
     progress_kind:a.q?"TECHNICAL_STAGE_COMPLETE":a.processing?.status==="PROCESSING"?"TECHNICAL_STAGE_MEASURED":"NOT_MEASURED",
     message:a.d?.decision==="REWORK_REQUESTED"?
-      "Мастер возвращён на доработку. Для геометрии укажите 4 угла фасада; для света и цвета доступен ограниченный корректор.":
+      "Мастер возвращён на доработку. Для фронтального фасада запустите автоисправление перспективы либо укажите 4 угла; для света и цвета доступен отдельный корректор.":
       a.q?"Технический мастер готов; требуется визуальное утверждение QA.":
       qaIntegrityHold?"HOLD: технический TIFF сохранён, но проверка целостности не подтверждена. Откройте диагностику задания.":
       a.processing?.message||job.message,
@@ -381,7 +382,7 @@ function state(job,a) {
       a.d.categories.every(c=>c==="exposure"||c==="color"),
     auto_rework_hold_reason:a.d?.decision==="REWORK_REQUESTED"&&
       a.d.categories?.some(c=>c!=="exposure"&&c!=="color")?
-      "Автоматическая коррекция перспективы, фактур и деталей требует проверенных опорных точек/профиля. HOLD.":"",
+      "Коррекция экспозиции здесь недоступна. Для фронтальной перспективы используйте отдельный автоматический или ручной геометрический инструмент.":"",
     rework:a.d?.decision==="REWORK_REQUESTED"?{categories:a.d.categories,note:a.d.note,at:a.d.at}:
       a.autoHold?{categories:job.correction_plan?.categories||[],
         note:"Автоматическая коррекция остановлена по защитному HOLD. Загрузите исправленный исходник, чтобы создать новую версию.",
@@ -619,8 +620,9 @@ export async function editorialJobApi(request,env,url,authorizeSession) {
       return json({error:"geometry_master_not_ready_or_already_decided"},409);
     if(a.revision)return json({error:"revision_already_created",job_id:a.revision.job_id},409);
     let input;try{input=await request.json()}catch{return json({error:"invalid_geometry_input"},400)}
-    if(input?.facade_assumption_confirmed!==true)
-      return json({error:"rectangular_planar_facade_confirmation_required"},422);
+    const automatic=input?.anchor_mode==="AUTO_FRONT";
+    if(automatic?input.frontality_requested!==true:input?.facade_assumption_confirmed!==true)
+      return json({error:automatic?"explicit_frontality_request_required":"rectangular_planar_facade_confirmation_required"},422);
     if(firstGeometryReturn&&(
       input.commit_parent_return!==true||
       input.master_sha256!==a.q.master_sha256||
@@ -628,6 +630,7 @@ export async function editorialJobApi(request,env,url,authorizeSession) {
       input.note.trim().length<12||input.note.trim().length>2000))
       return json({error:"explicit_geometry_return_confirmation_and_master_hash_required"},422);
     const pts=input?.source_quad_norm;
+    if(!automatic){
     if(!Array.isArray(pts)||pts.length!==4||
        !pts.every(p=>Array.isArray(p)&&p.length===2&&p.every(n=>
          typeof n==="number"&&Number.isFinite(n)&&n>=.015&&n<=.985)))
@@ -645,6 +648,7 @@ export async function editorialJobApi(request,env,url,authorizeSession) {
        Math.max(Math.abs(tl[0]-bl[0]),Math.abs(tr[0]-br[0]),
         Math.abs(tl[1]-tr[1]),Math.abs(bl[1]-br[1]))>.17)
       return json({error:"facade_quad_outside_safe_limits"},422);
+    }
     if(!env.TROPICANA_TECH_WORKFLOW)return json({error:"technical_workflow_missing"},503);
     const v=(job.revision_num||1)+1;
     if(v>12)return json({error:"revision_limit_reached"},409);
@@ -670,9 +674,8 @@ export async function editorialJobApi(request,env,url,authorizeSession) {
       parent_master_sha256:returnRecord.master_sha256,remarks_sha256:noteHash,
       categories:["geometry"],HDR_allowed:false,
       geometry_transform:"CONTROLLED_PROJECTIVE_WARP",
-      allowed_algorithm:"HUMAN_ANCHORED_FACADE_HOMOGRAPHY",
-      source_quad_norm:pts.map(p=>p.map(x=>Math.round(x*1e7)/1e7)),
-      facade_assumption_confirmed:true,
+      allowed_algorithm:automatic?"AUTO_INFERRED_FACADE_HOMOGRAPHY":"HUMAN_ANCHORED_FACADE_HOMOGRAPHY",
+      ...(automatic?{anchor_mode:"AUTO_FRONT",frontality_requested:true}:{source_quad_norm:pts.map(p=>p.map(x=>Math.round(x*1e7)/1e7)),facade_assumption_confirmed:true}),
       no_outpainting:true,human_approval_required:true,
       source_dimensions:[a.q.width,a.q.height]};
     const child=await createEditorialIntakeJob(env,{id:job.owner_session_id},{
@@ -683,7 +686,7 @@ export async function editorialJobApi(request,env,url,authorizeSession) {
     });
     const link={schema:2,job_id:child.job_id,revision_num:v,
       source_sha256:job.source_sha256,source_unchanged:true,
-      correction_type:plan.type,source_quad_norm:plan.source_quad_norm,
+      correction_type:plan.type,anchor_mode:automatic?"AUTO_FRONT":"HUMAN",source_quad_norm:plan.source_quad_norm,
       parent_master_sha256:returnRecord.master_sha256,remarks_sha256:noteHash,
       rework_decision_at:returnRecord.at,created_at:new Date().toISOString()};
     const written=await env.TROPICANA_EDITORIAL_R2.put(

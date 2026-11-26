@@ -25,7 +25,7 @@ test("TECH MASTER remains a non-generative QA-gated stage",()=>{
   for(const token of [
     'class="brand">MG <span>4K</span> / TECH MASTER',
     "NO HDR",
-    "Утвердить Tech Master",
+    'id="intake-approve"',
     "Сохранить и передать в выбранный контур",
     "Открыть Tech Master в MG4K",
     'id="intake-check-preview"',
@@ -33,6 +33,8 @@ test("TECH MASTER remains a non-generative QA-gated stage",()=>{
     'id="intake-check-materials"',
     "intakeHandoff",
   ]) assert.ok(tech.includes(token),token);
+  assert.match(tech,/<button[^>]*id="intake-approve"[^>]*disabled[^>]*>Утвердить<\/button>/);
+  assert.ok(tech.includes('if(decision==="APPROVED"&&!reviewChecksPass())'));
   assert.ok(tech.includes("Утверждённый TIFF сохранён и принят выбранным контуром. Генерация не запускалась."));
 });
 
@@ -105,6 +107,6 @@ test("TECH MASTER UI accepts RAW but keeps explicit human QA",()=>{
     "Хроматические аберрации",
     "Виньетирование",
     "Профиль камеры / объектива",
-    "Утвердить Tech Master",
+    'id="intake-approve"',
   ]) assert.ok(tech.includes(token),token);
 });

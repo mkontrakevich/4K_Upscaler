@@ -93,3 +93,41 @@ with tempfile.TemporaryDirectory() as tmp:
     assert (t/"corrected"/"fullres-preview.jpg").stat().st_size>10000
 
 print("GUIDED_PERSPECTIVE_LOCK_SYNTHETIC_PASS")
+
+
+# Automatic mode: controlled synthetic perspective with independently supplied
+# exact architectural line segments. No human-corner flag or corner input.
+from unittest.mock import patch
+from editorial_facade_geometry import infer_front_quad
+lines=[]
+for level in np.linspace(.15,.85,9):
+    m=-.12*(level-.5)
+    lines.append({"xyxy_norm":[.10,float(level-.40*m),.90,float(level+.40*m)]})
+for level in np.linspace(.15,.85,9):
+    lines.append({"xyxy_norm":[float(level),.10,float(level),.90]})
+analysis={"status":"OBSERVATION_ONLY","scene":{"intent":"FRONT_CANDIDATE"},"diagnostic_lines":lines}
+auto_plan={k:v for k,v in PLAN.items() if k not in ("source_quad_norm","facade_assumption_confirmed")}
+auto_plan.update(anchor_mode="AUTO_FRONT",frontality_requested=True)
+q,hl,vl,evidence=infer_front_quad(analysis,w,h)
+assert len(q)==4 and evidence["horizontal"]["distinct_levels"]>=5
+# Warp a source pattern by the synthetic camera model.
+N=np.array([[1/(w-1),0,-.5],[0,1/(h-1),-.5],[0,0,1]],float)
+synthetic=cv2.warpPerspective(pattern,np.linalg.inv(N)@np.array([[1,0,0],[0,1,0],[.12,0,1]],float)@N,(w,h),borderMode=cv2.BORDER_REFLECT)
+saved=synthetic.copy()
+with patch("editorial_auto_perspective_analysis.analyze",return_value=analysis):
+    fixed,proof=correct(synthetic,auto_plan)
+assert np.array_equal(synthetic,saved)
+assert proof["anchor_mode"]=="AUTO_FRONT"
+assert proof["correction_class"]=="AUTO_INFERRED_PROJECTIVE"
+assert proof["automatic_anchor_evidence"]["residual_QA"]["horizontal_after_p90_deg"]<1.2
+assert proof["human_visual_QA"]=="PENDING"
+assert not np.array_equal(fixed,synthetic)
+assert proof["HDR_applied"] is False and proof["generative_processing"] is False
+for bad in ({**analysis,"scene":{"intent":"ANGLE"}},{**analysis,"diagnostic_lines":lines[:3]}):
+    try:
+        infer_front_quad(bad,w,h)
+    except GeometryHold:
+        pass
+    else:
+        raise AssertionError("Ambiguous scene must HOLD")
+print("AUTOMATIC_FRONT_PERSPECTIVE_SYNTHETIC_PASS")
