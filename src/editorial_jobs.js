@@ -492,9 +492,10 @@ export async function editorialJobApi(request,env,url,authorizeSession) {
     if(!a.previewReady)return json({error:"source_preview_must_be_visible_before_processing"},409);
     if(!env.TROPICANA_TECH_WORKFLOW)return json({error:"technical_workflow_not_configured"},503);
     const original=await env.TROPICANA_EDITORIAL_R2.head(job.source_key);
+    const nativeSha=original?.checksums?.sha256?hex(original.checksums.sha256):null;
+    const metadataSha=original?.customMetadata?.sha256||null;
     if(!original||original.size!==job.source_bytes||
-       original.customMetadata?.sha256!==job.source_sha256||
-       (original.checksums?.sha256&&hex(original.checksums.sha256)!==job.source_sha256))
+       ((nativeSha||metadataSha)!==job.source_sha256))
       return json({error:"immutable_original_integrity_HOLD"},409);
     const mark=await env.TROPICANA_EDITORIAL_R2.put(key(id,"processing-state.json"),JSON.stringify({
       job_id:id,status:"QUEUED",stage:"operator_requested_technical_analysis",
