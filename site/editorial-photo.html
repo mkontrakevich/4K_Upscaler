@@ -142,6 +142,17 @@
 .raw-destination option:disabled{color:#a6b8c4}
 .workflow-step[data-stage-state="current"]{background:#0c2638}
 .workflow-step[data-stage-state="completed"]{background:#0d2a30;color:#a9dfd0}
+/* Minimal operational UI; legacy controls stay inert. */
+.next-step-panel,.workflow-step small,.qa-head>span,.source-help>span,
+#intake-geometry-open,#intake-geometry-panel,#intake-auto-geometry-status,
+#intake-process-notice,#intake-source-caption,#intake-auto-eligibility,
+#intake-rework-remarks,#intake-revision-title,#intake-revision-panel>details,
+.qa-split-meta,.qa-split-range>span{display:none!important}
+#intake-message:empty,#intake-rework-progress:empty{display:none}
+#intake-live-stage{display:flex;justify-content:space-between;gap:8px;font-size:12px;color:#a9d3e6;margin:8px 0}
+#intake-rework-action,#intake-revision-panel,#intake-auto-panel{padding:0!important;border:0!important;margin:10px 0!important}
+#intake-rework-action button{width:100%}
+#intake-comparison figure{margin:0}
 </style><link rel="stylesheet" href="/editorial-compare.css"></head><body>
 <header><div class="brand">MG <span>4K</span> / TECH MASTER</div><nav><a href="/">MG4K GENERATIVE</a></nav></header>
 <nav class="workflow-nav" aria-label="Пайплайн RAW — четыре шага">
@@ -152,13 +163,13 @@
 </nav>
 <main>
 <div class="eyebrow">MG 4K / TECH MASTER</div><h1>Подготовить фотографию</h1>
-<p class="lead">Выберите оригинал. TECH MASTER сам проверит оптику, геометрию, перспективу, экспозицию и цвет. Затем останется только сравнить результат с исходником и передать его в MG4K.</p>
+
 <div class="grid editorial-layout">
   <aside class="stack workspace-rail">
     <section class="panel source-entry-panel">
       <div class="eyebrow">ШАГ 1 · ИСХОДНИК</div>
-      <h2>Откройте папку с оригиналами</h2>
-      <p class="muted">Вставьте публичную ссылку на открытую папку Яндекс Диска. Ничего скачивать на компьютер не нужно.</p>
+      <h2>Исходник</h2>
+      
       <div class="yandex-link-row">
         <input id="yandex-url" type="url" inputmode="url" placeholder="https://disk.yandex.ru/d/…" autocomplete="off">
         <button id="yandex-open" class="btn" type="button">Открыть папку</button>
@@ -210,8 +221,9 @@
       <div class="metric intake-technical-id"><span class="muted">Задание</span><strong id="intake-id" class="key">Не создано</strong></div>
       <div class="metric"><span class="muted">Состояние</span><strong id="intake-status" class="status" aria-live="polite">Ожидание загрузки</strong></div>
       <div class="metric intake-technical-stage"><span class="muted">Этап</span><strong id="intake-stage">—</strong></div>
+      <div id="intake-live-stage" hidden><span id="intake-live-action"></span><output id="intake-live-percent"></output></div>
       <progress id="intake-progress" max="100" value="0" hidden class="qa-progress" style="width:100%;height:12px"></progress>
-      <p id="intake-empty" class="note">Выберите оригинал слева. После этого появится кнопка «Создать TECH MASTER».</p>
+      <p id="intake-empty" class="note"></p>
       <p id="intake-message" class="muted" role="status"></p>
       <div id="intake-recheck-panel" class="note" hidden>
         <strong>TECH MASTER сохранён, но проверка результата не завершилась.</strong>
@@ -229,19 +241,14 @@
         <button class="btn primary-action" type="button" id="intake-process" disabled>Создать TECH MASTER</button>
         <span class="muted" id="intake-process-notice">Сначала загрузите оригинал и дождитесь его превью.</span>
       </div>
-      <div id="intake-rework-action" hidden style="padding:14px;margin:12px 0;border:1px solid #3f6b82"><strong>Коррекция перспективы фасада</strong><p class="muted">Для фронтального кадра система автоматически найдёт согласованные горизонтальные и вертикальные линии, проверит выпрямление и создаст новую версию. При недостатке данных обработка остановится. Для углового кадра этот режим не предназначен.</p><button class="btn" type="button" id="intake-front-auto">Автоматически исправить фронтальную перспективу</button> <button class="btn mutebtn" type="button" id="intake-geometry-open">Ручная разметка четырёх точек</button></div>
+      <div id="intake-rework-action" hidden style="padding:14px;margin:12px 0;border:1px solid #3f6b82"><button class="btn" type="button" id="intake-front-auto">Исправить перспективу</button><button class="btn mutebtn" type="button" id="intake-geometry-open" hidden disabled inert aria-hidden="true"></button></div>
       <p id="intake-rework-progress" role="status" aria-live="polite" style="color:#a9e7fa" hidden></p>
       <p id="intake-auto-geometry-status" class="muted secondary-status" aria-live="polite">Проверка геометрии ещё не выполнялась.</p>
       <section id="intake-geometry-first" class="geometry-first" hidden aria-label="Автоматическая техническая коррекция">
-        <div>
-          <div class="eyebrow">01 / АВТОМАТИЧЕСКАЯ ГЕОМЕТРИЯ</div>
-          <h3>Исправить кадр автоматически</h3>
-          <p>Повторный технический анализ исходника: поиск направляющих, выравнивание достоверного наклона камеры и безопасное кадрирование. Без разметки точек и генерации новых деталей.</p>
-        </div>
         <button class="btn geometry-first-btn" id="intake-geometry-start" type="button">Создать Auto Tech Master</button>
       </section>
 
-        <section class="geometry-editor" id="intake-geometry-panel" hidden aria-label="Управляемое исправление перспективы фасада">
+        <section class="geometry-editor" id="intake-geometry-panel" hidden inert aria-hidden="true" aria-label="Управляемое исправление перспективы фасада">
           <h3>Укажите углы фасада</h3>
           <p class="muted">Нажмите на фотографии: 1 — верхний левый, 2 — верхний правый, 3 — нижний правый, 4 — нижний левый угол одной плоскости.</p>
           <div class="geometry-canvas-wrap" id="intake-geometry-image-wrap">
@@ -272,7 +279,7 @@
           <button class="btn" type="button" id="intake-geometry-submit" disabled>Создать исправленную V2 и вернуть V1 на доработку</button>
           <p class="muted" id="intake-geometry-warning" role="status">Разметку и предпросмотр можно отменить без изменения задания.</p>
         </section>
-      <details class="qa-tech-details" id="intake-tech-details"><summary>Технический протокол <span>Проверки исходника, SHA-256 и битности</span></summary>
+      <details class="qa-tech-details" id="intake-tech-details"><summary>Диагностика</summary>
       <section id="intake-source-verification" class="qa-source-review" aria-label="Протокол проверки исходного изображения" hidden>
         <div class="qa-source-review-head">
           <h3>01 / Проверка исходника</h3>
@@ -296,6 +303,7 @@
           <div id="intake-source-visual-note">Автоматическая коррекция объектива, вертикалей и перспективы не выполнялась. Сохранение геометрии исходника не подтверждает правильность съёмки. Оцените композицию, фактуры и перспективу через Сплит и 100% масштаб.</div>
         </div>
       </section>
+        <p id="intake-correction-report" class="note" hidden></p>
       </details>
       <section id="intake-split-viewer" class="qa-split-viewer" hidden aria-label="Сравнение исходника и Tech Master в одной геометрии">
         <div class="qa-split-toolbar">
@@ -337,7 +345,7 @@
           <img id="intake-preview" alt="Технический мастер для визуального QA" style="display:block;max-height:65vh;object-fit:contain">
         </div>
         <p><a id="intake-preview-native" href="#" target="_blank" rel="noopener" hidden>Открыть техническое превью в 100% масштабе</a></p>
-        <p class="muted">Браузер показывает 8-битное представление 16-битного TIFF. Масштабирование и проверка реальной геометрии остаются обязанностью визуального QA.</p>
+        
       </figure>
       </div>
       <div id="intake-visual-checks" class="qa-checklist" hidden>
@@ -346,14 +354,14 @@
         <label><input type="checkbox" id="intake-check-materials"> Материалы, свет и идентичность объектов сохранены; HDR отсутствует</label>
       </div>
       <div class="flex qa-actions">
-        <button class="btn" id="intake-approve" disabled type="button">Утвердить Tech Master</button>
-        <button class="btn mutebtn" id="intake-reject" disabled type="button">Вернуть на доработку</button>
+        <button class="btn" id="intake-approve" disabled type="button">Утвердить</button>
+        <button class="btn mutebtn" id="intake-reject" disabled type="button">Доработать</button>
         <!-- Export/transfer is a separate fourth step AFTER human QA. -->
       </div>
 
       <section class="raw-destination" id="intake-destination-panel" hidden aria-label="Шаг 4: сохранение и передача">
         <h3>04 · Сохранение и передача</h3>
-        <p class="muted">Утверждённый 16-битный мастер сохраняется отдельной версией. Выберите совместимый контур. Недоступные приёмники не запускаются.</p>
+        
         <label for="intake-destination">Контур-получатель</label>
         <select id="intake-destination"><option value="marins-mg4k">MG4K — улучшение</option></select>
         <div class="flex">
@@ -364,7 +372,7 @@
       </section>
       <div id="intake-rework-form" hidden style="margin:14px 0;padding:14px;border:1px solid #4d6070">
         <h3>Замечания к техническому мастеру</h3>
-        <p class="muted">Выберите категории и обязательно опишите конкретные изменения. Исходник и отклонённая версия сохраняются.</p>
+        
         <div class="fields" id="intake-rework-categories">
           <label><input type="checkbox" value="geometry"> Геометрия, перспектива, вертикали</label>
           <label><input type="checkbox" value="exposure"> Свет и экспозиция</label>
@@ -374,19 +382,19 @@
           <label><input type="checkbox" value="other"> Другое</label>
         </div>
         <label for="intake-rework-note">Что исправить</label>
-        <textarea id="intake-rework-note" rows="3" maxlength="2000" placeholder="Например: исправить наклон вертикалей без изменения габаритов здания; сохранить естественный свет и фактуры." style="width:100%"></textarea>
+        <textarea id="intake-rework-note" rows="3" maxlength="2000" placeholder="Замечание" style="width:100%"></textarea>
         <div class="flex">
-          <button class="btn" id="intake-rework-submit" type="button">Зафиксировать возврат</button>
+          <button class="btn" id="intake-rework-submit" type="button">Создать исправленную версию</button>
           <button class="btn mutebtn" id="intake-rework-cancel" type="button">Отмена</button>
         </div>
       </div>
       <div id="intake-revision-panel" hidden style="margin:14px 0;padding:14px;border:1px solid #4d6070">
         <h3 id="intake-revision-title">Исправленная версия</h3>
         <section id="intake-auto-panel" style="border:1px solid #3b6178;padding:13px;margin:10px 0">
-          <strong>Автоматическая техническая коррекция → V2</strong>
-          <p class="muted">Работает только при измеримых отклонениях глобальной экспозиции или нейтрального баланса белого. Без HDR и ИИ. Для архитектурной перспективы, оптики, деталей и материалов без достоверной калибровки — HOLD, а не выдуманное исправление.</p>
+          
+          
           <p class="muted" id="intake-auto-eligibility">Условия коррекции проверяются после регистрации замечаний.</p>
-          <button class="btn" id="intake-auto-rework" type="button" disabled>Запустить безопасную коррекцию</button>
+          <button class="btn" id="intake-auto-rework" type="button" disabled>Исправить свет и цвет</button>
         </section>
 
         <p class="muted" id="intake-rework-remarks"></p>
@@ -396,16 +404,16 @@
         <a id="intake-next-revision-link" href="#" hidden>Открыть созданную версию</a>
       </div>
       <div id="intake-comparison" hidden style="margin:12px 0">
-        <h3>Контроль версий — исходник / предыдущий мастер / текущий мастер</h3>
+        
         <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px">
           <figure><figcaption>Исходник</figcaption><a id="compare-original-link" target="_blank" rel="noopener"><img id="compare-original" alt="Исходная фотография" style="width:100%;object-fit:contain"></a></figure>
           <figure><figcaption>Предыдущий Tech Master</figcaption><a id="compare-previous-link" target="_blank" rel="noopener"><img id="compare-previous" alt="Предыдущая версия мастера" style="width:100%;object-fit:contain"></a></figure>
           <figure><figcaption>Текущий Tech Master</figcaption><a id="compare-current-link" target="_blank" rel="noopener"><img id="compare-current" alt="Новая версия мастера" style="width:100%;object-fit:contain"></a></figure>
         </div>
       </div>
-      <p id="intake-correction-report" class="note" hidden></p>
+      
       <p><a id="intake-import-link" href="#" hidden>Открыть Tech Master в MG4K →</a></p>
-      <p class="note">Для JPEG/PNG/WebP автоматически формируется нейтральный 16-битный TIFF без HDR. Если источник был 8-битным, дополнительная информация не возникает. Художественная генерация разрешается только отдельно после QA.</p>
+      
     </section>
     <details class="archive-bundle diagnostics-archive" id="legacy-archive">
       <summary><strong>Диагностика / архив</strong> Исторические версии и служебные инструменты</summary>
@@ -626,7 +634,7 @@ function updateIntakeActions(){
  e("intake-handoff").disabled=e("intake-handoff").disabled||
    ![...receiver.options].some(x=>x.value===receiver.value&&!x.disabled);
  e("intake-revision-submit").disabled=intakeBusy||data.can_upload_revision!==true||!e("intake-revision-file").files[0];
- e("intake-geometry-open").disabled=intakeBusy||data.can_geometry_rework!==true;
+ e("intake-geometry-open").disabled=true;
  e("intake-front-auto").disabled=intakeBusy||data.can_geometry_rework!==true;
 }
 async function loadIntakePreview(id,sha){
@@ -717,14 +725,7 @@ function setIntake(data){
  e("intake-empty").hidden=true;
  updateSourceVerification(data);
  e("intake-id").textContent=(data.job_id||"—")+" · V"+(data.revision_num||1);
- e("intake-geometry-check-label").textContent=
-   data.source_verification?.geometry_preservation==="AUTO_PERSPECTIVE_PENDING_HUMAN_QA"?
-   "Автоматическая геометрия проверена: вертикали, перспектива, обрезка и архитектура сохранены":
-   data.source_verification?.geometry_preservation==="AUTO_LEVELLED_PENDING_HUMAN_QA"?
-   "Автоматическое выравнивание проверено: вертикали, обрезка, архитектура и окружение сохранены":
-   data.technical_correction?.geometry_correction==="CONTROLLED_PENDING_VISUAL_QA"?
-   "Выпрямленная плоскость фасада проверена; объекты вне плоскости, детали и композиция не искажены":
-   "Геометрия, перспектива и архитектура соответствуют исходнику";
+ e("intake-geometry-check-label").textContent="Геометрия и архитектура сохранены";
  const techTab=e("intake-split-viewer").querySelector('[data-intake-mode="tech"]');
  if(techTab)techTab.textContent="Tech V"+(data.revision_num||1);
  e("intake-status").textContent=readableStatus[data.status]||data.status||"Неизвестно";
@@ -733,12 +734,18 @@ function setIntake(data){
  if(typeof data.progress==="number"&&Number.isFinite(data.progress)){
   bar.hidden=false;bar.value=Math.max(0,Math.min(100,data.progress));
   bar.title=data.progress+"% только технического этапа";
+   e("intake-live-percent").textContent=Math.round(bar.value)+"%";
+   e("intake-live-stage").hidden=false;
  }else{
   bar.value=0;bar.hidden=true;
   bar.title="Процент неизвестен; техническая обработка не начата";
+   e("intake-live-percent").textContent="";
+   e("intake-live-stage").hidden=true;
  }
- e("intake-message").textContent=data.error?"Не удалось завершить этап: "+String(data.error).slice(0,500):
-   data.mg4k_imported?"TECH MASTER передан в MG4K.":data.message||"";
+ const stageNames={technical_dispatch:"Запуск обработки",technical_processing:"Обработка",technical_qa_ready:"Проверка завершена",correction_hold:"Коррекция остановлена",source_preview_ready:"Исходник готов",RAW_thumbnail_only:"Подготовка превью"};
+ e("intake-live-action").textContent=stageNames[data.stage]||readableStatus[data.status]||"Обработка";
+ e("intake-message").textContent=data.error?"Остановлено: "+String(data.error).slice(0,160):"";
+ if(!intakeBusy)e("intake-rework-progress").hidden=true;
  e("intake-recheck-panel").hidden=data.can_recheck_integrity!==true;
  e("intake-recheck").disabled=intakeBusy||data.can_recheck_integrity!==true;
  const link=e("intake-import-link");if(link){
@@ -747,11 +754,12 @@ function setIntake(data){
  const form=e("intake-rework-form");
  if(!data.can_rework)form.hidden=true;
  const revisionPanel=e("intake-revision-panel");
- revisionPanel.hidden=!data.rework;
+ revisionPanel.hidden=!(data.can_auto_rework||data.next_revision_job_id);
+ e("intake-auto-panel").hidden=data.can_auto_rework!==true;
  e("intake-geometry-first").hidden=!data.can_auto_geometry_reprocess;
  e("intake-geometry-start").disabled=intakeBusy||!data.can_auto_geometry_reprocess;
  e("intake-rework-action").hidden=data.can_geometry_rework!==true;
- if(!data.can_geometry_rework)e("intake-geometry-panel").hidden=true; // keep editor open during polling
+ e("intake-geometry-panel").hidden=true; // legacy UI is inaccessible
  const autoButton=e("intake-auto-rework");
  autoButton.disabled=intakeBusy||!data.can_auto_rework;
  e("intake-auto-eligibility").textContent=data.rework?
@@ -800,7 +808,7 @@ function setIntake(data){
        o.op+(o.ev!==undefined?" "+o.ev+" EV":"")+
        (o.gain_rgb?" RGB ×"+o.gain_rgb.join("/"):"")).join("; ")+".":
        "Ожидается анализ измеримых отклонений.")+
-     " Геометрия и объектив автоматически НЕ исправлялись; решение QA обязательно.";
+     (correction.geometry_correction==="CONTROLLED_PENDING_VISUAL_QA"?" Геометрия скорректирована; визуальная проверка ожидается.":" Геометрия не исправлялась; визуальная проверка ожидается.");
  }
  if(data.rework){
    e("intake-revision-title").textContent="Возврат V"+(data.revision_num||1)+" → V"+((data.revision_num||1)+1);
@@ -891,6 +899,11 @@ async function submitRework(){
   });
   const result=await res.json();if(!res.ok)throw Error(result.error||"Не удалось вернуть на доработку");
   e("intake-rework-form").hidden=true;await intakeStatus();
+   if(categories.length===1&&categories[0]==="geometry"&&intakeState?.can_geometry_rework){
+     intakeBusy=false;await automaticFrontRework();
+   }else if(categories.every(x=>x==="exposure"||x==="color")&&intakeState?.can_auto_rework){
+     intakeBusy=false;await automaticRework();
+   }
  }catch(err){e("intake-message").textContent=String(err)}
  finally{intakeBusy=false;e("intake-rework-submit").disabled=false;updateIntakeActions()}
 }
@@ -980,7 +993,7 @@ async function automaticFrontRework(){
  if(!intakeId||!intakeState?.can_geometry_rework||intakeBusy)return;
  const id=intakeId,token=jobToken(id);
  intakeBusy=true;updateIntakeActions();
- reworkProgress("Запускаем поиск линий фасада и проверку фронтальной перспективы. Ожидаем подтверждение сервера…");
+ reworkProgress("Запуск коррекции перспективы…");
  try{
    const response=await fetch(base+"/job/rework/geometry?job="+encodeURIComponent(id),{
      method:"POST",headers:sessionHeaders({"content-type":"application/json"}),
@@ -993,7 +1006,7 @@ async function automaticFrontRework(){
    if(!response.ok||!data.job_id)throw Error(data.error||"Не удалось создать новую версию");
    if(token)persistJobToken(data.job_id,token);
    activateIntake(data.job_id);
-   reworkProgress(data.workflow_started===false?"HOLD: сервер не запустил коррекцию. Проверьте диагностику новой версии.":"Задание принято: определение линий → расчёт перспективы → контроль геометрии → сравнение. Прогресс отображается по данным сервера.");
+   reworkProgress(data.workflow_started===false?"Коррекция не запущена":"Коррекция перспективы · в очереди");
  }catch(err){reworkProgress("HOLD: "+String(err.message||err));}
  finally{intakeBusy=false;updateIntakeActions();}
 }
@@ -1305,7 +1318,7 @@ e("intake-rework-cancel").addEventListener("click",()=>e("intake-rework-form").h
 e("intake-revision-submit").addEventListener("click",uploadRevision);
  e("intake-revision-file").addEventListener("change",updateIntakeActions);
  e("intake-front-auto").addEventListener("click",automaticFrontRework);
- e("intake-geometry-open").addEventListener("click",()=>showGeometryEditor().catch(err=>reworkProgress("Не удалось открыть редактор: "+String(err.message||err))));
+
 e("intake-auto-rework").addEventListener("click",automaticRework);
 async function startAutoGeometryVersion(){
  if(!intakeId||!intakeState?.can_auto_geometry_reprocess||intakeBusy)return;
