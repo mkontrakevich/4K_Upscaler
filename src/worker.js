@@ -938,7 +938,6 @@ async function ensureCloudProcessor(env, origin) {
         MG4K_PUBLIC_ORIGIN: origin,
         MG4K_PROCESSOR_TOKEN: processorToken,
         OPENROUTER_API_KEY: openRouterKey,
-        OPENROUTER_MANAGEMENT_KEY: String(env.OPENROUTER_MANAGEMENT_KEY||""),
         MG4K_MIN_PROVIDER_CREDITS_USD: String(env.MG4K_MIN_PROVIDER_CREDITS_USD||"0.50"),
         MG4K_SINGLE_PAID_ATTEMPT: "1",
         MG4K_HEADLESS: "1",
@@ -2006,6 +2005,12 @@ async function handleApi(request, env, ctx, url) {
   if (path === "/api/processor/pair/status" && method === "POST") {
     const ok = await authorizeProcessor(request, env);
     return json({ paired: ok }, ok ? 200 : 403);
+  }
+
+  if(path==="/api/processor/credit-check"&&method==="GET"){
+    if(!await authorizeProcessor(request,env))return json({error:"processor_unauthorized"},403);
+    const credit=await providerCreditPreflight(env);
+    return json(credit,credit.ok?200:credit.code==="PROVIDER_CREDITS_EXHAUSTED"?402:503);
   }
 
   if (path === "/api/processor/claim" && method === "POST") {
