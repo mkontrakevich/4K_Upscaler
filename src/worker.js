@@ -5,6 +5,8 @@ export { EditorialPhotoWorkflow };
 export { EditorialTechWorkflow } from "./editorial_tech_workflow.js";
 import { promptAssistantEnabled, promptAssistantModel, sanitizeAssistantContext, runPromptAssistant } from "./prompt_assistant.js";
 
+import { providerCreditPreflight, canResumeCreditJob } from "./provider_credit_guard.js";
+
 export { ContainerProxy };
 
 export class MG4KProcessor extends Container {
@@ -605,6 +607,8 @@ function publicJob(job) {
     container_build_id: job.container_build_id || null,
     container_instance_name: job.container_instance_name || null,
     manual_retry_required: Boolean(job.manual_retry_required),
+    can_resume_credit: canResumeCreditJob(job),
+    resumed_from_job_id:job.resumed_from_job_id||null,
     validation: job.validation || null,
     decision: job.decision || null,
     approval_mode: job.approval_mode || null,
@@ -934,6 +938,9 @@ async function ensureCloudProcessor(env, origin) {
         MG4K_PUBLIC_ORIGIN: origin,
         MG4K_PROCESSOR_TOKEN: processorToken,
         OPENROUTER_API_KEY: openRouterKey,
+        OPENROUTER_MANAGEMENT_KEY: String(env.OPENROUTER_MANAGEMENT_KEY||""),
+        MG4K_MIN_PROVIDER_CREDITS_USD: String(env.MG4K_MIN_PROVIDER_CREDITS_USD||"0.50"),
+        MG4K_SINGLE_PAID_ATTEMPT: "1",
         MG4K_HEADLESS: "1",
         MG4K_RUNTIME_DIR: "/runtime/bridge",
         MG4K_JOBS_ROOT: "/tmp/mg4k-jobs",
@@ -1117,6 +1124,18 @@ async function storeContainerResult(env, container, job) {
 }
 
 async function dispatchJobToContainer(env, job, origin) {
+  const credit=await providerCreditPreflight(env);
+  if(!credit.ok){
+    job.status="failed";job.stage="provider_credit_hold";job.progress=0;
+    job.error=credit.summary;job.diagnostic_code=credit.code;
+    job.diagnostic_summary=credit.summary;job.diagnostic_layer="provider_billing";
+    job.diagnostic_http_status=credit.code==="PROVIDER_CREDITS_EXHAUSTED"?402:null;
+    job.diagnostic_retryable=false;job.provider_request_count=0;job.provider_cost_usd=0;
+    job.provider_cost_complete=true;job.container_dispatched=false;
+    await writeJob(env,job);
+    await settleBilling(env,job,{resultAvailable:false,hardSystemFailure:true});
+    return {job,container:null};
+  }
   const container = await ensureCloudProcessor(env, origin);
   const source = await env.TEMP_BUFFER_R7.get(job.source_key);
   if (!source) {
@@ -1667,6 +1686,55 @@ async function handleApi(request, env, ctx, url) {
       }
     }
     return json(publicJob(job));
+  }
+
+  const creditResumeMatch=path.match(/^\/api\/jobs\/([0-9a-f-]+)\/resume-credit$/i);
+  if(creditResumeMatch&&method==="POST"){
+    const parent=await readJob(env,creditResumeMatch[1]);
+    if(!parent)return json({error:"job_not_found"},404);
+    if(!await authorizeJob(request,url,parent))return json({error:"forbidden"},403);
+    if(!canResumeCreditJob(parent))return json({error:"credit_resume_not_safe"},409);
+    // Commercial mode requires a new reservation rather than reusing a settled one.
+    if(billingEnabled(env)||parent.billing_reservation_id)return json({error:"fresh_billing_reservation_required"},409);
+    const session=await authorizeSession(request,url,env);
+    if(!session)return json({error:"session_required"},403);
+    const token=jobToken(request,url);
+    const digest=await sha256("credit-resume:"+parent.id);
+    const id=`${digest.slice(0,8)}-${digest.slice(8,12)}-${digest.slice(12,16)}-${digest.slice(16,20)}-${digest.slice(20,32)}`;
+    const accessToken=(await sha256("credit-resume-access:"+parent.id+":"+token)).slice(0,48);
+    const existing=await readJob(env,id);
+    if(existing?.resumed_from_job_id===parent.id)return json({...publicJob(existing),token:accessToken,idempotent:true});
+    const credit=await providerCreditPreflight(env);
+    if(!credit.ok)return json({error:credit.code,message:credit.summary},credit.code==="PROVIDER_CREDITS_EXHAUSTED"?402:503);
+    // Inspect durable archive as well as transient state, in case the Container
+    // was retired after producing an artifact. Never resume an accepted donor.
+    const archived=await listAllObjects(env,`archive/jobs/${parent.id}/`);
+    if(archived.some(o=>/\/(DONOR_RAW|RESULT|FINAL)\//.test(o.key)))return json({error:"existing_paid_artifact"},409);
+    let source=parent.source_key?await env.TEMP_BUFFER_R7.get(parent.source_key):null;
+    if(!source){
+      const candidates=archived.filter(o=>o.key.startsWith(`archive/jobs/${parent.id}/SOURCE/`));
+      if(candidates.length!==1)return json({error:"original_source_unavailable"},409);
+      source=await env.TEMP_BUFFER_R7.get(candidates[0].key);
+    }
+    if(!source||Number(source.size)!==Number(parent.bytes))return json({error:"original_source_unavailable"},409);
+    const bytes=await source.arrayBuffer();
+    // One atomic durable claim per failed parent prevents double-clicks and
+    // concurrent requests from authorizing multiple paid children.
+    const claim=await env.TEMP_BUFFER_R7.put(`archive/jobs/${parent.id}/_credit_resume.json`,JSON.stringify({child_id:id,created_at:now()}),{onlyIf:new Headers({"If-None-Match":"*"})});
+    if(!claim)return json({error:"credit_resume_already_claimed"},409);
+    const sourceKey=`sessions/${session.id}/jobs/${id}/source/${cleanName(parent.filename)}`;
+    await env.TEMP_BUFFER_R7.put(sourceKey,bytes,{httpMetadata:{contentType:parent.content_type},customMetadata:{job_id:id,session_id:session.id,kind:"source"}});
+    const child={id,session_id:session.id,access_hash:await sha256(accessToken),resumed_from_job_id:parent.id,
+      status:"queued",stage:"uploaded",progress:5,created_at:now(),updated_at:now(),
+      filename:parent.filename,content_type:parent.content_type,bytes:parent.bytes,mode:parent.mode,
+      locks:parent.locks,editorial_lineage:parent.editorial_lineage||null,prompt_override:parent.prompt_override||null,
+      prompt_sha256:parent.prompt_sha256||null,source_key:sourceKey,result_key:null,error:null,validation:null,decision:null};
+    await archiveBytes(env,{job:child,bytes,contentType:child.content_type,name:child.filename,kind:"SOURCE",status:"credit_resumed",persistSource:"server_original_reuse"});
+    await writeJob(env,child);await persistArchiveAccessManifest(env,child);
+    if(!session.jobs.includes(id))session.jobs.push(id);await writeSession(env,session);
+    // Normal authenticated polling dispatches the child. No timer or credit
+    // replenishment can start a generation without this explicit POST.
+    return json({...publicJob(child),token:accessToken},201);
   }
 
   const jobDecisionMatch = path.match(/^\/api\/jobs\/([0-9a-f-]+)\/decision$/i);
