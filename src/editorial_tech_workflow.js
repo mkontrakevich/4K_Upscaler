@@ -187,6 +187,7 @@ async function proof(env,id,job){
        !Array.isArray(qa.correction?.operations)||
        qa.correction.operations.length<1||
        qa.correction?.correction_status!=="APPLIED"||
+        (job.correction_plan.anchor_mode==="AUTO_FRONT"&&(qa.correction?.anchor_mode!=="AUTO_FRONT"||qa.correction?.correction_class!=="AUTO_INFERRED_PROJECTIVE"||!qa.correction?.automatic_anchor_evidence?.residual_QA))||
        qa.correction?.geometry_transform!==(geometryPlan?
          "CONTROLLED_PROJECTIVE_WARP":"IDENTITY")||
        (geometryPlan&&(qa.correction?.perspective_corrected!==true||
@@ -370,7 +371,7 @@ export class EditorialTechWorkflow extends WorkflowEntrypoint{
       const saved=await step.do("persist-verified-technical-master",()=>persist(env,id,job,qa));
       await update(env,id,{status:"AWAITING_HUMAN_QA",stage:"technical_qa_ready",progress:100,
         message:job.correction_plan?.type==="GEOMETRY_FACADE_QUAD_V1"?
-          "Перспектива фасада скорректирована по четырём точкам. Проверьте здание и объекты вне фасада перед утверждением.":
+          (job.correction_plan.anchor_mode==="AUTO_FRONT"?"Фронтальная перспектива исправлена по автоматически найденной сетке линий. Проверьте здание и окружение перед утверждением.":"Перспектива фасада скорректирована по четырём точкам. Проверьте здание и объекты вне фасада перед утверждением."):
           job.correction_plan?
           "Исправленная V2 готова: "+job.correction_plan.categories.join(", ")+
           ". Проверьте изменения визуально, автоматически не утверждается.":
