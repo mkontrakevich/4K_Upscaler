@@ -7,6 +7,8 @@ const ROOT=PROJECT+"/"+FRAME+"/";
 const MAX_SOURCE=8*1024*1024;
 const MAX_RAW_SOURCE=90*1024*1024;
 const RAW_EXTENSIONS=new Set(["arw","dng","nef","nrw","cr2","cr3","raf","orf","rw2","pef","srw","3fr","iiq","x3f"]);
+const RASTER_EXTENSIONS=new Set(["jpg","jpeg","png","webp"]);
+const SUPPORTED_SOURCE_EXTENSIONS=new Set([...RAW_EXTENSIONS,...RASTER_EXTENSIONS]);
 const MODEL="google/gemini-3.1-flash-image";
 const AUDIT_MODEL="google/gemini-3-flash-preview";
 const j=(x,s=200)=>Response.json(x,{status:s,headers:{"cache-control":"no-store"}});
@@ -18,6 +20,39 @@ function b64(bytes){let s="";const a=new Uint8Array(bytes);for(let p=0;p<a.lengt
 function binary(base64){const s=atob(base64);const arr=new Uint8Array(s.length);for(let i=0;i<s.length;i++)arr[i]=s.charCodeAt(i);return arr}
 function imageUrl(b,mime="image/jpeg"){return "data:"+mime+";base64,"+b64(b)}
 function sourceName(key){return typeof key==="string"&&key.startsWith(ROOT)&&/^[a-zA-Z0-9/_\-.]{10,150}$/.test(key)&&!key.includes("..")&&/\.(jpe?g|png|webp)$/i.test(key)}
+function sourceExt(name){return String(name||"").match(/\.([a-z0-9]+)$/i)?.[1]?.toLowerCase()||""}
+function validYandexPublicLink(value){
+  try{
+    const u=new URL(String(value||"").trim());
+    if(u.protocol!=="https:")return null;
+    const host=u.hostname.toLowerCase();
+    if(!["disk.yandex.ru","disk.yandex.com","yadi.sk"].includes(host))return null;
+    if(!/^\/(?:d|i)\/[A-Za-z0-9_-]+/.test(u.pathname))return null;
+    u.hash="";
+    return u.toString();
+  }catch{return null}
+}
+async function yandexPublicResource(publicLink,path=""){
+  const qs=new URLSearchParams({public_key:publicLink,limit:"200",fields:"name,type,path,size,mime,file,modified,_embedded.items.name,_embedded.items.type,_embedded.items.path,_embedded.items.size,_embedded.items.mime,_embedded.items.file,_embedded.items.modified"});
+  if(path)qs.set("path",path);
+  const res=await fetch("https://cloud-api.yandex.net/v1/disk/public/resources?"+qs.toString(),{
+    headers:{"user-agent":"MG4K-TECH-MASTER/1.0"}
+  });
+  const data=await res.json().catch(()=>({}));
+  if(!res.ok)throw Error("YANDEX_PUBLIC_LINK_"+res.status+":"+String(data?.message||data?.error||"not_available").slice(0,160));
+  return data;
+}
+function yandexItem(item){
+  const type=String(item?.type||"");
+  const name=String(item?.name||"").slice(0,180);
+  const path=String(item?.path||"").slice(0,800);
+  const ext=sourceExt(name);
+  return {
+    type,name,path,ext,size:Number(item?.size||0)||null,
+    modified:item?.modified||null,
+    supported:type==="dir"||(type==="file"&&SUPPORTED_SOURCE_EXTENSIONS.has(ext))
+  };
+}
 async function object(env,key,maxBytes=MAX_SOURCE){
  const o=await env.TROPICANA_EDITORIAL_R2.get(key);
  if(!o)throw new Error("editorial_source_not_found");
@@ -166,6 +201,115 @@ export async function editorialApi(request,env,url,authorizeSession){
  if(path==="/api/editorial/health"&&method==="GET"){
   return j({ok:true,project:PROJECT,frame:FRAME,module:"TECH MASTER / RAW",storage_isolated:!!env.TROPICANA_EDITORIAL_R2,openrouter_configured:!!env.OPENROUTER_API_KEY,job_control:"Cloudflare Workflows API only",skill:"v1.13",technical_master_policy:"V10_NEUTRAL_NO_HDR",generation_guard:"HUMAN_QA_APPROVAL_REQUIRED",image_model:env.EDITORIAL_IMAGE_MODEL||MODEL,workflow:"mg4k-tropicana-editorial",technical_workflow_configured:!!env.TROPICANA_TECH_WORKFLOW});
  }
+ if(path==="/api/editorial/yandex/list"&&method==="POST"){
+  const session=await authorizeSession(request,url,env);
+  if(!session)return j({error:"session_required"},403);
+  let input;try{input=await request.json()}catch{return j({error:"invalid_json"},400)}
+  const publicLink=validYandexPublicLink(input?.url);
+  if(!publicLink)return j({error:"invalid_public_yandex_link"},400);
+  const requestedPath=typeof input?.path==="string"?input.path.slice(0,800):"";
+  let resource;
+  try{resource=await yandexPublicResource(publicLink,requestedPath)}
+  catch(error){return j({error:"public_folder_unavailable",reason:String(error?.message||error).slice(0,180)},409)}
+  if(resource.type==="file"){
+    const item=yandexItem(resource);
+    if(!item.supported)return j({error:"unsupported_source_type",item},415);
+    return j({ok:true,kind:"file",current_path:item.path||requestedPath,items:[item]});
+  }
+  if(resource.type!=="dir")return j({error:"public_resource_not_file_or_folder"},415);
+  const items=(resource?._embedded?.items||[]).map(yandexItem)
+    .filter(x=>x.type==="dir"||x.supported)
+    .sort((a,b)=>(a.type===b.type?String(a.name).localeCompare(String(b.name),"ru"):(a.type==="dir"?-1:1)));
+  return j({ok:true,kind:"dir",current_path:String(resource.path||requestedPath||""),name:String(resource.name||"Папка"),items});
+ }
+
+ if(path==="/api/editorial/yandex/import"&&method==="POST"){
+  const session=await authorizeSession(request,url,env);
+  if(!session)return j({error:"session_required"},403);
+  if(!env.TROPICANA_EDITORIAL_R2)return j({error:"r2_missing"},503);
+  let input;try{input=await request.json()}catch{return j({error:"invalid_json"},400)}
+  const publicLink=validYandexPublicLink(input?.url);
+  const requestedPath=typeof input?.path==="string"?input.path.slice(0,800):"";
+  if(!publicLink)return j({error:"invalid_public_yandex_link"},400);
+
+  const limitKey="editorial:upload:"+session.id;
+  const usage=Number(await env.SESSION_STATE_R7.get(limitKey)||0);
+  if(usage>=2)return j({error:"upload_session_limit"},429);
+
+  let resource;
+  try{resource=await yandexPublicResource(publicLink,requestedPath)}
+  catch(error){return j({error:"public_file_unavailable",reason:String(error?.message||error).slice(0,180)},409)}
+  if(resource.type!=="file")return j({error:"choose_file_from_public_folder"},400);
+  const filename=String(resource.name||"source").split(/[\\/]/).pop().slice(0,128);
+  const ext=sourceExt(filename);
+  if(!SUPPORTED_SOURCE_EXTENSIONS.has(ext))return j({error:"unsupported_source_extension",extension:ext},415);
+  const isRaw=RAW_EXTENSIONS.has(ext);
+  const max=isRaw?MAX_RAW_SOURCE:MAX_SOURCE;
+  const expectedSize=Number(resource.size||0);
+  if(!Number.isSafeInteger(expectedSize)||expectedSize<10000||expectedSize>max)
+    return j({error:"source_size_invalid",max_bytes:max,size:expectedSize},413);
+
+  let direct=String(resource.file||"");
+  if(!direct){
+    const qs=new URLSearchParams({public_key:publicLink});
+    if(requestedPath)qs.set("path",requestedPath);
+    const dl=await fetch("https://cloud-api.yandex.net/v1/disk/public/resources/download?"+qs.toString());
+    const info=await dl.json().catch(()=>({}));
+    if(!dl.ok||!info?.href)return j({error:"public_file_download_link_unavailable"},409);
+    direct=String(info.href);
+  }
+  let sourceResponse;
+  try{sourceResponse=await fetch(direct,{redirect:"follow"})}
+  catch(error){return j({error:"public_file_download_failed",reason:String(error?.message||error).slice(0,160)},502)}
+  if(!sourceResponse.ok||!sourceResponse.body)return j({error:"public_file_download_http_"+sourceResponse.status},502);
+  const received=Number(sourceResponse.headers.get("content-length")||expectedSize);
+  if(received!==expectedSize)return j({error:"public_file_size_changed",expected:expectedSize,received},409);
+
+  const mime=isRaw?"application/x-camera-raw":
+    (ext==="png"?"image/png":ext==="webp"?"image/webp":"image/jpeg");
+  const sourceKey=PROJECT+"/editorial-inbox/"+session.id+"/"+crypto.randomUUID()+"."+ext;
+  let stored;
+  try{
+    stored=await env.TROPICANA_EDITORIAL_R2.put(sourceKey,sourceResponse.body,{
+      httpMetadata:{contentType:mime},
+      customMetadata:{
+        project:PROJECT,frame:FRAME,source_kind:isRaw?"CAMERA_RAW":"RASTER",
+        original_name:filename,source_origin:"YANDEX_PUBLIC_LINK"
+      }
+    });
+  }catch(error){return j({error:"public_file_store_failed",reason:String(error?.message||error).slice(0,180)},502)}
+  const sha=stored?.checksums?.sha256?hex(stored.checksums.sha256):"";
+  if(!stored||stored.size!==expectedSize||!/^[a-f0-9]{64}$/.test(sha)){
+    try{await env.TROPICANA_EDITORIAL_R2.delete(sourceKey)}catch{}
+    return j({error:"source_integrity_HOLD"},409);
+  }
+
+  await env.SESSION_STATE_R7.put(limitKey,String(usage+1),{expirationTtl:3600});
+  const intake=await createEditorialIntakeJob(env,session,{
+    filename,mime,source_key:sourceKey,source_sha256:sha,bytes:expectedSize
+  });
+
+  let preview_started=false,preview_error=null;
+  if(isRaw&&env.TROPICANA_TECH_WORKFLOW){
+    try{
+      await env.TROPICANA_TECH_WORKFLOW.create({
+        id:crypto.randomUUID(),params:{job_id:intake.job_id,preview_only:true}
+      });
+      preview_started=true;
+    }catch(error){
+      preview_error=String(error?.message||error).slice(0,180);
+    }
+  }
+  return j({
+    ok:true,source:"YANDEX_PUBLIC_LINK",job_id:intake.job_id,job_token:intake.job_token,
+    filename,source_kind:isRaw?"CAMERA_RAW":"RASTER",sha256:sha,bytes:expectedSize,
+    status:"AWAITING_TECH_PROCESSING",stage:"source_stored",
+    source_preview_started:preview_started,source_preview_ready:!isRaw,
+    source_preview_error:preview_error,technical_processing_started:false,
+    message:"Оригинал сохранён. Нажмите «Создать TECH MASTER».",generation_started:false
+  },201);
+ }
+
  if(path==="/api/editorial/upload-raw"&&method==="POST"){
   const session=await authorizeSession(request,url,env);
   if(!session)return j({error:"session_required"},403);
