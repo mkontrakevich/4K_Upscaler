@@ -351,6 +351,7 @@ function state(job,a) {
       (a.previewState?.status||"PREPARING"):"READY",
     can_start_processing:!a.q&&!a.d&&!a.processing&&
       job.status==="AWAITING_TECH_PROCESSING"&&a.previewReady,
+    can_recheck_integrity:qaIntegrityHold,
     destination_choices:[
       {id:"marins-mg4k",name:"MG4K — улучшение",enabled:true},
       {id:"marins-welcome-studio",name:"Студия приветствий",enabled:false,reason:"Приём TIFF не подключён"},
@@ -485,6 +486,20 @@ export async function editorialJobApi(request,env,url,authorizeSession) {
       job_id:id,overall:a.q?"PASS":"HOLD",checks,
       no_generation_started:job.auto_generation!==true});
   }
+  if(path==="/api/editorial/job/recheck"&&method==="POST"){
+    const verified=await verifiedTech(env,job);
+    if(verified){
+      await env.TROPICANA_EDITORIAL_R2.put(key(id,"processing-state.json"),JSON.stringify({
+        job_id:id,status:"AWAITING_HUMAN_QA",stage:"technical_qa_verified",
+        progress:100,message:"TECH MASTER проверен. Сравните его с исходником.",
+        generation_started:false,updated_at:new Date().toISOString()
+      }),{httpMetadata:{contentType:"application/json"}});
+      return json({ok:true,status:"AWAITING_HUMAN_QA",technical_master_ready:true});
+    }
+    return json({ok:false,status:"QA_INTEGRITY_HOLD",
+      message:"Проверка пока не прошла. Откройте диагностику для причины."},409);
+  }
+
   if(path==="/api/editorial/job/process"&&method==="POST"){
     // Explicit user action only. Historical rework jobs have their own guarded entrypoints.
     if(job.status!=="AWAITING_TECH_PROCESSING"||a.processing||a.q||a.d)
