@@ -103,6 +103,8 @@ def prepare(source: Path, out: Path, job_id: str, expected_sha: str, correction_
     source_preview_rgb16 = rgb16.copy() if source_kind == "CAMERA_RAW" else None
     from editorial_source_metadata import extract_source_metadata
     source_metadata = extract_source_metadata(source, source_kind)
+    payload = json.loads(correction_plan.read_text(encoding="utf-8")) if correction_plan is not None else None
+    automatic_front = bool(payload and payload.get("type") == "GEOMETRY_FACADE_QUAD_V1" and payload.get("anchor_mode") == "AUTO_FRONT")
     correction = None
     auto_optics = None
     auto_geometry = None
@@ -112,7 +114,7 @@ def prepare(source: Path, out: Path, job_id: str, expected_sha: str, correction_
     # Initial TECH MASTER is an active technical-development pipeline:
     # verified optics -> camera geometry -> neutral exposure/color.
     # Every risky stage can HOLD independently without blocking safe stages.
-    if correction_plan is None:
+    if correction_plan is None or automatic_front:
         try:
             from editorial_auto_optics import apply as auto_optics_apply
             rgb16, auto_optics = auto_optics_apply(rgb16, source, source_kind, source_metadata)
@@ -137,7 +139,7 @@ def prepare(source: Path, out: Path, job_id: str, expected_sha: str, correction_
             "next_stage":"MANUAL_DIAGNOSTIC_ONLY"
         }
 
-    if correction_plan is None:
+    if correction_plan is None or automatic_front:
         from editorial_auto_roll_correction import apply as auto_roll
         rgb16, auto_geometry = auto_roll(rgb16, scene_analysis)
 
@@ -169,7 +171,6 @@ def prepare(source: Path, out: Path, job_id: str, expected_sha: str, correction_
             }
 
     if correction_plan is not None:
-        payload = json.loads(correction_plan.read_text(encoding="utf-8"))
         if payload.get("type") == "GEOMETRY_FACADE_QUAD_V1":
             from editorial_facade_geometry import correct
         else:
