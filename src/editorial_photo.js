@@ -33,7 +33,7 @@ function validYandexPublicLink(value){
   }catch{return null}
 }
 async function yandexPublicResource(publicLink,path=""){
-  const qs=new URLSearchParams({public_key:publicLink,limit:"200",fields:"name,type,path,size,mime,file,modified,_embedded.items.name,_embedded.items.type,_embedded.items.path,_embedded.items.size,_embedded.items.mime,_embedded.items.file,_embedded.items.modified"});
+  const qs=new URLSearchParams({public_key:publicLink,limit:"200",fields:"name,type,path,size,mime,file,modified,sha256,md5,_embedded.items.name,_embedded.items.type,_embedded.items.path,_embedded.items.size,_embedded.items.mime,_embedded.items.file,_embedded.items.modified,_embedded.items.sha256,_embedded.items.md5"});
   if(path)qs.set("path",path);
   const res=await fetch("https://cloud-api.yandex.net/v1/disk/public/resources?"+qs.toString(),{
     headers:{"user-agent":"MG4K-TECH-MASTER/1.0"}
@@ -50,6 +50,8 @@ function yandexItem(item){
   return {
     type,name,path,ext,size:Number(item?.size||0)||null,
     modified:item?.modified||null,
+    sha256:/^[a-f0-9]{64}$/i.test(String(item?.sha256||""))?String(item.sha256).toLowerCase():null,
+    md5:/^[a-f0-9]{32}$/i.test(String(item?.md5||""))?String(item.md5).toLowerCase():null,
     supported:type==="dir"||(type==="file"&&SUPPORTED_SOURCE_EXTENSIONS.has(ext))
   };
 }
@@ -268,21 +270,28 @@ export async function editorialApi(request,env,url,authorizeSession){
   const mime=isRaw?"application/x-camera-raw":
     (ext==="png"?"image/png":ext==="webp"?"image/webp":"image/jpeg");
   const sourceKey=PROJECT+"/editorial-inbox/"+session.id+"/"+crypto.randomUUID()+"."+ext;
+  const sourceSha=/^[a-f0-9]{64}$/i.test(String(resource.sha256||""))?
+    String(resource.sha256).toLowerCase():null;
+  if(!sourceSha)return j({error:"public_source_sha256_missing"},409);
+
   let stored;
   try{
     stored=await env.TROPICANA_EDITORIAL_R2.put(sourceKey,sourceResponse.body,{
+      sha256:sourceSha,
       httpMetadata:{contentType:mime},
       customMetadata:{
+        sha256:sourceSha,
         project:PROJECT,frame:FRAME,source_kind:isRaw?"CAMERA_RAW":"RASTER",
         original_name:filename,source_origin:"YANDEX_PUBLIC_LINK"
       }
     });
   }catch(error){return j({error:"public_file_store_failed",reason:String(error?.message||error).slice(0,180)},502)}
-  const sha=stored?.checksums?.sha256?hex(stored.checksums.sha256):"";
-  if(!stored||stored.size!==expectedSize||!/^[a-f0-9]{64}$/.test(sha)){
+  const nativeSha=stored?.checksums?.sha256?hex(stored.checksums.sha256):null;
+  if(!stored||stored.size!==expectedSize||(nativeSha&&nativeSha!==sourceSha)){
     try{await env.TROPICANA_EDITORIAL_R2.delete(sourceKey)}catch{}
     return j({error:"source_integrity_HOLD"},409);
   }
+  const sha=sourceSha;
 
   await env.SESSION_STATE_R7.put(limitKey,String(usage+1),{expirationTtl:3600});
   const intake=await createEditorialIntakeJob(env,session,{
