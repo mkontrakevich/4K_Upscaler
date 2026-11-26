@@ -351,6 +351,7 @@ function state(job,a) {
       (a.previewState?.status||"PREPARING"):"READY",
     can_start_processing:!a.q&&!a.d&&!a.processing&&
       job.status==="AWAITING_TECH_PROCESSING"&&a.previewReady,
+    can_recheck_integrity:qaIntegrityHold,
     destination_choices:[
       {id:"marins-mg4k",name:"MG4K — улучшение",enabled:true},
       {id:"marins-welcome-studio",name:"Студия приветствий",enabled:false,reason:"Приём TIFF не подключён"},
@@ -485,6 +486,20 @@ export async function editorialJobApi(request,env,url,authorizeSession) {
       job_id:id,overall:a.q?"PASS":"HOLD",checks,
       no_generation_started:job.auto_generation!==true});
   }
+  if(path==="/api/editorial/job/recheck"&&method==="POST"){
+    const verified=await verifiedTech(env,job);
+    if(verified){
+      await env.TROPICANA_EDITORIAL_R2.put(key(id,"processing-state.json"),JSON.stringify({
+        job_id:id,status:"AWAITING_HUMAN_QA",stage:"technical_qa_verified",
+        progress:100,message:"TECH MASTER проверен. Сравните его с исходником.",
+        generation_started:false,updated_at:new Date().toISOString()
+      }),{httpMetadata:{contentType:"application/json"}});
+      return json({ok:true,status:"AWAITING_HUMAN_QA",technical_master_ready:true});
+    }
+    return json({ok:false,status:"QA_INTEGRITY_HOLD",
+      message:"Проверка пока не прошла. Откройте диагностику для причины."},409);
+  }
+
   if(path==="/api/editorial/job/process"&&method==="POST"){
     // Explicit user action only. Historical rework jobs have their own guarded entrypoints.
     if(job.status!=="AWAITING_TECH_PROCESSING"||a.processing||a.q||a.d)
@@ -492,9 +507,10 @@ export async function editorialJobApi(request,env,url,authorizeSession) {
     if(!a.previewReady)return json({error:"source_preview_must_be_visible_before_processing"},409);
     if(!env.TROPICANA_TECH_WORKFLOW)return json({error:"technical_workflow_not_configured"},503);
     const original=await env.TROPICANA_EDITORIAL_R2.head(job.source_key);
+    const nativeSha=original?.checksums?.sha256?hex(original.checksums.sha256):null;
+    const metadataSha=original?.customMetadata?.sha256||null;
     if(!original||original.size!==job.source_bytes||
-       original.customMetadata?.sha256!==job.source_sha256||
-       (original.checksums?.sha256&&hex(original.checksums.sha256)!==job.source_sha256))
+       ((nativeSha||metadataSha)!==job.source_sha256))
       return json({error:"immutable_original_integrity_HOLD"},409);
     const mark=await env.TROPICANA_EDITORIAL_R2.put(key(id,"processing-state.json"),JSON.stringify({
       job_id:id,status:"QUEUED",stage:"operator_requested_technical_analysis",
@@ -536,7 +552,10 @@ export async function editorialJobApi(request,env,url,authorizeSession) {
         "x-mg4k-original-source-sha256":job.source_sha256}});
     }
     const src=await env.TROPICANA_EDITORIAL_R2.get(job.source_key);
-    if(!src||src.size!==job.source_bytes||src.customMetadata?.sha256!==job.source_sha256||
+    const nativeSha=src?.checksums?.sha256?hex(src.checksums.sha256):null;
+    const metadataSha=src?.customMetadata?.sha256||null;
+    if(!src||src.size!==job.source_bytes||
+       ((nativeSha||metadataSha)!==job.source_sha256)||
        !["image/jpeg","image/png","image/webp"].includes(src.httpMetadata?.contentType))
       return json({error:"source_integrity_HOLD"},409);
     return new Response(src.body,{headers:{"content-type":job.mime,"cache-control":"private,no-store",

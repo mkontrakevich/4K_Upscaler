@@ -32,9 +32,11 @@ async function processor(env){
 async function start(env,id,job,previewOnly=false){
   const input=await env.TROPICANA_EDITORIAL_R2.get(job.source_key);
   if(!input||input.size!==job.source_bytes||!input.body)throw Error("source_missing_or_size_changed");
-  if(input.customMetadata?.sha256!==job.source_sha256)throw Error("source_SHA_metadata_mismatch");
-  if(input.checksums?.sha256&&hex(input.checksums.sha256)!==job.source_sha256)
-    throw Error("source_R2_checksum_mismatch");
+  const nativeSha=input.checksums?.sha256?hex(input.checksums.sha256):null;
+  const metadataSha=input.customMetadata?.sha256||null;
+  if(nativeSha&&nativeSha!==job.source_sha256)throw Error("source_R2_checksum_mismatch");
+  if(metadataSha&&metadataSha!==job.source_sha256)throw Error("source_SHA_metadata_mismatch");
+  if(!nativeSha&&!metadataSha)throw Error("source_SHA_evidence_missing");
   const c=await processor(env);
   const {readable,writable}=new FixedLengthStream(input.size);
   const copy=input.body.pipeTo(writable);

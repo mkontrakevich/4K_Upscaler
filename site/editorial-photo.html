@@ -103,7 +103,28 @@
 @media(max-width:800px){.editorial-layout{grid-template-columns:1fr;grid-template-areas:"primary" "rail"}.qa-image-workspace .imagebox{min-height:250px!important;height:min(57vh,550px)}}
 @media(max-width:600px){.qa-image-workspace.is-compare{grid-template-columns:1fr}.qa-panel{padding:14px}.qa-image-workspace .imagebox{min-height:210px!important;height:48vh}.archive-content{padding:9px}.archive-content .triptych{grid-template-columns:1fr}.qa-panel .metric{grid-template-columns:1fr}.qa-panel .metric strong{text-align:left}.qa-head h2{font-size:22px}}.panel{border:1px solid var(--line);background:rgba(14,32,48,.84);padding:20px;border-radius:4px}.metric{display:grid;grid-template-columns:1fr auto;gap:8px;border-bottom:1px solid var(--line);padding:11px 0}.muted,small{color:var(--muted)}.status{color:#ffe1a0}.stack{display:grid;gap:15px}.fields{display:grid;gap:9px}.fields input{padding:10px;width:100%;max-width:100%;background:#07131f;color:var(--txt);border:1px solid var(--line);border-radius:3px}.btn{background:#193d52;color:#fff;border:1px solid #4d8cae;border-radius:3px;cursor:pointer;padding:10px 16px}.btn:disabled{opacity:.5;cursor:default}.mutebtn{background:#122a3b}.triptych{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}[hidden]{display:none!important}.frame{margin:0;display:grid;grid-template-rows:auto 1fr;gap:8px;min-width:0}.frame figcaption{font-size:12px;color:var(--muted);letter-spacing:.12em;text-transform:uppercase}.frame .imagebox{background:#06121c;min-height:190px;aspect-ratio:3/2;border:1px solid #284359;display:grid;place-items:center;color:#7793a8;overflow:hidden}.frame img{width:100%;height:100%;object-fit:contain;display:none}.frame img.ready{display:block}.note{padding:12px 14px;border-left:2px solid var(--gold);background:#152838;color:#c9d4de}.report{margin-top:16px;background:#081923;border:1px solid var(--line);padding:14px;font:12px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace;white-space:pre-wrap;overflow-wrap:anywhere;max-height:280px;overflow:auto}.flex{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.key{font:12px Consolas,monospace;color:#a1b8cd;overflow-wrap:anywhere}@media(max-width:920px){.grid{grid-template-columns:1fr}.triptych{grid-template-columns:1fr}.frame .imagebox{min-height:150px}header{padding:15px 18px}}
 @media(min-width:801px) and (max-width:920px){.grid.editorial-layout{grid-template-columns:minmax(0,1fr) 260px}}
-@media(max-width:800px){.grid.editorial-layout{grid-template-columns:minmax(0,1fr);grid-template-areas:"primary" "rail"}}
+@media(max-width:800px){.grid.editorial-layout{grid-template-columns:minmax(0,1fr);grid-template-areas:"rail" "primary"}}
+.source-entry-panel h2{font-size:22px;margin-bottom:8px}
+.yandex-link-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;margin:14px 0}
+.yandex-link-row input{min-width:0;background:#071723;color:#eaf7ff;border:1px solid #31556d;padding:12px 13px;min-height:44px;font:14px/1.2 inherit}
+.yandex-browser{border:1px solid #28475c;background:#081b28;margin-top:10px}
+.yandex-browser-head{display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid #203b4e}
+.yandex-files{max-height:310px;overflow:auto}
+.yandex-file{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;width:100%;padding:11px 12px;border:0;border-bottom:1px solid #173144;background:transparent;color:#dcecf6;text-align:left;cursor:pointer}
+.yandex-file:last-child{border-bottom:0}.yandex-file:hover{background:#0d2a3d}.yandex-file.selected{background:#12384d;box-shadow:inset 3px 0 0 #4bc5ea}
+.yandex-file strong{display:block;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.yandex-file span{font-size:11px;color:#84a2b7}
+.yandex-file .file-kind{color:#8cdff6;text-transform:uppercase;letter-spacing:.06em}
+.yandex-selection{margin-top:10px;padding:12px;border:1px solid #3f6b82;background:#0b2637;display:flex;gap:12px;align-items:center;justify-content:space-between}
+.yandex-selection>div{min-width:0}.yandex-selection strong{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:3px}
+.computer-upload{margin-top:14px;border-top:1px solid #20394b;padding-top:12px}.computer-upload summary{cursor:pointer;color:#9ab4c7;font-size:12px}
+.source-help{margin-top:14px;padding-top:12px;border-top:1px solid #20394b;display:grid;gap:5px;font-size:11px;color:#86a3b6}
+.simple-flow-mini{display:grid;gap:9px}.simple-flow-mini>div{display:flex;align-items:center;gap:10px;color:#a9bfcd;font-size:12px}
+.simple-flow-mini b{width:24px;height:24px;border-radius:50%;border:1px solid #355a70;display:grid;place-items:center;color:#d7f6ff}
+.intake-technical-id,.intake-technical-stage{display:none}.secondary-status{font-size:11px}.primary-action{font-weight:700;min-height:44px;padding-inline:20px}
+.diagnostics-archive{opacity:.8;margin-top:18px}.diagnostics-archive>summary{font-size:12px;color:#8ca7ba}
+@media(max-width:800px){.yandex-link-row{grid-template-columns:1fr}.yandex-link-row .btn{width:100%}.yandex-selection{align-items:stretch;flex-direction:column}.yandex-selection .btn{width:100%}}
+
 
 .workflow-nav{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:#20384a;border-bottom:1px solid #294054}
 .workflow-step{min-height:52px;padding:9px 14px;background:#081724;color:#7792a6;text-decoration:none;display:flex;align-items:center;gap:10px;min-width:0}
@@ -126,62 +147,89 @@
 <nav class="workflow-nav" aria-label="Пайплайн RAW — четыре шага">
   <div class="workflow-step active" data-raw-stage="1" data-stage-state="current"><b>1</b><span><strong>ЗАГРУЗКА</strong><small>оригинал и превью</small></span></div>
   <div class="workflow-step" data-raw-stage="2" data-stage-state="pending"><b>2</b><span><strong>КОРРЕКЦИЯ</strong><small>автоанализ по кнопке</small></span></div>
-  <div class="workflow-step" data-raw-stage="3" data-stage-state="pending"><b>3</b><span><strong>QA</strong><small>сравнение и утверждение</small></span></div>
-  <div class="workflow-step" data-raw-stage="4" data-stage-state="pending"><b>4</b><span><strong>ПЕРЕДАЧА</strong><small>сохранение и выбор контура</small></span></div>
+  <div class="workflow-step" data-raw-stage="3" data-stage-state="pending"><b>3</b><span><strong>СРАВНЕНИЕ</strong><small>исходник и результат</small></span></div>
+  <div class="workflow-step" data-raw-stage="4" data-stage-state="pending"><b>4</b><span><strong>ПЕРЕДАЧА</strong><small>в MG4K</small></span></div>
 </nav>
 <main>
-<div class="eyebrow">MG 4K / SOURCE PREPARATION / RAW & TECHNICAL MASTER</div><h1>TECH MASTER</h1>
-<p class="lead">Техническая подготовка SOURCE перед генеративным MG4K: геометрия, перспектива, экспозиция, баланс белого, шум и фактуры — без HDR и без изменения содержания. После визуального QA утверждённый мастер передаётся в MG4K как новый SOURCE.</p>
+<div class="eyebrow">MG 4K / TECH MASTER</div><h1>Подготовить фотографию</h1>
+<p class="lead">Выберите оригинал. TECH MASTER сам проверит оптику, геометрию, перспективу, экспозицию и цвет. Затем останется только сравнить результат с исходником и передать его в MG4K.</p>
 <div class="grid editorial-layout">
   <aside class="stack workspace-rail">
-    <section class="panel">
-      <div class="eyebrow">Архив RAW/TECH · DSC09818</div><h2>Тропикана-парк</h2>
-      <div class="metric"><span class="muted">Кадр</span><strong>DSC09818</strong></div>
-      <div class="metric"><span class="muted">Источник</span><strong>ARW → V3 Perspective Lock</strong></div>
-      <div class="metric"><span class="muted">Skill</span><strong>v1.10</strong></div>
-      <div class="metric"><span class="muted">Режим</span><strong>Editorial + Fidelity</strong></div>
-      <div class="metric"><span class="muted">Статус</span><strong id="status" class="status">Проверка…</strong></div>
-    </section>
-    <section class="panel">
-      <h2>Новый SOURCE → TECH MASTER</h2>
-      <p class="muted">RAW: ARW / DNG / NEF / NRW / CR2 / CR3 / RAF / ORF / RW2 / PEF / SRW / 3FR / IIQ / X3F до 90 MiB. JPEG / PNG / WEBP — до 8 МБ. RAW проявляется в 16-bit через LibRaw без HDR и без генерации.</p>
-      <div class="fields"><input id="file" type="file" accept="image/jpeg,image/png,image/webp,.arw,.dng,.nef,.nrw,.cr2,.cr3,.raf,.orf,.rw2,.pef,.srw,.3fr,.iiq,.x3f"><button id="upload" class="btn" type="button">Загрузить оригинал</button></div>
+    <section class="panel source-entry-panel">
+      <div class="eyebrow">ШАГ 1 · ИСХОДНИК</div>
+      <h2>Откройте папку с оригиналами</h2>
+      <p class="muted">Вставьте публичную ссылку на открытую папку Яндекс Диска. Ничего скачивать на компьютер не нужно.</p>
+      <div class="yandex-link-row">
+        <input id="yandex-url" type="url" inputmode="url" placeholder="https://disk.yandex.ru/d/…" autocomplete="off">
+        <button id="yandex-open" class="btn" type="button">Открыть папку</button>
+      </div>
+      <div id="yandex-browser" class="yandex-browser" hidden>
+        <div class="yandex-browser-head">
+          <button id="yandex-up" class="btn mutebtn" type="button" hidden>← Назад</button>
+          <strong id="yandex-folder-name">Папка</strong>
+        </div>
+        <div id="yandex-files" class="yandex-files"></div>
+      </div>
+      <div id="yandex-selection" class="yandex-selection" hidden>
+        <div><span class="muted">Выбран оригинал</span><strong id="yandex-selected-name"></strong></div>
+        <button id="yandex-import" class="btn" type="button" disabled>Использовать этот файл</button>
+      </div>
+      <p id="yandex-status" class="muted" role="status"></p>
+
+      <details class="computer-upload">
+        <summary>Или выбрать файл на компьютере</summary>
+        <div class="fields" style="margin-top:12px">
+          <input id="file" type="file" accept="image/jpeg,image/png,image/webp,.arw,.dng,.nef,.nrw,.cr2,.cr3,.raf,.orf,.rw2,.pef,.srw,.3fr,.iiq,.x3f">
+          <button id="upload" class="btn mutebtn" type="button">Загрузить файл</button>
+        </div>
+      </details>
       <p id="upload-result" class="key"></p>
-      <p class="muted">Загрузка не запускает техническую коррекцию. Для RAW извлекается только превью без HDR и генерации. Полноценный анализ включается отдельно по кнопке.</p>
+      <div class="source-help">
+        <strong id="status" class="status">TECH MASTER проверяется…</strong>
+        <span>RAW и готовые изображения поддерживаются автоматически. Исходник сохраняется отдельно и не изменяется.</span>
+      </div>
     </section>
 
-    <section class="panel">
-      <h2>Протокол</h2>
-      <div class="metric"><span class="muted">1. Исходник и превью</span><strong>IMMUTABLE SOURCE</strong></div>
-      <div class="metric"><span class="muted">2. Автоанализ и коррекция</span><strong>ПО КНОПКЕ · NO HDR</strong></div>
-      <div class="metric"><span class="muted">3. Визуальный QA</span><strong>SPLIT / APPROVE</strong></div>
-      <div class="metric"><span class="muted">4. Сохранить и передать</span><strong>ВЫБОР КОНТУРА</strong></div>
-      <p><a href="https://github.com/mkontrakevich/marins-platform/blob/main/skills/marins-architectural-raw-photo/SKILL.md" target="_blank" rel="noreferrer">MARINS Architectural RAW Photo Skill</a></p>
+    <section class="panel next-step-panel">
+      <div class="eyebrow">ЧТО ДАЛЬШЕ</div>
+      <div class="simple-flow-mini">
+        <div><b>1</b><span>Выбрать исходник</span></div>
+        <div><b>2</b><span>Создать TECH MASTER</span></div>
+        <div><b>3</b><span>Сравнить и утвердить</span></div>
+        <div><b>4</b><span>Передать в MG4K</span></div>
+      </div>
     </section>
   </aside>
   <section class="stack workspace-primary">
     <section class="panel qa-panel" aria-label="Текущий Tech Master и визуальное QA">
       <div class="qa-head">
-        <div><div class="eyebrow qa-eyebrow">Текущая фотография / RAW · 4 этапа</div>
-        <h2>Фотография · обработка и проверка</h2></div>
-        <span class="muted">Без HDR · Perspective Lock · исходник неизменен</span>
+        <div><div class="eyebrow qa-eyebrow">ТЕКУЩАЯ ФОТОГРАФИЯ</div>
+        <h2>Обработка</h2></div>
+        <span class="muted">Исходник не изменяется</span>
       </div>
-      <div class="metric"><span class="muted">Задание</span><strong id="intake-id" class="key">Не создано</strong></div>
+      <div class="metric intake-technical-id"><span class="muted">Задание</span><strong id="intake-id" class="key">Не создано</strong></div>
       <div class="metric"><span class="muted">Состояние</span><strong id="intake-status" class="status" aria-live="polite">Ожидание загрузки</strong></div>
-      <div class="metric"><span class="muted">Этап</span><strong id="intake-stage">—</strong></div>
+      <div class="metric intake-technical-stage"><span class="muted">Этап</span><strong id="intake-stage">—</strong></div>
       <progress id="intake-progress" max="100" value="0" hidden class="qa-progress" style="width:100%;height:12px"></progress>
-      <p id="intake-empty" class="note">Нет открытого задания в этом браузере. Для уже обработанной фотографии используйте персональную ссылку на QA — повторно загружать исходник не требуется.</p>
+      <p id="intake-empty" class="note">Выберите оригинал слева. После этого появится кнопка «Создать TECH MASTER».</p>
       <p id="intake-message" class="muted" role="status"></p>
+      <div id="intake-recheck-panel" class="note" hidden>
+        <strong>TECH MASTER сохранён, но проверка результата не завершилась.</strong>
+        <div class="flex" style="margin-top:10px">
+          <button id="intake-recheck" class="btn" type="button">Повторить проверку</button>
+          <span class="muted">Повторная генерация не выполняется.</span>
+        </div>
+      </div>
       <figure class="raw-source-stage" id="intake-source-stage" hidden aria-label="Шаг 1: превью загруженного оригинала">
         <figcaption>01 · Оригинал / защищённое превью</figcaption>
         <img id="intake-source-image" alt="Превью исходной фотографии до автоматической коррекции">
         <p class="muted" id="intake-source-caption">Исходный файл не изменяется.</p>
       </figure>
       <div class="raw-process-actions">
-        <button class="btn geometry-first-btn" type="button" id="intake-process" disabled>02 · Анализировать и исправить</button>
+        <button class="btn primary-action" type="button" id="intake-process" disabled>Создать TECH MASTER</button>
         <span class="muted" id="intake-process-notice">Сначала загрузите оригинал и дождитесь его превью.</span>
       </div>
-      <p id="intake-auto-geometry-status" class="muted" aria-live="polite">Автоматический анализ геометрии: данные ещё не получены.</p>
+      <p id="intake-auto-geometry-status" class="muted secondary-status" aria-live="polite">Проверка геометрии ещё не выполнялась.</p>
       <section id="intake-geometry-first" class="geometry-first" hidden aria-label="Автоматическая техническая коррекция">
         <div>
           <div class="eyebrow">01 / АВТОМАТИЧЕСКАЯ ГЕОМЕТРИЯ</div>
@@ -357,8 +405,8 @@
       <p><a id="intake-import-link" href="#" hidden>Открыть Tech Master в MG4K →</a></p>
       <p class="note">Для JPEG/PNG/WebP автоматически формируется нейтральный 16-битный TIFF без HDR. Если источник был 8-битным, дополнительная информация не возникает. Художественная генерация разрешается только отдельно после QA.</p>
     </section>
-    <details class="archive-bundle" id="legacy-archive">
-      <summary><strong>Архив RAW / TECH V10 · DSC09818</strong> Историческая обработка и сравнения, не текущая приёмка</summary>
+    <details class="archive-bundle diagnostics-archive" id="legacy-archive">
+      <summary><strong>Диагностика / архив</strong> Исторические версии и служебные инструменты</summary>
       <div class="archive-content">
     <div class="panel">
       <div class="eyebrow">Стадия 01 / Обязательная техническая подготовка</div>
@@ -396,6 +444,7 @@ const hexBytes=buffer=>[...new Uint8Array(buffer)].map(v=>v.toString(16).padStar
 const fileExt=file=>String(file?.name||"").split(".").pop().toLowerCase();
 let intakeId="",intakeProof=null,intakePoll=null,intakeBusy=false,intakeState=null;
 let comparisonFor="",comparisonUrls=[];
+let yandexPublicUrl="",yandexCurrentPath="",yandexSelected=null,yandexHistory=[];
 
 let intakePreviewURL=null,intakePreviewFor="",intakePreviewReady=false;
 let intakeSourceURL=null,intakeSourceFor="";
@@ -433,7 +482,7 @@ function persistJobToken(id,token){
  for(const [k,v] of Object.entries(current)){if(!v||now-Number(v.at||0)>30*24*3600*1000)delete current[k]}
  current[id]={token,at:now};localStorage.setItem(jobAccessStore,JSON.stringify(current));
 }
-const readableStatus={AWAITING_TECH_PROCESSING:"Исходник сохранён · ожидает вашего запуска",QA_INTEGRITY_HOLD:"HOLD · технический мастер не прошёл проверку целостности",HOLD:"Техническая коррекция: HOLD",AWAITING_TECH_PROCESSING:"Ожидает технической обработки",QUEUED:"В очереди технической обработки",PROCESSING:"Выполняется Tech Master",TECHNICAL_QA_PENDING:"Проверка технического мастера",AWAITING_HUMAN_QA:"Ожидает визуального QA",TECH_MASTER_APPROVED:"Мастер утверждён",MG4K_MASTER_IMPORTED:"Импортировано в MG 4K",FAILED:"Ошибка технической обработки",REWORK_REQUESTED:"Возвращено на доработку",REVISION_CREATED:"Исправленная версия создана",REJECTED:"QA отклонён"};
+const readableStatus={AWAITING_TECH_PROCESSING:"Исходник готов · можно создавать TECH MASTER",QA_INTEGRITY_HOLD:"Нужно повторить проверку результата",HOLD:"Коррекция остановлена безопасно",QUEUED:"TECH MASTER в очереди",PROCESSING:"Создаётся TECH MASTER",TECHNICAL_QA_PENDING:"Проверяю TECH MASTER",AWAITING_HUMAN_QA:"TECH MASTER готов · сравните с исходником",TECH_MASTER_APPROVED:"TECH MASTER утверждён",MG4K_MASTER_IMPORTED:"Передано в MG4K",FAILED:"Обработка не завершена",REWORK_REQUESTED:"Нужна доработка",REVISION_CREATED:"Исправленная версия создана",REJECTED:"Результат отклонён"};
 function sessionHeaders(extra={}){return {...extra,"x-session-id":session?.id||"","x-session-token":session?.token||"","x-editorial-job-token":jobToken(intakeId)}}
 function reviewChecksPass(){
  return intakePreviewReady&&["intake-check-preview","intake-check-geometry","intake-check-materials"].every(id=>e(id).checked);
@@ -684,8 +733,10 @@ function setIntake(data){
   bar.value=0;bar.hidden=true;
   bar.title="Процент неизвестен; техническая обработка не начата";
  }
- e("intake-message").textContent=data.error?"Ошибка: "+String(data.error).slice(0,500):
-   data.mg4k_imported?"Утверждённый TIFF находится в MG 4K. Генерация не запускалась.":data.message||"";
+ e("intake-message").textContent=data.error?"Не удалось завершить этап: "+String(data.error).slice(0,500):
+   data.mg4k_imported?"TECH MASTER передан в MG4K.":data.message||"";
+ e("intake-recheck-panel").hidden=data.can_recheck_integrity!==true;
+ e("intake-recheck").disabled=intakeBusy||data.can_recheck_integrity!==true;
  const link=e("intake-import-link");if(link){
    link.hidden=!data.mg4k_imported;link.href=data.mg4k_import_url||"#";
  }
@@ -771,6 +822,23 @@ async function intakeStatus(){
  if(d.parent_job_id&&d.technical_master_ready)
   loadComparison(d).catch(err=>{e("intake-message").textContent=String(err)});
 }
+async function recheckIntegrity(){
+ if(!intakeId||intakeBusy)return;
+ intakeBusy=true;e("intake-recheck").disabled=true;
+ e("intake-message").textContent="Повторно проверяю сохранённый TECH MASTER…";
+ try{
+   const r=await fetch(base+"/job/recheck?job="+encodeURIComponent(intakeId),{
+     method:"POST",headers:sessionHeaders({"content-type":"application/json"}),body:"{}"
+   });
+   const d=await r.json().catch(()=>({}));
+   if(!r.ok)throw Error(d.message||d.error||"Проверка пока не прошла");
+   e("intake-message").textContent="Проверка пройдена. Сравните TECH MASTER с исходником.";
+   await intakeStatus();
+ }catch(err){
+   e("intake-message").textContent=String(err.message||err)+". Подробности доступны в «Техническом протоколе».";
+ }finally{intakeBusy=false;updateIntakeActions()}
+}
+
 function activateIntake(id){
  if(!/^[0-9a-f-]{36}$/i.test(id))return;
  intakeId=id;location.hash="intake="+encodeURIComponent(id);
@@ -1017,6 +1085,91 @@ async function sessionStart(){
  session=await r.json();sessionStorage.setItem(sessionStore,JSON.stringify(session));return session
 }
 async function health(){const r=await fetch(base+"/health");const h=await r.json();e("status").textContent=h.ok&&h.storage_isolated&&h.technical_workflow_configured?"Tech Master доступен":"Технический контур требует настройки";say(h)}
+function humanBytes(n){
+ const x=Number(n||0);if(!x)return "";
+ if(x<1024*1024)return Math.max(1,Math.round(x/1024))+" КБ";
+ return (x/(1024*1024)).toFixed(x>=10*1024*1024?0:1)+" МБ";
+}
+function resetYandexSelection(){
+ yandexSelected=null;
+ e("yandex-selection").hidden=true;
+ e("yandex-import").disabled=true;
+ e("yandex-selected-name").textContent="";
+ for(const node of e("yandex-files").querySelectorAll(".selected"))node.classList.remove("selected");
+}
+function renderYandexFolder(data){
+ const list=e("yandex-files");list.replaceChildren();resetYandexSelection();
+ yandexCurrentPath=String(data.current_path||"");
+ e("yandex-folder-name").textContent=String(data.name||"Открытая папка");
+ e("yandex-up").hidden=yandexHistory.length===0;
+ const items=Array.isArray(data.items)?data.items:[];
+ if(!items.length){
+   const empty=document.createElement("div");empty.className="muted";empty.style.padding="14px";
+   empty.textContent="В этой папке нет поддерживаемых фотографий.";
+   list.append(empty);return;
+ }
+ for(const item of items){
+   const b=document.createElement("button");b.type="button";b.className="yandex-file";
+   const left=document.createElement("span"),name=document.createElement("strong"),meta=document.createElement("span");
+   name.textContent=item.name||"Без имени";
+   meta.textContent=item.type==="dir"?"Папка":[String(item.ext||"").toUpperCase(),humanBytes(item.size)].filter(Boolean).join(" · ");
+   left.append(name,meta);
+   const kind=document.createElement("span");kind.className="file-kind";kind.textContent=item.type==="dir"?"Открыть":"Выбрать";
+   b.append(left,kind);
+   b.addEventListener("click",()=>{
+     if(item.type==="dir"){
+       yandexHistory.push(yandexCurrentPath);
+       openYandexFolder(item.path,false).catch(err=>e("yandex-status").textContent=String(err.message||err));
+       return;
+     }
+     resetYandexSelection();yandexSelected=item;b.classList.add("selected");
+     e("yandex-selected-name").textContent=item.name;
+     e("yandex-selection").hidden=false;e("yandex-import").disabled=false;
+     e("yandex-status").textContent="Файл выбран. Он будет сохранён как исходник без изменения.";
+   });
+   list.append(b);
+ }
+}
+async function openYandexFolder(path="",resetHistory=true){
+ const value=e("yandex-url").value.trim();
+ if(!/^https:\/\/(?:disk\.yandex\.(?:ru|com)|yadi\.sk)\/(?:d|i)\//i.test(value))
+   throw Error("Вставьте публичную ссылку на открытую папку Яндекс Диска.");
+ const s=await sessionStart();
+ if(resetHistory)yandexHistory=[];
+ yandexPublicUrl=value;
+ e("yandex-open").disabled=true;e("yandex-status").textContent="Открываю папку…";
+ try{
+   const r=await fetch(base+"/yandex/list",{
+     method:"POST",headers:{"content-type":"application/json","x-session-id":s.id,"x-session-token":s.token},
+     body:JSON.stringify({url:value,path:path||""})
+   });
+   const data=await r.json().catch(()=>({}));
+   if(!r.ok)throw Error(data.reason||data.error||"Не удалось открыть папку");
+   e("yandex-browser").hidden=false;renderYandexFolder(data);
+   e("yandex-status").textContent=data.kind==="file"?"Файл найден. Выберите его.":"Выберите оригинал из папки.";
+ }finally{e("yandex-open").disabled=false}
+}
+async function importYandexSelection(){
+ if(!yandexSelected||!yandexPublicUrl)return;
+ const s=await sessionStart();
+ e("yandex-import").disabled=true;e("yandex-open").disabled=true;
+ e("yandex-status").textContent="Сохраняю оригинал в TECH MASTER…";
+ try{
+   const r=await fetch(base+"/yandex/import",{
+     method:"POST",headers:{"content-type":"application/json","x-session-id":s.id,"x-session-token":s.token},
+     body:JSON.stringify({url:yandexPublicUrl,path:yandexSelected.path})
+   });
+   const data=await r.json().catch(()=>({}));
+   if(!r.ok)throw Error(data.reason||data.error||"Не удалось получить оригинал");
+   e("yandex-status").textContent="Оригинал сохранён. Следующий шаг — создать TECH MASTER.";
+   e("upload-result").textContent=data.filename+" · "+String(data.sha256||"").slice(0,12)+"…";
+   if(data.job_id){persistJobToken(data.job_id,data.job_token);activateIntake(data.job_id)}
+ }finally{
+   e("yandex-open").disabled=false;
+   e("yandex-import").disabled=!yandexSelected;
+ }
+}
+
 async function upload(){
  const file=e("file").files[0];if(!file)throw Error("Выберите RAW, JPG, PNG или WEBP");
  const ext=fileExt(file),isRaw=RAW_EXTENSIONS.has(ext);
@@ -1083,6 +1236,13 @@ e("open-editorial").addEventListener("click",()=>{
  const id=e("job").value.trim();if(!id)return say("Не указан ID задания.");
  window.EditorialCompare?.open(id,"tech-editorial").catch(err=>say(String(err)));
 });
+e("yandex-open").addEventListener("click",()=>openYandexFolder("",true).catch(err=>e("yandex-status").textContent=String(err.message||err)));
+e("yandex-import").addEventListener("click",()=>importYandexSelection().catch(err=>e("yandex-status").textContent=String(err.message||err)));
+e("yandex-up").addEventListener("click",()=>{
+ const previous=yandexHistory.pop();
+ openYandexFolder(previous||"",false).catch(err=>e("yandex-status").textContent=String(err.message||err));
+});
+e("yandex-url").addEventListener("keydown",ev=>{if(ev.key==="Enter"){ev.preventDefault();openYandexFolder("",true).catch(err=>e("yandex-status").textContent=String(err.message||err))}});
 e("file").addEventListener("change",()=>{
  const file=e("file").files[0];
  if(localSourceStageURL){URL.revokeObjectURL(localSourceStageURL);localSourceStageURL=null}
@@ -1097,6 +1257,7 @@ e("file").addEventListener("change",()=>{
  }
 });
 e("intake-process").addEventListener("click",startTechnicalProcessing);
+e("intake-recheck").addEventListener("click",recheckIntegrity);
 e("upload").addEventListener("click",()=>upload().catch(err=>say(String(err))));e("load").addEventListener("click",()=>load().catch(err=>say(String(err))));e("refresh").addEventListener("click",()=>load().catch(err=>health().catch(e=>say(String(e)))));["intake-check-preview","intake-check-geometry","intake-check-materials"].forEach(id=>
  e(id).addEventListener("change",updateIntakeActions));
 e("intake-approve").addEventListener("click",()=>intakeDecision("APPROVED"));
