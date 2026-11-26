@@ -147,8 +147,8 @@
 <nav class="workflow-nav" aria-label="Пайплайн RAW — четыре шага">
   <div class="workflow-step active" data-raw-stage="1" data-stage-state="current"><b>1</b><span><strong>ЗАГРУЗКА</strong><small>оригинал и превью</small></span></div>
   <div class="workflow-step" data-raw-stage="2" data-stage-state="pending"><b>2</b><span><strong>КОРРЕКЦИЯ</strong><small>автоанализ по кнопке</small></span></div>
-  <div class="workflow-step" data-raw-stage="3" data-stage-state="pending"><b>3</b><span><strong>QA</strong><small>сравнение и утверждение</small></span></div>
-  <div class="workflow-step" data-raw-stage="4" data-stage-state="pending"><b>4</b><span><strong>ПЕРЕДАЧА</strong><small>сохранение и выбор контура</small></span></div>
+  <div class="workflow-step" data-raw-stage="3" data-stage-state="pending"><b>3</b><span><strong>СРАВНЕНИЕ</strong><small>исходник и результат</small></span></div>
+  <div class="workflow-step" data-raw-stage="4" data-stage-state="pending"><b>4</b><span><strong>ПЕРЕДАЧА</strong><small>в MG4K</small></span></div>
 </nav>
 <main>
 <div class="eyebrow">MG 4K / TECH MASTER</div><h1>Подготовить фотографию</h1>
@@ -213,6 +213,13 @@
       <progress id="intake-progress" max="100" value="0" hidden class="qa-progress" style="width:100%;height:12px"></progress>
       <p id="intake-empty" class="note">Нет открытого задания в этом браузере. Для уже обработанной фотографии используйте персональную ссылку на QA — повторно загружать исходник не требуется.</p>
       <p id="intake-message" class="muted" role="status"></p>
+      <div id="intake-recheck-panel" class="note" hidden>
+        <strong>TECH MASTER сохранён, но проверка результата не завершилась.</strong>
+        <div class="flex" style="margin-top:10px">
+          <button id="intake-recheck" class="btn" type="button">Повторить проверку</button>
+          <span class="muted">Повторная генерация не выполняется.</span>
+        </div>
+      </div>
       <figure class="raw-source-stage" id="intake-source-stage" hidden aria-label="Шаг 1: превью загруженного оригинала">
         <figcaption>01 · Оригинал / защищённое превью</figcaption>
         <img id="intake-source-image" alt="Превью исходной фотографии до автоматической коррекции">
@@ -475,7 +482,7 @@ function persistJobToken(id,token){
  for(const [k,v] of Object.entries(current)){if(!v||now-Number(v.at||0)>30*24*3600*1000)delete current[k]}
  current[id]={token,at:now};localStorage.setItem(jobAccessStore,JSON.stringify(current));
 }
-const readableStatus={AWAITING_TECH_PROCESSING:"Исходник сохранён · ожидает вашего запуска",QA_INTEGRITY_HOLD:"HOLD · технический мастер не прошёл проверку целостности",HOLD:"Техническая коррекция: HOLD",AWAITING_TECH_PROCESSING:"Ожидает технической обработки",QUEUED:"В очереди технической обработки",PROCESSING:"Выполняется Tech Master",TECHNICAL_QA_PENDING:"Проверка технического мастера",AWAITING_HUMAN_QA:"Ожидает визуального QA",TECH_MASTER_APPROVED:"Мастер утверждён",MG4K_MASTER_IMPORTED:"Импортировано в MG 4K",FAILED:"Ошибка технической обработки",REWORK_REQUESTED:"Возвращено на доработку",REVISION_CREATED:"Исправленная версия создана",REJECTED:"QA отклонён"};
+const readableStatus={AWAITING_TECH_PROCESSING:"Исходник готов · можно создавать TECH MASTER",QA_INTEGRITY_HOLD:"Нужно повторить проверку результата",HOLD:"Коррекция остановлена безопасно",QUEUED:"TECH MASTER в очереди",PROCESSING:"Создаётся TECH MASTER",TECHNICAL_QA_PENDING:"Проверяю TECH MASTER",AWAITING_HUMAN_QA:"TECH MASTER готов · сравните с исходником",TECH_MASTER_APPROVED:"TECH MASTER утверждён",MG4K_MASTER_IMPORTED:"Передано в MG4K",FAILED:"Обработка не завершена",REWORK_REQUESTED:"Нужна доработка",REVISION_CREATED:"Исправленная версия создана",REJECTED:"Результат отклонён"};
 function sessionHeaders(extra={}){return {...extra,"x-session-id":session?.id||"","x-session-token":session?.token||"","x-editorial-job-token":jobToken(intakeId)}}
 function reviewChecksPass(){
  return intakePreviewReady&&["intake-check-preview","intake-check-geometry","intake-check-materials"].every(id=>e(id).checked);
