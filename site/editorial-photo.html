@@ -229,7 +229,7 @@
         <button class="btn primary-action" type="button" id="intake-process" disabled>Создать TECH MASTER</button>
         <span class="muted" id="intake-process-notice">Сначала загрузите оригинал и дождитесь его превью.</span>
       </div>
-      <div id="intake-rework-action" hidden style="padding:14px;margin:12px 0;border:1px solid #3f6b82"><strong>Коррекция перспективы фасада</strong><p class="muted">Для бокового смещения фронтального кадра укажите четыре угла одной прямоугольной плоскости.</p><button class="btn" type="button" id="intake-geometry-open">Исправить перспективу по четырём точкам</button></div>
+      <div id="intake-rework-action" hidden style="padding:14px;margin:12px 0;border:1px solid #3f6b82"><strong>Коррекция перспективы фасада</strong><p class="muted">Для фронтального кадра система автоматически найдёт согласованные горизонтальные и вертикальные линии, проверит выпрямление и создаст новую версию. При недостатке данных обработка остановится. Для углового кадра этот режим не предназначен.</p><button class="btn" type="button" id="intake-front-auto">Автоматически исправить фронтальную перспективу</button> <button class="btn mutebtn" type="button" id="intake-geometry-open">Ручная разметка четырёх точек</button></div>
       <p id="intake-rework-progress" role="status" aria-live="polite" style="color:#a9e7fa" hidden></p>
       <p id="intake-auto-geometry-status" class="muted secondary-status" aria-live="polite">Проверка геометрии ещё не выполнялась.</p>
       <section id="intake-geometry-first" class="geometry-first" hidden aria-label="Автоматическая техническая коррекция">
@@ -627,6 +627,7 @@ function updateIntakeActions(){
    ![...receiver.options].some(x=>x.value===receiver.value&&!x.disabled);
  e("intake-revision-submit").disabled=intakeBusy||data.can_upload_revision!==true||!e("intake-revision-file").files[0];
  e("intake-geometry-open").disabled=intakeBusy||data.can_geometry_rework!==true;
+ e("intake-front-auto").disabled=intakeBusy||data.can_geometry_rework!==true;
 }
 async function loadIntakePreview(id,sha){
  if(intakePreviewFor===id+sha)return;
@@ -975,6 +976,27 @@ function updateGeometryPreviewCut(){
  e("intake-geometry-preview-cut").style.left=value+"%";
 }
 function reworkProgress(message){const el=e("intake-rework-progress");el.hidden=false;el.textContent=message;}
+async function automaticFrontRework(){
+ if(!intakeId||!intakeState?.can_geometry_rework||intakeBusy)return;
+ const id=intakeId,token=jobToken(id);
+ intakeBusy=true;updateIntakeActions();
+ reworkProgress("Запускаем поиск линий фасада и проверку фронтальной перспективы. Ожидаем подтверждение сервера…");
+ try{
+   const response=await fetch(base+"/job/rework/geometry?job="+encodeURIComponent(id),{
+     method:"POST",headers:sessionHeaders({"content-type":"application/json"}),
+     body:JSON.stringify({anchor_mode:"AUTO_FRONT",frontality_requested:true,
+       commit_parent_return:intakeState.can_rework===true,
+       master_sha256:intakeProof?.master_sha256,
+       note:"Автоматически исправить боковое смещение фронтальной перспективы фасада. Сохранить архитектуру и проверенные вертикали."})
+   });
+   const data=await response.json().catch(()=>({}));
+   if(!response.ok||!data.job_id)throw Error(data.error||"Не удалось создать новую версию");
+   if(token)persistJobToken(data.job_id,token);
+   activateIntake(data.job_id);
+   reworkProgress(data.workflow_started===false?"HOLD: сервер не запустил коррекцию. Проверьте диагностику новой версии.":"Задание принято: определение линий → расчёт перспективы → контроль геометрии → сравнение. Прогресс отображается по данным сервера.");
+ }catch(err){reworkProgress("HOLD: "+String(err.message||err));}
+ finally{intakeBusy=false;updateIntakeActions();}
+}
  async function submitGeometryCorrection(){
  if(!intakeId||!intakeState?.can_geometry_rework||geometryPoints.length!==4||
     !geometryPreviewReady||!e("intake-geometry-facade-check").checked)return;
@@ -1282,6 +1304,7 @@ e("intake-rework-submit").addEventListener("click",submitRework);
 e("intake-rework-cancel").addEventListener("click",()=>e("intake-rework-form").hidden=true);
 e("intake-revision-submit").addEventListener("click",uploadRevision);
  e("intake-revision-file").addEventListener("change",updateIntakeActions);
+ e("intake-front-auto").addEventListener("click",automaticFrontRework);
  e("intake-geometry-open").addEventListener("click",()=>showGeometryEditor().catch(err=>reworkProgress("Не удалось открыть редактор: "+String(err.message||err))));
 e("intake-auto-rework").addEventListener("click",automaticRework);
 async function startAutoGeometryVersion(){
