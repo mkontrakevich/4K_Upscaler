@@ -241,5 +241,15 @@
     "WEBP"
   ],
   "tech_master_hdr": false,
-  "tech_master_generative_processing": false
+  "tech_master_generative_processing": false,
+  "tech_master_ui_release_tag": "TECH_MASTER_SIMPLE_FLOW_R1",
+  "tech_master_ui_release_date": "2026-11-26",
+  "tech_master_primary_source_intake": "PUBLIC_YANDEX_FOLDER_LINK",
+  "tech_master_user_flow": [
+    "choose_source",
+    "create_tech_master",
+    "compare_and_approve",
+    "handoff_to_mg4k"
+  ],
+  "tech_master_local_file_upload": "fallback"
 }
