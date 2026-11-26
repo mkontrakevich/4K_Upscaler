@@ -121,7 +121,7 @@
 .source-help{margin-top:14px;padding-top:12px;border-top:1px solid #20394b;display:grid;gap:5px;font-size:11px;color:#86a3b6}
 .simple-flow-mini{display:grid;gap:9px}.simple-flow-mini>div{display:flex;align-items:center;gap:10px;color:#a9bfcd;font-size:12px}
 .simple-flow-mini b{width:24px;height:24px;border-radius:50%;border:1px solid #355a70;display:grid;place-items:center;color:#d7f6ff}
-.intake-technical-id{display:none}.secondary-status{font-size:11px}.primary-action{font-weight:700;min-height:44px;padding-inline:20px}
+.intake-technical-id,.intake-technical-stage{display:none}.secondary-status{font-size:11px}.primary-action{font-weight:700;min-height:44px;padding-inline:20px}
 .diagnostics-archive{opacity:.8;margin-top:18px}.diagnostics-archive>summary{font-size:12px;color:#8ca7ba}
 @media(max-width:800px){.yandex-link-row{grid-template-columns:1fr}.yandex-link-row .btn{width:100%}.yandex-selection{align-items:stretch;flex-direction:column}.yandex-selection .btn{width:100%}}
 
@@ -209,9 +209,9 @@
       </div>
       <div class="metric intake-technical-id"><span class="muted">Задание</span><strong id="intake-id" class="key">Не создано</strong></div>
       <div class="metric"><span class="muted">Состояние</span><strong id="intake-status" class="status" aria-live="polite">Ожидание загрузки</strong></div>
-      <div class="metric"><span class="muted">Этап</span><strong id="intake-stage">—</strong></div>
+      <div class="metric intake-technical-stage"><span class="muted">Этап</span><strong id="intake-stage">—</strong></div>
       <progress id="intake-progress" max="100" value="0" hidden class="qa-progress" style="width:100%;height:12px"></progress>
-      <p id="intake-empty" class="note">Нет открытого задания в этом браузере. Для уже обработанной фотографии используйте персональную ссылку на QA — повторно загружать исходник не требуется.</p>
+      <p id="intake-empty" class="note">Выберите оригинал слева. После этого появится кнопка «Создать TECH MASTER».</p>
       <p id="intake-message" class="muted" role="status"></p>
       <div id="intake-recheck-panel" class="note" hidden>
         <strong>TECH MASTER сохранён, но проверка результата не завершилась.</strong>
@@ -733,8 +733,10 @@ function setIntake(data){
   bar.value=0;bar.hidden=true;
   bar.title="Процент неизвестен; техническая обработка не начата";
  }
- e("intake-message").textContent=data.error?"Ошибка: "+String(data.error).slice(0,500):
-   data.mg4k_imported?"Утверждённый TIFF находится в MG 4K. Генерация не запускалась.":data.message||"";
+ e("intake-message").textContent=data.error?"Не удалось завершить этап: "+String(data.error).slice(0,500):
+   data.mg4k_imported?"TECH MASTER передан в MG4K.":data.message||"";
+ e("intake-recheck-panel").hidden=data.can_recheck_integrity!==true;
+ e("intake-recheck").disabled=intakeBusy||data.can_recheck_integrity!==true;
  const link=e("intake-import-link");if(link){
    link.hidden=!data.mg4k_imported;link.href=data.mg4k_import_url||"#";
  }
@@ -820,6 +822,23 @@ async function intakeStatus(){
  if(d.parent_job_id&&d.technical_master_ready)
   loadComparison(d).catch(err=>{e("intake-message").textContent=String(err)});
 }
+async function recheckIntegrity(){
+ if(!intakeId||intakeBusy)return;
+ intakeBusy=true;e("intake-recheck").disabled=true;
+ e("intake-message").textContent="Повторно проверяю сохранённый TECH MASTER…";
+ try{
+   const r=await fetch(base+"/job/recheck?job="+encodeURIComponent(intakeId),{
+     method:"POST",headers:sessionHeaders({"content-type":"application/json"}),body:"{}"
+   });
+   const d=await r.json().catch(()=>({}));
+   if(!r.ok)throw Error(d.message||d.error||"Проверка пока не прошла");
+   e("intake-message").textContent="Проверка пройдена. Сравните TECH MASTER с исходником.";
+   await intakeStatus();
+ }catch(err){
+   e("intake-message").textContent=String(err.message||err)+". Подробности доступны в «Техническом протоколе».";
+ }finally{intakeBusy=false;updateIntakeActions()}
+}
+
 function activateIntake(id){
  if(!/^[0-9a-f-]{36}$/i.test(id))return;
  intakeId=id;location.hash="intake="+encodeURIComponent(id);
@@ -1238,6 +1257,7 @@ e("file").addEventListener("change",()=>{
  }
 });
 e("intake-process").addEventListener("click",startTechnicalProcessing);
+e("intake-recheck").addEventListener("click",recheckIntegrity);
 e("upload").addEventListener("click",()=>upload().catch(err=>say(String(err))));e("load").addEventListener("click",()=>load().catch(err=>say(String(err))));e("refresh").addEventListener("click",()=>load().catch(err=>health().catch(e=>say(String(e)))));["intake-check-preview","intake-check-geometry","intake-check-materials"].forEach(id=>
  e(id).addEventListener("change",updateIntakeActions));
 e("intake-approve").addEventListener("click",()=>intakeDecision("APPROVED"));
