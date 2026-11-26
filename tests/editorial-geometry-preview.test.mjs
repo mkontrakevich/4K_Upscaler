@@ -94,3 +94,15 @@ test("editor has immediate visible entry, reversible preview and explicit final 
  const scripts=[...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)].map(m=>m[1]);
  scripts.forEach(x=>new Script(x));
 });
+
+test("rework geometry entry remains usable during polling and import is explicitly separate",()=>{
+ const html=readFileSync("site/editorial-photo.html","utf8");
+ assert.match(html,/id="intake-geometry-open"/);
+ assert.match(html,/e\("intake-geometry-open"\)\.addEventListener\("click",\(\)=>showGeometryEditor/);
+ assert.match(html,/e\("intake-rework-action"\)\.hidden=data\.can_geometry_rework!==true/);
+ assert.match(html,/if\(!data\.can_geometry_rework\)e\("intake-geometry-panel"\)\.hidden=true/);
+ assert.doesNotMatch(html,/legacy four-corner tool is not in standard user flow/);
+ assert.match(html,/Резерв: загрузить уже исправленный файл с компьютера/);
+ assert.match(html,/id="intake-rework-progress" role="status" aria-live="polite"/);
+ assert.match(html,/\[REDACTED\]/);
+});
