@@ -536,7 +536,10 @@ export async function editorialJobApi(request,env,url,authorizeSession) {
         "x-mg4k-original-source-sha256":job.source_sha256}});
     }
     const src=await env.TROPICANA_EDITORIAL_R2.get(job.source_key);
-    if(!src||src.size!==job.source_bytes||src.customMetadata?.sha256!==job.source_sha256||
+    const nativeSha=src?.checksums?.sha256?hex(src.checksums.sha256):null;
+    const metadataSha=src?.customMetadata?.sha256||null;
+    if(!src||src.size!==job.source_bytes||
+       ((nativeSha||metadataSha)!==job.source_sha256)||
        !["image/jpeg","image/png","image/webp"].includes(src.httpMetadata?.contentType))
       return json({error:"source_integrity_HOLD"},409);
     return new Response(src.body,{headers:{"content-type":job.mime,"cache-control":"private,no-store",
