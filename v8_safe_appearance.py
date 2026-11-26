@@ -1058,27 +1058,32 @@ def generate_image(key: str, reference: Path, trace_name: str, seed: int) -> tup
         payload["provider"]["allow_fallbacks"],
     )
     if os.environ.get("MG4K_SINGLE_PAID_ATTEMPT") == "1":
-        # Recheck with the exact generation credential immediately before POST.
+        # Recheck the exact generation credential, then query the Worker budget
+        # gate using processor authentication. Management credentials stay in Worker.
         try:
             minimum = float(os.environ.get("MG4K_MIN_PROVIDER_CREDITS_USD", "0.50"))
-            management = os.environ.get("OPENROUTER_MANAGEMENT_KEY", "").strip()
-            if not math.isfinite(minimum) or minimum <= 0 or not management:
+            if not math.isfinite(minimum) or minimum <= 0:
                 raise ValueError("configuration")
-            def read_budget(path, token):
-                res = requests.get("https://openrouter.ai/api/v1/" + path,
-                                   headers={"Authorization": "Bearer " + token}, timeout=8)
-                if res.status_code != 200:
-                    raise ValueError("budget endpoint")
-                return res.json()["data"]
-            k = read_budget("key", key)
-            c = read_budget("credits", management)
+            res = requests.get("https://openrouter.ai/api/v1/key",
+                               headers={"Authorization": "Bearer " + key}, timeout=8)
+            if res.status_code != 200:
+                raise ValueError("key endpoint")
+            k = res.json()["data"]
             remaining = k["limit_remaining"]
             if remaining is not None and (not isinstance(remaining, (int,float)) or not math.isfinite(remaining)):
                 raise ValueError("key limit")
-            credits, usage = c["total_credits"], c["total_usage"]
-            if not all(isinstance(v,(int,float)) and math.isfinite(v) for v in (credits,usage)):
-                raise ValueError("balance")
-            sufficient = not k.get("is_free_tier") and (remaining is None or remaining >= minimum) and credits-usage >= minimum
+            sufficient = not k.get("is_free_tier") and (remaining is None or remaining >= minimum)
+            if sufficient:
+                worker_url = os.environ.get("MG4K_CLOUD_URL", "").rstrip("/")
+                token = os.environ.get("MG4K_PROCESSOR_TOKEN", "").strip()
+                if not worker_url or not token:
+                    raise ValueError("worker authorization")
+                check = requests.get(worker_url + "/api/processor/credit-check",
+                                     headers={"Authorization": "Bearer " + token}, timeout=25)
+                if check.status_code == 402:
+                    sufficient = False
+                elif check.status_code != 200 or check.json().get("ok") is not True:
+                    raise ValueError("worker budget endpoint")
         except Exception:
             raise RuntimeError("PROVIDER_CREDIT_CHECK_UNAVAILABLE: read-only budget verification failed") from None
         if not sufficient:
