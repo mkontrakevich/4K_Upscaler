@@ -7,7 +7,7 @@ const html=readFileSync("site/editorial-photo.html","utf8");
 const between=(a,b)=>html.slice(html.indexOf(a),html.indexOf(b));
 const ids=[...html.matchAll(/\bid="([^"]+)"/g)].map(x=>x[1]);
 
-test("current user QA is the primary wide workspace, archival V10 is collapsed",()=>{
+test("current user flow is primary and archival diagnostics stay collapsed",()=>{
   const layout=html.indexOf('class="grid editorial-layout"');
   const primary=html.indexOf('class="stack workspace-primary"');
   const qa=html.indexOf('class="panel qa-panel"');
@@ -20,8 +20,14 @@ test("current user QA is the primary wide workspace, archival V10 is collapsed",
   assert.match(html,/grid-template-areas:"primary rail"/);
   assert.match(html,/\.workspace-primary\{grid-area:primary/);
   assert.match(html,/\.workspace-rail\{grid-area:rail/);
-  assert.match(html,/<details class="archive-bundle" id="legacy-archive">/);
-  assert.doesNotMatch(html,/<details class="archive-bundle" id="legacy-archive" open/);
+  assert.match(html,/<details class="archive-bundle diagnostics-archive" id="legacy-archive">/);
+  assert.doesNotMatch(html,/<details class="archive-bundle diagnostics-archive" id="legacy-archive" open/);
+  assert.match(html,/id="yandex-url"/);
+  assert.match(html,/id="yandex-open"/);
+  assert.match(html,/id="yandex-files"/);
+  assert.match(html,/id="yandex-import"/);
+  assert.match(html,/Создать TECH MASTER/);
+  assert.match(html,/\.intake-technical-id,.intake-technical-stage\{display:none\}/);
   assert.ok(html.indexOf('id="intake-preview-frame"')<archive);
 });
 test("primary QA shows source integrity proof separately from visual acceptance",()=>{
@@ -44,7 +50,7 @@ test("primary QA shows source integrity proof separately from visual acceptance"
   assert.match(html,/id="intake-rework-note"/);
 });
 test("responsive desktop/tablet/mobile and genuine empty state",()=>{
-  assert.match(html,/@media\(max-width:800px\)\{\.grid\.editorial-layout\{grid-template-columns:minmax\(0,1fr\);grid-template-areas:"primary" "rail"\}\}/);
+  assert.match(html,/@media\(max-width:800px\)\{\.grid\.editorial-layout\{grid-template-columns:minmax\(0,1fr\);grid-template-areas:"rail" "primary"\}\}/);
   assert.match(html,/@media\(max-width:600px\)\{\.qa-image-workspace\.is-compare\{grid-template-columns:1fr\}/);
   assert.match(html,/\[hidden\]\{display:none!important\}/);
   assert.match(html,/id="intake-progress"[^>]*value="0" hidden/);
@@ -64,7 +70,7 @@ test("auto geometry summary is compact, truthful, and old jobs are not silently 
   assert.ok(html.includes('data.automatic_geometry_analysis'));
   assert.ok(html.includes('Исправление не выполнялось'),"explicit no-correction status required");
   assert.ok(html.includes('Автовыравнивание выполнено'),"real correction status required");
-  assert.ok(html.includes('Создать Auto Tech Master'),"one-click auto correction must be discoverable");
+  assert.ok(html.includes('Создать TECH MASTER'),"one-click technical correction must be discoverable");
   assert.ok(html.includes('Автоанализ геометрии ещё не выполнялся'));
   assert.ok(html.indexOf('id="intake-auto-geometry-status"')<html.indexOf('id="intake-source-verification"'));
 });
