@@ -730,3 +730,34 @@ test("automatic camera levelling evidence must pass independent QA checks",async
    assert.equal(result.can_handoff,false);
  }
 });
+
+
+test("explicit automatic frontality creates an immutable-source job without pretending human anchors",async()=>{
+ const h=harness(),v1=await intake(h),sha=await tech(h,v1);
+ await h.call("/api/editorial/job/decision?job="+v1.job_id,"POST",{
+  decision:"REWORK_REQUESTED",master_sha256:sha,categories:["geometry"],
+  note:"Correct the horizontal perspective of this frontal facade"
+ });
+ const uri="/api/editorial/job/rework/geometry?job="+v1.job_id;
+ const launched=[];h.env.TROPICANA_TECH_WORKFLOW={async create(x){launched.push(x);return {id:x.id}}};
+ const input={anchor_mode:"AUTO_FRONT",frontality_requested:true};
+ assert.equal((await h.call(uri,"POST",input,false)).status,404);
+ assert.equal((await h.call(uri,"POST",{...input,frontality_requested:false})).status,422);
+ const response=await h.call(uri,"POST",input);
+ assert.equal(response.status,201);
+ const d=await response.json();
+ assert.equal(d.generation_started,false);
+ assert.equal(launched.length,1);
+ const child=await (await h.r2.get("tropicana-park/editorial-jobs/"+d.job_id+"/job.json")).json();
+ assert.equal(child.source_sha256,v1.source_sha256);
+ assert.equal(child.source_key,v1.source_key);
+ assert.equal(child.correction_plan.anchor_mode,"AUTO_FRONT");
+ assert.equal(child.correction_plan.frontality_requested,true);
+ assert.equal(child.correction_plan.source_quad_norm,undefined);
+ assert.equal(child.correction_plan.facade_assumption_confirmed,undefined);
+ assert.equal(child.correction_plan.HDR_allowed,false);
+ assert.equal(child.correction_plan.human_approval_required,true);
+ const pending=await (await h.call("/api/editorial/job/status?job="+d.job_id)).json();
+ assert.equal(pending.can_handoff,false);
+ assert.equal(pending.can_approve,false);
+});
