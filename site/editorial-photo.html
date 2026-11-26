@@ -229,6 +229,8 @@
         <button class="btn primary-action" type="button" id="intake-process" disabled>Создать TECH MASTER</button>
         <span class="muted" id="intake-process-notice">Сначала загрузите оригинал и дождитесь его превью.</span>
       </div>
+      <div id="intake-rework-action" hidden style="padding:14px;margin:12px 0;border:1px solid #3f6b82"><strong>Коррекция перспективы фасада</strong><p class="muted">Для бокового смещения фронтального кадра укажите четыре угла одной прямоугольной плоскости.</p><button class="btn" type="button" id="intake-geometry-open">Исправить перспективу по четырём точкам</button></div>
+      <p id="intake-rework-progress" role="status" aria-live="polite" style="color:#a9e7fa" hidden></p>
       <p id="intake-auto-geometry-status" class="muted secondary-status" aria-live="polite">Проверка геометрии ещё не выполнялась.</p>
       <section id="intake-geometry-first" class="geometry-first" hidden aria-label="Автоматическая техническая коррекция">
         <div>
@@ -388,9 +390,9 @@
         </section>
 
         <p class="muted" id="intake-rework-remarks"></p>
-        <p class="muted">Если коррекция по точкам недоступна или остановлена, можно загрузить исправленный исходник JPG/PNG/WebP (до 8 МБ). Предыдущие версии остаются в архиве.</p>
+        <details><summary>Резерв: загрузить уже исправленный файл с компьютера</summary><p class="muted">Импорт готового изображения, а не автоматическая коррекция. JPG/PNG/WebP до 8 МБ.</p>
         <input id="intake-revision-file" type="file" accept="image/jpeg,image/png,image/webp">
-        <button class="btn" id="intake-revision-submit" type="button">Создать исправленную версию</button>
+        <button class="btn" id="intake-revision-submit" type="button">Загрузить исправленный файл</button></details>
         <a id="intake-next-revision-link" href="#" hidden>Открыть созданную версию</a>
       </div>
       <div id="intake-comparison" hidden style="margin:12px 0">
@@ -623,7 +625,8 @@ function updateIntakeActions(){
    "MG4K подтвердил получение утверждённого TIFF. Генерация не запускалась.";
  e("intake-handoff").disabled=e("intake-handoff").disabled||
    ![...receiver.options].some(x=>x.value===receiver.value&&!x.disabled);
- e("intake-revision-submit").disabled=intakeBusy||data.can_upload_revision!==true;
+ e("intake-revision-submit").disabled=intakeBusy||data.can_upload_revision!==true||!e("intake-revision-file").files[0];
+ e("intake-geometry-open").disabled=intakeBusy||data.can_geometry_rework!==true;
 }
 async function loadIntakePreview(id,sha){
  if(intakePreviewFor===id+sha)return;
@@ -746,7 +749,8 @@ function setIntake(data){
  revisionPanel.hidden=!data.rework;
  e("intake-geometry-first").hidden=!data.can_auto_geometry_reprocess;
  e("intake-geometry-start").disabled=intakeBusy||!data.can_auto_geometry_reprocess;
- e("intake-geometry-panel").hidden=true; // legacy four-corner tool is not in standard user flow
+ e("intake-rework-action").hidden=data.can_geometry_rework!==true;
+ if(!data.can_geometry_rework)e("intake-geometry-panel").hidden=true; // keep editor open during polling
  const autoButton=e("intake-auto-rework");
  autoButton.disabled=intakeBusy||!data.can_auto_rework;
  e("intake-auto-eligibility").textContent=data.rework?
@@ -855,6 +859,9 @@ function activateIntake(id){
  geometryPoints=[];geometryAnchorJob="";geometryLoadingJob="";
  geometryPreviewReady=false;
  e("intake-geometry-preview").hidden=true;
+ e("intake-geometry-panel").hidden=true;
+ e("intake-rework-action").hidden=true;
+ e("intake-rework-progress").hidden=true;
  e("intake-geometry-facade-check").checked=false;
  intakeSplitFor="";intakeSplitRequest="";
  if(intakeSplitViewer)intakeSplitViewer.reset();
@@ -967,12 +974,14 @@ function updateGeometryPreviewCut(){
  e("intake-geometry-after").style.clipPath="inset(0 0 0 "+value+"%)";
  e("intake-geometry-preview-cut").style.left=value+"%";
 }
-async function submitGeometryCorrection(){
+function reworkProgress(message){const el=e("intake-rework-progress");el.hidden=false;el.textContent=message;}
+ async function submitGeometryCorrection(){
  if(!intakeId||!intakeState?.can_geometry_rework||geometryPoints.length!==4||
     !geometryPreviewReady||!e("intake-geometry-facade-check").checked)return;
  const id=intakeId,token=jobToken(id);
  const quad=geometryPoints.map(pair=>pair.map(x=>Number(x.toFixed(7))));
- intakeBusy=true;e("intake-geometry-submit").disabled=true;
+ intakeBusy=true;updateIntakeActions();e("intake-geometry-submit").disabled=true;
+ reworkProgress("Отправляем контрольные точки. Ожидаем подтверждение запуска новой версии…");
  try{
   const response=await fetch(base+"/job/rework/geometry?job="+encodeURIComponent(id),{
    method:"POST",headers:sessionHeaders({"content-type":"application/json"}),
@@ -988,8 +997,10 @@ async function submitGeometryCorrection(){
   if(!data.job_id)throw Error("Не создано задание для геометрии");
   if(token)persistJobToken(data.job_id,token);
   activateIntake(data.job_id);
+   reworkProgress("Сервер принял запрос новой версии. Следите за фактическими этапами обработки и QA.");
  }catch(err){
-  e("intake-geometry-warning").textContent="HOLD: "+String(err.message||err);
+  reworkProgress("Доработка остановлена (HOLD): "+String(err.message||err)+". Проверьте точки и повторите запуск.");
+   e("intake-geometry-warning").textContent="HOLD: "+String(err.message||err);
  }finally{intakeBusy=false;updateIntakeActions()}
 }
 async function automaticRework(){
@@ -997,6 +1008,7 @@ async function automaticRework(){
  const parentId=intakeId,token=jobToken(parentId);
  intakeBusy=true;updateIntakeActions();
  e("intake-auto-rework").disabled=true;
+ reworkProgress("Запрос технической коррекции отправляется. Ожидаем ответ сервера…");
  e("intake-auto-eligibility").textContent="Запускается техническая коррекция без OpenRouter. Cloudflare может учитывать вычислительные ресурсы...";
  try{
   const res=await fetch(base+"/job/rework/auto?job="+encodeURIComponent(parentId),{
@@ -1007,7 +1019,9 @@ async function automaticRework(){
   if(!data.job_id)throw Error("correction_job_missing");
   if(token)persistJobToken(data.job_id,token);
   activateIntake(data.job_id);
+   reworkProgress("Сервер принял запрос новой версии. Следите за фактическими этапами обработки и QA.");
  }catch(error){
+   reworkProgress("Доработка остановлена (HOLD): "+String(error.message||error));
   e("intake-auto-eligibility").textContent="HOLD: "+String(error.message||error);
   e("intake-message").textContent="Техническая коррекция остановлена: "+String(error.message||error);
  }finally{intakeBusy=false;updateIntakeActions()}
@@ -1015,10 +1029,11 @@ async function automaticRework(){
 async function uploadRevision(){
  if(!intakeId||!intakeState?.can_upload_revision)return;
  const file=e("intake-revision-file").files[0];
- if(!file||file.size>8*1024*1024)return e("intake-message").textContent="Выберите исправленное изображение до 8 МБ";
+ if(!file||file.size>8*1024*1024)return reworkProgress("Выберите готовое исправленное изображение до 8 МБ либо используйте коррекцию по точкам.");
  const parentId=intakeId,parentToken=jobToken(parentId);
  const form=new FormData();form.append("file",file);
  intakeBusy=true;updateIntakeActions();
+ reworkProgress("Загружаем готовый исправленный файл. Ожидаем подтверждение сервера…");
  try{
   const res=await fetch(base+"/job/revision?job="+encodeURIComponent(parentId),{
    method:"POST",headers:sessionHeaders(),body:form
@@ -1026,7 +1041,8 @@ async function uploadRevision(){
   const result=await res.json();if(!res.ok)throw Error(result.error||"revision upload failed");
   if(parentToken)persistJobToken(result.job_id,parentToken);
   activateIntake(result.job_id);
- }catch(err){e("intake-message").textContent=String(err)}
+   reworkProgress("Сервер принял запрос новой версии. Следите за фактическими этапами обработки и QA.");
+ }catch(err){reworkProgress("Импорт остановлен: "+String(err.message||err));}
  finally{intakeBusy=false;updateIntakeActions()}
 }
 async function intakeDecision(decision){
@@ -1076,7 +1092,7 @@ async function intakeHandoff(){
 }
 
 const e=id=>document.getElementById(id);
-function say(s){e("report").textContent=typeof s==="string"?s:JSON.stringify(s,null,2)}
+function say(s){e("report").textContent=typeof s==="string"?s:JSON.stringify(s,(key,value)=>/token|authorization|secret|api[_-]?key|password/i.test(key)?"[REDACTED]":value,2)}
 async function sessionStart(){
  if(session)return session;
  try{const cached=JSON.parse(sessionStorage.getItem(sessionStore)||"null");if(cached?.id&&cached?.token){session=cached;return session}}catch{}
@@ -1237,7 +1253,7 @@ e("open-editorial").addEventListener("click",()=>{
  window.EditorialCompare?.open(id,"tech-editorial").catch(err=>say(String(err)));
 });
 e("yandex-open").addEventListener("click",()=>openYandexFolder("",true).catch(err=>e("yandex-status").textContent=String(err.message||err)));
-e("yandex-import").addEventListener("click",()=>importYandexSelection().catch(err=>e("yandex-status").textContent=String(err.message||err)));
+e("yandex-import").addEventListener("click",()=>importYandexSelection().catch(err=>{const msg=String(err.message||err);e("yandex-status").textContent=/429/.test(msg)?"Яндекс Диск ограничил скачивание (429). Повторите позднее или загрузите оригинал с компьютера. Текущая фотография не изменена.":msg}));
 e("yandex-up").addEventListener("click",()=>{
  const previous=yandexHistory.pop();
  openYandexFolder(previous||"",false).catch(err=>e("yandex-status").textContent=String(err.message||err));
@@ -1265,6 +1281,8 @@ e("intake-reject").addEventListener("click",()=>{e("intake-rework-form").hidden=
 e("intake-rework-submit").addEventListener("click",submitRework);
 e("intake-rework-cancel").addEventListener("click",()=>e("intake-rework-form").hidden=true);
 e("intake-revision-submit").addEventListener("click",uploadRevision);
+ e("intake-revision-file").addEventListener("change",updateIntakeActions);
+ e("intake-geometry-open").addEventListener("click",()=>showGeometryEditor().catch(err=>reworkProgress("Не удалось открыть редактор: "+String(err.message||err))));
 e("intake-auto-rework").addEventListener("click",automaticRework);
 async function startAutoGeometryVersion(){
  if(!intakeId||!intakeState?.can_auto_geometry_reprocess||intakeBusy)return;
