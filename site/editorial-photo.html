@@ -172,7 +172,7 @@
       </div>
       <div id="yandex-selection" class="yandex-selection" hidden>
         <div><span class="muted">Выбран оригинал</span><strong id="yandex-selected-name"></strong></div>
-        <button id="yandex-import" class="btn" type="button">Использовать этот файл</button>
+        <button id="yandex-import" class="btn" type="button" disabled>Использовать этот файл</button>
       </div>
       <p id="yandex-status" class="muted" role="status"></p>
 
@@ -437,6 +437,7 @@ const hexBytes=buffer=>[...new Uint8Array(buffer)].map(v=>v.toString(16).padStar
 const fileExt=file=>String(file?.name||"").split(".").pop().toLowerCase();
 let intakeId="",intakeProof=null,intakePoll=null,intakeBusy=false,intakeState=null;
 let comparisonFor="",comparisonUrls=[];
+let yandexPublicUrl="",yandexCurrentPath="",yandexSelected=null,yandexHistory=[];
 
 let intakePreviewURL=null,intakePreviewFor="",intakePreviewReady=false;
 let intakeSourceURL=null,intakeSourceFor="";
@@ -1058,6 +1059,91 @@ async function sessionStart(){
  session=await r.json();sessionStorage.setItem(sessionStore,JSON.stringify(session));return session
 }
 async function health(){const r=await fetch(base+"/health");const h=await r.json();e("status").textContent=h.ok&&h.storage_isolated&&h.technical_workflow_configured?"Tech Master доступен":"Технический контур требует настройки";say(h)}
+function humanBytes(n){
+ const x=Number(n||0);if(!x)return "";
+ if(x<1024*1024)return Math.max(1,Math.round(x/1024))+" КБ";
+ return (x/(1024*1024)).toFixed(x>=10*1024*1024?0:1)+" МБ";
+}
+function resetYandexSelection(){
+ yandexSelected=null;
+ e("yandex-selection").hidden=true;
+ e("yandex-import").disabled=true;
+ e("yandex-selected-name").textContent="";
+ for(const node of e("yandex-files").querySelectorAll(".selected"))node.classList.remove("selected");
+}
+function renderYandexFolder(data){
+ const list=e("yandex-files");list.replaceChildren();resetYandexSelection();
+ yandexCurrentPath=String(data.current_path||"");
+ e("yandex-folder-name").textContent=String(data.name||"Открытая папка");
+ e("yandex-up").hidden=yandexHistory.length===0;
+ const items=Array.isArray(data.items)?data.items:[];
+ if(!items.length){
+   const empty=document.createElement("div");empty.className="muted";empty.style.padding="14px";
+   empty.textContent="В этой папке нет поддерживаемых фотографий.";
+   list.append(empty);return;
+ }
+ for(const item of items){
+   const b=document.createElement("button");b.type="button";b.className="yandex-file";
+   const left=document.createElement("span"),name=document.createElement("strong"),meta=document.createElement("span");
+   name.textContent=item.name||"Без имени";
+   meta.textContent=item.type==="dir"?"Папка":[String(item.ext||"").toUpperCase(),humanBytes(item.size)].filter(Boolean).join(" · ");
+   left.append(name,meta);
+   const kind=document.createElement("span");kind.className="file-kind";kind.textContent=item.type==="dir"?"Открыть":"Выбрать";
+   b.append(left,kind);
+   b.addEventListener("click",()=>{
+     if(item.type==="dir"){
+       yandexHistory.push(yandexCurrentPath);
+       openYandexFolder(item.path,false).catch(err=>e("yandex-status").textContent=String(err.message||err));
+       return;
+     }
+     resetYandexSelection();yandexSelected=item;b.classList.add("selected");
+     e("yandex-selected-name").textContent=item.name;
+     e("yandex-selection").hidden=false;e("yandex-import").disabled=false;
+     e("yandex-status").textContent="Файл выбран. Он будет сохранён как исходник без изменения.";
+   });
+   list.append(b);
+ }
+}
+async function openYandexFolder(path="",resetHistory=true){
+ const value=e("yandex-url").value.trim();
+ if(!/^https:\/\/(?:disk\.yandex\.(?:ru|com)|yadi\.sk)\/(?:d|i)\//i.test(value))
+   throw Error("Вставьте публичную ссылку на открытую папку Яндекс Диска.");
+ const s=await sessionStart();
+ if(resetHistory)yandexHistory=[];
+ yandexPublicUrl=value;
+ e("yandex-open").disabled=true;e("yandex-status").textContent="Открываю папку…";
+ try{
+   const r=await fetch(base+"/yandex/list",{
+     method:"POST",headers:{"content-type":"application/json","x-session-id":s.id,"x-session-token":s.token},
+     body:JSON.stringify({url:value,path:path||""})
+   });
+   const data=await r.json().catch(()=>({}));
+   if(!r.ok)throw Error(data.reason||data.error||"Не удалось открыть папку");
+   e("yandex-browser").hidden=false;renderYandexFolder(data);
+   e("yandex-status").textContent=data.kind==="file"?"Файл найден. Выберите его.":"Выберите оригинал из папки.";
+ }finally{e("yandex-open").disabled=false}
+}
+async function importYandexSelection(){
+ if(!yandexSelected||!yandexPublicUrl)return;
+ const s=await sessionStart();
+ e("yandex-import").disabled=true;e("yandex-open").disabled=true;
+ e("yandex-status").textContent="Сохраняю оригинал в TECH MASTER…";
+ try{
+   const r=await fetch(base+"/yandex/import",{
+     method:"POST",headers:{"content-type":"application/json","x-session-id":s.id,"x-session-token":s.token},
+     body:JSON.stringify({url:yandexPublicUrl,path:yandexSelected.path})
+   });
+   const data=await r.json().catch(()=>({}));
+   if(!r.ok)throw Error(data.reason||data.error||"Не удалось получить оригинал");
+   e("yandex-status").textContent="Оригинал сохранён. Следующий шаг — создать TECH MASTER.";
+   e("upload-result").textContent=data.filename+" · "+String(data.sha256||"").slice(0,12)+"…";
+   if(data.job_id){persistJobToken(data.job_id,data.job_token);activateIntake(data.job_id)}
+ }finally{
+   e("yandex-open").disabled=false;
+   e("yandex-import").disabled=!yandexSelected;
+ }
+}
+
 async function upload(){
  const file=e("file").files[0];if(!file)throw Error("Выберите RAW, JPG, PNG или WEBP");
  const ext=fileExt(file),isRaw=RAW_EXTENSIONS.has(ext);
@@ -1124,6 +1210,13 @@ e("open-editorial").addEventListener("click",()=>{
  const id=e("job").value.trim();if(!id)return say("Не указан ID задания.");
  window.EditorialCompare?.open(id,"tech-editorial").catch(err=>say(String(err)));
 });
+e("yandex-open").addEventListener("click",()=>openYandexFolder("",true).catch(err=>e("yandex-status").textContent=String(err.message||err)));
+e("yandex-import").addEventListener("click",()=>importYandexSelection().catch(err=>e("yandex-status").textContent=String(err.message||err)));
+e("yandex-up").addEventListener("click",()=>{
+ const previous=yandexHistory.pop();
+ openYandexFolder(previous||"",false).catch(err=>e("yandex-status").textContent=String(err.message||err));
+});
+e("yandex-url").addEventListener("keydown",ev=>{if(ev.key==="Enter"){ev.preventDefault();openYandexFolder("",true).catch(err=>e("yandex-status").textContent=String(err.message||err))}});
 e("file").addEventListener("change",()=>{
  const file=e("file").files[0];
  if(localSourceStageURL){URL.revokeObjectURL(localSourceStageURL);localSourceStageURL=null}
