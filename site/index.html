@@ -1695,6 +1695,12 @@ function renderJobState(state){
   if(state.status==="failed"){
     clearInterval(jobPollTimer);jobPollTimer=null;
     $("action-process").disabled=false;$("mobile-process").disabled=false;
+    if(state.can_resume_credit){
+      $("action-process").textContent="Продолжить";$("mobile-process").textContent="Продолжить";
+      setReviewActions();
+      setStatus(state.diagnostic_code==="PROVIDER_CREDITS_EXHAUSTED"?"Недостаточно кредитов":"Проверка баланса недоступна","warn");
+      return state;
+    }
     const manualRetry=Boolean(state.manual_retry_required);
     $("action-process").textContent=manualRetry?"Регенерировать вручную":"Повторить";
     $("mobile-process").textContent=manualRetry?"Регенерация":"Повторить";
@@ -2108,11 +2114,32 @@ async function saveCurrentResult(){
   }
 }
 
+let creditResumeBusy=false;
+async function resumeCreditJob(job){
+  if(creditResumeBusy||!confirmPaidGeneration())return;
+  creditResumeBusy=true;
+  $("action-process").disabled=true;$("mobile-process").disabled=true;
+  setStatus("Проверка кредитов…");
+  try{
+    const session=await startCloudSession();
+    const response=await fetch("/api/jobs/"+job.id+"/resume-credit",{method:"POST",headers:{"X-Job-Token":job.token,"X-Session-Id":session.id,"X-Session-Token":session.token},cache:"no-store"});
+    const d=await response.json().catch(()=>({}));
+    if(!response.ok)throw Error(d.message||d.error||"Возобновление недоступно");
+    if(currentJob!==job)return;
+    currentJob={id:d.id,token:d.token};latestJobState=null;
+    const item=currentSourceItem();if(item){item.job=currentJob;item.lastState=d;}
+    persistSessionHistory();setStatus("Задание возобновлено");
+    clearInterval(jobPollTimer);jobPollTimer=setInterval(pollCurrentJob,1800);await pollCurrentJob();
+  }catch(err){if(currentJob===job){setStatus(String(err.message||err),"warn");$("action-process").disabled=false;$("mobile-process").disabled=false;}}
+  finally{creditResumeBusy=false;}
+}
 async function prepareJob(forceNew=false){
+  if(currentJob&&latestJobState?.can_resume_credit){await resumeCreditJob(currentJob);return;}
   if(!currentFile){toast("Сначала добавьте исходник.");return}
   if(currentJob&&!forceNew){
     try{
       const s=await jobStatus(currentJob);
+      if(s.can_resume_credit){await resumeCreditJob(currentJob);return;}
       if(s.status==="done"){location.href=resultUrl(currentJob,true);return}
       if(!["failed","skipped"].includes(s.status)){toast("Текущее задание ещё активно.");return}
     }catch{}
