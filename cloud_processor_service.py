@@ -155,6 +155,9 @@ def _classify_failure(error_text: str | None, diagnostic_excerpt: str | None = N
             "action": "Проверьте серверный OpenRouter credential и его права. Ключ в UI не выводится.",
             "retryable": False,
         })
+    elif "provider_credit_check_unavailable" in lowered:
+        result.update({"code":"PROVIDER_CREDIT_CHECK_UNAVAILABLE","layer":"provider_billing",
+                       "summary":"Проверка кредитов недоступна","retryable":False})
     elif http_status == 402 or "insufficient" in lowered and ("credit" in lowered or "balance" in lowered):
         result.update({
             "code": "PROVIDER_CREDITS_EXHAUSTED",
@@ -368,6 +371,8 @@ def _process_job(job_id: str) -> None:
                 status = str(active.get("status") or "")
 
             if status == "AWAITING_EXPLICIT_DONOR_GENERATION":
+                if os.environ.get("MG4K_SINGLE_PAID_ATTEMPT") == "1":
+                    raise RuntimeError("PAID_REPLACEMENT_REQUIRES_EXPLICIT_OPERATOR_ACTION")
                 _set_state(job_id, status="processing", stage="replacement_generation", progress=34)
                 bridge.run_pipeline(
                     [

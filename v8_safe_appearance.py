@@ -963,7 +963,7 @@ def _retry_delay(retry: int) -> float:
 
 def _post_json(endpoint: str, key: str, payload: dict[str, Any], trace_name: str, timeout: int) -> dict[str, Any]:
     last: Exception | None = None
-    max_retries = int(CFG["max_retries"])
+    max_retries = 1 if os.environ.get("MG4K_SINGLE_PAID_ATTEMPT") == "1" and endpoint.endswith("/images") else int(CFG["max_retries"])
     for retry in range(1, max_retries + 1):
         started = time.monotonic()
         try:
@@ -1057,6 +1057,37 @@ def generate_image(key: str, reference: Path, trace_name: str, seed: int) -> tup
         ",".join(payload["provider"]["order"]),
         payload["provider"]["allow_fallbacks"],
     )
+    if os.environ.get("MG4K_SINGLE_PAID_ATTEMPT") == "1":
+        # Recheck the exact generation credential, then query the Worker budget
+        # gate using processor authentication. Management credentials stay in Worker.
+        try:
+            minimum = float(os.environ.get("MG4K_MIN_PROVIDER_CREDITS_USD", "0.50"))
+            if not math.isfinite(minimum) or minimum <= 0:
+                raise ValueError("configuration")
+            res = requests.get("https://openrouter.ai/api/v1/key",
+                               headers={"Authorization": "Bearer " + key}, timeout=8)
+            if res.status_code != 200:
+                raise ValueError("key endpoint")
+            k = res.json()["data"]
+            remaining = k["limit_remaining"]
+            if remaining is not None and (not isinstance(remaining, (int,float)) or not math.isfinite(remaining)):
+                raise ValueError("key limit")
+            sufficient = not k.get("is_free_tier") and (remaining is None or remaining >= minimum)
+            if sufficient:
+                worker_url = os.environ.get("MG4K_CLOUD_URL", "").rstrip("/")
+                token = os.environ.get("MG4K_PROCESSOR_TOKEN", "").strip()
+                if not worker_url or not token:
+                    raise ValueError("worker authorization")
+                check = requests.get(worker_url + "/api/processor/credit-check",
+                                     headers={"Authorization": "Bearer " + token}, timeout=25)
+                if check.status_code == 402:
+                    sufficient = False
+                elif check.status_code != 200 or check.json().get("ok") is not True:
+                    raise ValueError("worker budget endpoint")
+        except Exception:
+            raise RuntimeError("PROVIDER_CREDIT_CHECK_UNAVAILABLE: read-only budget verification failed") from None
+        if not sufficient:
+            raise RuntimeError("HTTP 402: insufficient credits before generation; no paid request made")
     body = _post_json("https://openrouter.ai/api/v1/images", key, payload, trace_name, int(CFG["generation_timeout_seconds"]))
     provider_model = body.get("model")
     if provider_model and str(provider_model) != str(CFG["model"]):
